@@ -1,0 +1,140 @@
+import React from 'react';
+import { Calendar, Hash, Award, Clock } from 'lucide-react';
+import { format } from 'date-fns';
+import { useWorkout } from '../../context/WorkoutContext';
+import './WorkoutDetails.css';
+
+import BackButton from '../common/BackButton';
+
+const WorkoutDetails = ({ workout, onBack }) => {
+    const { units } = useWorkout();
+
+    if (!workout) return null;
+
+    // Helper to format weight based on unit setting
+    const formatWeight = (kg) => {
+        if (units === 'imperial') {
+            return (kg * 2.20462).toFixed(1);
+        }
+        return kg;
+    };
+
+    const unitLabel = units === 'imperial' ? 'lbs' : 'kg';
+
+    // Filter valid exercises preventing crashes from corrupted data
+    const validExercises = workout.exercises ? workout.exercises.filter(ex => ex && ex.exercise) : [];
+
+    const totalVolume = validExercises.reduce((acc, ex) => {
+        return acc + ex.sets.reduce((sAcc, set) => sAcc + (set.weight * set.reps), 0);
+    }, 0);
+
+    const displayVolume = Math.round(units === 'imperial' ? totalVolume * 2.20462 : totalVolume);
+
+    const totalSets = validExercises.reduce((acc, ex) => acc + ex.sets.length, 0);
+
+    return (
+        <div className="workout-details-container">
+            <header className="details-header-card">
+                <BackButton onClick={onBack} label="Back" style={{ alignSelf: 'flex-start', marginBottom: '15px' }} />
+                <div className="header-top">
+                    <span className="workout-date">
+                        <Calendar size={14} />
+                        {format(new Date(workout.startTime), 'EEEE, MMMM do, yyyy')}
+                    </span>
+                    <span className="workout-time">
+                        {format(new Date(workout.startTime), 'p')}
+                    </span>
+                </div>
+
+                <h2 className="workout-title">{workout.name}</h2>
+            </header>
+
+            {workout.notes && (
+                <div className="workout-notes-display">
+                    <h3>Notes</h3>
+                    <p>{workout.notes}</p>
+                </div>
+            )}
+
+            {workout.recommendations && workout.recommendations.length > 0 && (
+                <div className="recs-section">
+                    <div className="recs-header">
+                        <Award size={18} />
+                        <h3>Smart Recommendations</h3>
+                    </div>
+                    {workout.recommendations.map((rec, i) => (
+                        <div key={i} className="rec-item-history">
+                            <span className="rec-exercise-name">{rec.exerciseName}</span>
+                            <div className="rec-values">
+                                <span>{rec.oldWeight}</span>
+                                <span className="arrow">→</span>
+                                <span className="new">{rec.newWeight} {unitLabel}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="exercises-timeline">
+                {validExercises.map((ex, index) => (
+                    <div key={ex.id} className="exercise-detail-card">
+                        <div className="exercise-header">
+                            <div className="exercise-number">{index + 1}</div>
+                            <h3>{ex.exercise.name}</h3>
+                        </div>
+
+                        <div className="sets-table-container">
+                            <table className="sets-table">
+                                <thead>
+                                    <tr>
+                                        <th>SET</th>
+                                        <th>WEIGHT ({unitLabel})</th>
+                                        <th>GOAL</th>
+                                        <th>ACTUAL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {ex.sets.map((set, i) => (
+                                        <tr key={set.id}>
+                                            <td className="col-set">
+                                                <span className="set-pill">{i + 1}</span>
+                                            </td>
+                                            <td className="col-weight">
+                                                {formatWeight(set.weight)}
+                                            </td>
+                                            <td className="col-goal">
+                                                {set.targetReps || '-'}
+                                            </td>
+                                            <td className="col-reps">
+                                                {set.reps}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="stats-grid footer-stats">
+                <div className="stat-item">
+                    <span className="stat-label">Volume</span>
+                    <span className="stat-value">
+                        {displayVolume.toLocaleString()} <span className="stat-unit">{unitLabel}</span>
+                    </span>
+                </div>
+                <div className="stat-item">
+                    <span className="stat-label">Sets</span>
+                    <span className="stat-value">{totalSets}</span>
+                </div>
+                <div className="stat-item">
+                    <span className="stat-label">Exercises</span>
+                    <span className="stat-value">{validExercises.length}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default WorkoutDetails;

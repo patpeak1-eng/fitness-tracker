@@ -1,0 +1,57 @@
+.workout-notes-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.notes-textarea {
+    width: 100%;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    color: var(--text);
+    font-size: 1rem;
+    resize: none;
+    font-family: inherit;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.notes-textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(191, 255, 0, 0.1);
+}
+
+/* Modal specific tweaks if needed */
+.input-modal .modal-content {
+    max-width: 500px;
+}
+
+.save-note-btn {
+    margin-top: 20px;
+    padding: 14px;
+    font-size: 1.1rem;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--primary) !important;
+    /* Force visibility */
+    color: #000000 !important;
+    font-weight: 700;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(191, 255, 0, 0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: none;
+}
+
+.save-note-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(191, 255, 0, 0.4);
+}
+
+.save-note-btn:active {
+    transform: translateY(0);
+}

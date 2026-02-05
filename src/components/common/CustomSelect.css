@@ -1,0 +1,103 @@
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    background-color: rgba(255, 255, 255, 0.05);
+    /* Matching app glass theme */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.custom-select-trigger:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.custom-select-trigger.open {
+    border-color: var(--primary);
+    background-color: rgba(0, 0, 0, 0.8);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.arrow {
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.arrow.rotated {
+    transform: rotate(180deg);
+    color: var(--primary);
+}
+
+.custom-select-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-height: 250px;
+    /* Scrollable if many exercises */
+    overflow-y: auto;
+    background-color: #0a0a0a;
+    /* Solid dark background to cover content below */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: none;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+    z-index: 100;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+/* Scrollbar Styling */
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.custom-option {
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background 0.15s;
+    border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.custom-option:first-child {
+    border-top: none;
+}
+
+.custom-option:hover {
+    background-color: rgba(191, 255, 0, 0.1);
+    color: var(--primary);
+}
+
+.custom-option.selected {
+    background-color: rgba(191, 255, 0, 0.05);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.check-icon {
+    color: var(--primary);
+}

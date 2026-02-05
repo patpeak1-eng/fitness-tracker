@@ -1,0 +1,234 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* --- MIDNIGHT & LIME PALETTE (Phase H) --- */
+  --bg-app: #0a0a0a;
+  /* Deep Charcoal */
+  --bg-card: rgba(255, 255, 255, 0.05);
+  /* Premium Glass Base */
+  --primary: #ccff00;
+  /* Vibrant Lime */
+  --primary-glow: rgba(204, 255, 0, 0.4);
+  --accent: #00f3ff;
+  /* Cyan for secondary accents */
+  --accent-glow: rgba(0, 243, 255, 0.4);
+
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+
+  --success: #ccff00;
+  /* Match primary */
+  --error: #ff3366;
+  --danger: #ff3366;
+
+  /* --- ALIASES (Legacy Support) --- */
+  --bg-primary: var(--bg-app);
+  --surface-light: var(--bg-card);
+  --primary-light: var(--primary);
+  --border-color: rgba(255, 255, 255, 0.1);
+
+  /* --- SPACING & LAYOUT --- */
+  --nav-height: 80px;
+  --header-height: 60px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 20px);
+  --radius-md: 24px;
+  --radius-sm: 12px;
+  /* Polish: Button Radius */
+
+  /* --- GLASSMORPHISM (Premium) --- */
+  --glass-blur: blur(12px);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.1);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(204, 255, 0, 0.15);
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: var(--text-primary);
+  background-color: var(--bg-app);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--bg-app);
+  /* "Midnight" Deep Charcoal */
+  color: var(--text-primary);
+  /* Subtle mesh gradient for depth - matched to Mockup feel */
+  background-image:
+    radial-gradient(circle at 15% 50%, rgba(204, 255, 0, 0.08) 0%, transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(0, 243, 255, 0.08) 0%, transparent 25%);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Button Polish: Lift Effect */
+button:active {
+  transform: scale(0.98);
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  background: rgba(0, 0, 0, 0.3);
+  border: var(--border-glass);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(204, 255, 0, 0.15);
+}
+
+/* --- UTILITIES --- */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: var(--radius-md);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #fff 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.neon-text {
+  color: var(--primary);
+  text-shadow: 0 0 10px rgba(204, 255, 0, 0.4);
+}
+
+/* --- BUTTONS --- */
+.primary-btn {
+  background: var(--primary);
+  color: #0a0a0a;
+  /* Dark text on lime */
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 16px 32px;
+  border-radius: 50px;
+  /* Pill shape as per mockup */
+  font-size: 1rem;
+  letter-spacing: 1px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 0 20px rgba(204, 255, 0, 0.4);
+  /* Stronger Neon Glow */
+  border: none;
+}
+
+.primary-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(204, 255, 0, 0.4);
+}
+
+.secondary-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 14px 28px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.secondary-btn:hover {
+  border-color: var(--primary);
+  background: rgba(204, 255, 0, 0.05);
+  /* Lime tint */
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+
+/* --- ACTIVE STATE ANIMATIONS --- */
+@keyframes pulse-lime {
+  0% {
+    text-shadow: 0 0 10px rgba(204, 255, 0, 0.2);
+    transform: scale(1);
+  }
+
+  50% {
+    text-shadow: 0 0 20px rgba(204, 255, 0, 0.6);
+    transform: scale(1.02);
+  }
+
+  100% {
+    text-shadow: 0 0 10px rgba(204, 255, 0, 0.2);
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-cyan {
+  0% {
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+    transform: scale(1);
+  }
+
+  50% {
+    text-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+    transform: scale(1.02);
+  }
+
+  100% {
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+    transform: scale(1);
+  }
+}
+
+.pulse-text-lime {
+  animation: pulse-lime 2s infinite ease-in-out;
+  color: var(--primary);
+}
+
+.pulse-text-cyan {
+  animation: pulse-cyan 2s infinite ease-in-out;
+  color: var(--accent);
+}
+
+/* --- LIGHT MODE OPTIONAL (Dark mode preferred) --- */
+[data-theme='light'] {
+  --bg-app: #f4f6f8;
+  --bg-card: rgba(255, 255, 255, 0.7);
+  --primary: #ccff00;
+  /* Keep branding */
+  --text-primary: #0a0a0a;
+  --border-glass: 1px solid rgba(0, 0, 0, 0.05);
+  color: #0a0a0a;
+}

@@ -1,0 +1,588 @@
+.track-workout-empty {
+    display: flex;
+    flex-direction: column;
+    /* Changed from row/default to column */
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    position: relative;
+    /* Enable absolute positioning context if needed */
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2.5rem;
+    max-width: 450px;
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: var(--border-glass);
+    border-radius: 20px;
+    box-shadow: var(--shadow-glass);
+}
+
+.empty-icon {
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 0 15px var(--primary-glow));
+}
+
+.empty-state h2 {
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.primary-btn-large,
+.secondary-btn-large {
+    width: 100%;
+    padding: 1rem;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+}
+
+.primary-btn-large {
+    background-color: var(--primary);
+    color: #000;
+    box-shadow: 0 4px 15px rgba(204, 255, 0, 0.25);
+}
+
+.primary-btn-large:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(191, 255, 0, 0.35);
+}
+
+.secondary-btn-large {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.secondary-btn-large:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--text-secondary);
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 1rem 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.divider span {
+    padding: 0 1rem;
+}
+
+/* Active State */
+/* Active Header / Prep Header */
+.active-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Center horizontally */
+    justify-content: center;
+    padding: 20px;
+    background: var(--surface-light);
+    text-align: center;
+    gap: 15px;
+    border-bottom: 1px solid var(--border);
+}
+
+.active-header h1 {
+    font-size: 1.8rem;
+    margin: 0;
+    margin-bottom: 5px;
+}
+
+.status-badge {
+    color: #000000;
+    /* Black text */
+    font-weight: 800;
+    background: var(--primary);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    display: inline-block;
+}
+
+.active-header h1 {
+    font-size: 1.5rem;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.active-timer {
+    font-family: 'Inter', monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--primary);
+    font-weight: 600;
+    text-shadow: 0 0 10px rgba(191, 255, 0, 0.3);
+}
+
+.finish-btn {
+    background-color: var(--success);
+    color: #000;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 255, 157, 0.2);
+    transition: transform 0.2s;
+}
+
+.finish-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 255, 157, 0.4);
+}
+
+.workout-stream {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 100px;
+}
+
+.add-exercise-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 1.2rem;
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 1rem;
+    transition: all 0.2s;
+}
+
+.add-exercise-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(204, 255, 0, 0.1);
+    box-shadow: 0 0 15px rgba(204, 255, 0, 0.2);
+}
+
+.cancel-workout-text {
+    margin-top: 2rem;
+    background: none;
+    border: none;
+    color: var(--error);
+    font-size: 0.875rem;
+    opacity: 0.7;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.cancel-workout-text:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+.info-box {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    backdrop-filter: var(--glass-blur);
+    border-radius: var(--radius-md);
+}
+
+/* --- BUFFER / START SCREEN --- */
+.buffer-screen {
+    min-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.buffer-title {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: -1px;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 0 20px rgba(204, 255, 0, 0.2);
+}
+
+.buffer-subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+}
+
+.buffer-preview {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 400px;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.preview-item {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preview-item:last-child {
+    border-bottom: none;
+}
+
+.buffer-preview h3 {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    letter-spacing: 1px;
+}
+
+.start-workout-btn {
+    background: var(--primary);
+    color: #000;
+    font-weight: 900;
+    font-size: 1.2rem;
+    padding: 1.2rem 3rem;
+    border-radius: 100px;
+    border: none;
+    box-shadow: 0 0 25px rgba(204, 255, 0, 0.3);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    width: 100%;
+    max-width: 400px;
+}
+
+.start-workout-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 35px rgba(204, 255, 0, 0.5);
+}
+
+/* --- CIRCULAR TIMER (NEON GREEN - CAPTURE 3) --- */
+.timer-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 0;
+    animation: fadeIn 0.5s ease;
+    width: 100%;
+}
+
+.exercise-title-large {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    color: #fff;
+    text-align: center;
+}
+
+.circular-timer-container {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    border: 4px solid rgba(163, 230, 53, 0.15);
+    /* Lime-400/20 equivalent */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 3rem;
+    box-shadow: 0 0 30px rgba(163, 230, 53, 0.1);
+}
+
+.circular-timer-container.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 50px rgba(204, 255, 0, 0.3);
+}
+
+.circular-timer-inner {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.timer-label {
+    font-size: 0.8rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+
+.timer-digits {
+    font-family: 'Inter', monospace;
+    font-size: 4.5rem;
+    color: var(--primary);
+    font-weight: 800;
+    text-shadow: 0 0 30px rgba(204, 255, 0, 0.4);
+    line-height: 1;
+}
+
+.timer-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 10px;
+}
+
+.timer-control-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.timer-control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.finish-set-btn {
+    background: var(--primary);
+    color: #000;
+    font-weight: 800;
+    font-size: 1.1rem;
+    padding: 16px 48px;
+    border-radius: 100px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 0 25px rgba(204, 255, 0, 0.3);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.finish-set-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px rgba(204, 255, 0, 0.5);
+}
+
+/* --- NEW START SCREEN --- */
+.start-screen-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-bottom: 100px;
+    /* Nav spacing */
+}
+
+.quick-start-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 180px;
+    position: relative;
+    overflow: hidden;
+}
+
+.quick-start-card:active {
+    transform: scale(0.98);
+}
+
+.quick-start-content {
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.quick-play-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(204, 255, 0, 0.1);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 20px rgba(204, 255, 0, 0.2);
+    margin-bottom: 8px;
+}
+
+.quick-start-card h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--primary);
+    text-shadow: 0 0 10px rgba(204, 255, 0, 0.3);
+}
+
+.quick-start-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Background waves/glow */
+.glow-effect {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(204, 255, 0, 0.05) 0%, transparent 70%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.template-tile {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 140px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.template-tile:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.template-tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.template-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.template-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: auto;
+}
+
+.delete-mini-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: var(--text-secondary);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.template-tile:hover .delete-mini-btn {
+    opacity: 1;
+}
+
+.create-btn-area {
+    margin-top: 12px;
+}
+
+.create-template-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px dashed var(--primary);
+    color: var(--primary);
+    padding: 16px;
+    border-radius: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    background: rgba(204, 255, 0, 0.02);
+}
+
+.create-template-btn:active {
+    background: rgba(204, 255, 0, 0.08);
+}

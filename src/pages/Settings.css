@@ -1,0 +1,135 @@
+.settings-page {
+    padding-bottom: 80px;
+}
+
+.settings-section {
+    margin-bottom: 2rem;
+}
+
+.settings-section h2 {
+    font-size: 0.9rem;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 1rem;
+    margin-left: 0.5rem;
+    font-weight: 700;
+}
+
+/* Override default card padding/flex for items if needed */
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.setting-label {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.setting-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.toggle-btn {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all 0.3s;
+}
+
+.toggle-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 10px rgba(191, 255, 0, 0.2);
+}
+
+.toggle-btn:active {
+    transform: scale(0.95);
+}
+
+.unit-toggle {
+    display: flex;
+    background-color: rgba(255, 255, 255, 0.15);
+    /* Much lighter track */
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.setting-help-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    line-height: 1.4;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary);
+}
+
+.unit-btn {
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    /* Brighter inactive text */
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.unit-btn:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.unit-btn.active {
+    background-color: var(--primary);
+    color: #000;
+    /* Black text on neon green */
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(191, 255, 0, 0.4);
+    /* Stronger glow */
+}
+
+.version-info {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 3rem;
+    opacity: 0.5;
+}
+
+.smart-progression-content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(-10px);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.smart-progression-content.open {
+    max-height: 1000px;
+    /* Large enough to fit content */
+    opacity: 1;
+    transform: translateY(0);
+    margin-top: 12px;
+}

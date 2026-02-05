@@ -1,0 +1,137 @@
+/* BottomNavigation.css - Phase H Refinement */
+.bottom-nav {
+    position: fixed;
+    bottom: 20px;
+    /* Floating slightly above bottom for premium look */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 95%;
+    max-width: 500px;
+    height: 70px;
+
+    background: rgba(30, 30, 30, 0.6);
+    /* Glass Base */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(204, 255, 0, 0.05);
+
+    border-radius: 24px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 10px;
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    gap: 4px;
+    position: relative;
+    flex: 1;
+}
+
+.nav-item svg {
+    transition: all 0.3s ease;
+    opacity: 0.7;
+}
+
+/* Active State */
+.nav-item.active {
+    color: var(--text-primary);
+}
+
+.nav-item.active svg {
+    color: var(--primary);
+    /* Neon Lime */
+    filter: drop-shadow(0 0 8px var(--primary-glow));
+    transform: translateY(-2px);
+    opacity: 1;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.nav-label {
+    margin-top: 2px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+/* Active Indicator Dot */
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    width: 4px;
+    height: 4px;
+    background-color: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--primary);
+}
+
+/* Mobile Polish */
+@media (max-width: 480px) {
+    .bottom-nav {
+        bottom: 10px;
+        width: 95%;
+        height: 65px;
+    }
+
+    .nav-label {
+        font-size: 0.7rem;
+    }
+}
+
+/* Minimize/Expand Toggle */
+.nav-toggle-btn {
+    position: absolute;
+    top: -24px;
+    right: 20px;
+    /* or center if preferred: left: 50%; transform: translateX(-50%); */
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: black;
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    z-index: 1001;
+    transition: all 0.3s ease;
+}
+
+.nav-toggle-btn:hover {
+    transform: scale(1.1);
+    background: #fff;
+}
+
+/* Minimized State */
+.bottom-nav.minimized {
+    transform: translateX(-50%) translateY(90px);
+    /* Push down */
+    opacity: 0.8;
+}
+
+.bottom-nav.minimized .nav-toggle-btn {
+    top: -36px;
+    /* Adjust position relative to hidden nav if needed */
+    background: rgba(40, 40, 40, 0.9);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}

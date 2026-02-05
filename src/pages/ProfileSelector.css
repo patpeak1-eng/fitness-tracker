@@ -1,0 +1,207 @@
+/* ProfileSelector.css */
+.profile-selector-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+    text-align: center;
+}
+
+.profile-header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(to right, #ffffff, #888888);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.profile-header p {
+    color: #a0a0a0;
+    margin-bottom: 3rem;
+    font-size: 1.1rem;
+}
+
+.profiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 2rem;
+    width: 100%;
+    max-width: 800px;
+    justify-content: center;
+}
+
+.profile-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    padding: 10px;
+    border-radius: 12px;
+}
+
+.profile-card:hover {
+    transform: translateY(-5px);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.profile-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--profile-color, #ffffff);
+    box-shadow: 0 0 15px var(--profile-color, rgba(255, 255, 255, 0.2));
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.profile-card:hover .profile-avatar {
+    box-shadow: 0 0 25px var(--profile-color, rgba(255, 255, 255, 0.4));
+}
+
+.profile-avatar svg {
+    width: 40px;
+    height: 40px;
+    color: var(--profile-color, #ffffff);
+}
+
+.profile-name {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+/* ADD PROFILE CARD */
+.add-profile-card .profile-avatar {
+    border: 2px dashed #404040;
+    box-shadow: none;
+}
+
+.add-profile-card:hover .profile-avatar {
+    border-color: #bfff00;
+    background: rgba(191, 255, 0, 0.1);
+    box-shadow: 0 0 20px rgba(191, 255, 0, 0.2);
+}
+
+.add-profile-card .profile-avatar svg {
+    color: #404040;
+}
+
+.add-profile-card:hover .profile-avatar svg {
+    color: #bfff00;
+}
+
+/* MODAL */
+.new-profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.color-picker {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+}
+
+.color-swatch.selected {
+    border-color: white;
+    box-shadow: 0 0 10px currentColor;
+    transform: scale(1.15);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+
+/* DELETE UI */
+.delete-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #ff3366;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    border: 2px solid #1a1a1a;
+    transition: transform 0.2s;
+}
+
+.delete-badge:hover {
+    transform: scale(1.1);
+}
+
+.delete-badge svg {
+    width: 14px;
+    height: 14px;
+    color: white;
+}
+
+/* Shake Animation for Edit Mode */
+@keyframes shake {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(1deg);
+    }
+
+    50% {
+        transform: rotate(0deg);
+    }
+
+    75% {
+        transform: rotate(-1deg);
+    }
+
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+.profile-card.shake-animation {
+    animation: shake 0.3s infinite ease-in-out;
+}
+
+.profile-card.shake-animation:hover {
+    transform: none;
+    /* Disable hover lift in edit mode */
+    background: none;
+}
