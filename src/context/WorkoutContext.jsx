@@ -142,12 +142,13 @@ export const WorkoutProvider = ({ children }) => {
 
 
     // Load custom templates on mount and merge
-    useEffect(() => {
-        const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
-        if (customTemplates.length > 0) {
-            setTemplates(prev => [...prev, ...customTemplates]);
-        }
-    }, []);
+    // MOVED TO refreshProfileData for profile scoping
+    // useEffect(() => {
+    //     const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
+    //     if (customTemplates.length > 0) {
+    //         setTemplates(prev => [...prev, ...customTemplates]);
+    //     }
+    // }, []);
 
     // Profile State
     const [profiles, setProfiles] = useState([]);
@@ -345,6 +346,14 @@ export const WorkoutProvider = ({ children }) => {
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
         setExercisePrefs(ps.exercisePrefs);
+        setWeightHistory(ps.weightHistory);
+        setExercisePrefs(ps.exercisePrefs);
+
+        // Load Templates Scoped to User
+        const userTemplates = StorageService.loadCustomTemplates(uid);
+        // Reset to Defaults + User Custom
+        // Use Set to prevent duplicates if any weird merging happens (though simply replacing is safer)
+        setTemplates([...DEFAULT_TEMPLATES, ...userTemplates]);
     };
 
     useEffect(() => {
@@ -999,12 +1008,13 @@ export const WorkoutProvider = ({ children }) => {
             newTemplates[tplIndex] = newTpl;
 
             // Persist
-            const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
-            // Find and update in storage
-            const storedIndex = customTemplates.findIndex(t => t.id === templateId);
-            if (storedIndex !== -1) {
-                customTemplates[storedIndex] = newTpl;
-                localStorage.setItem('fitness_custom_templates', JSON.stringify(customTemplates));
+            if (activeWorkout && activeWorkout.sourceTemplateId && currentProfile) {
+                const customTemplates = StorageService.loadCustomTemplates(currentProfile.id);
+                const storedIndex = customTemplates.findIndex(t => t.id === templateId);
+                if (storedIndex !== -1) {
+                    customTemplates[storedIndex] = newTpl;
+                    StorageService.saveCustomTemplates(currentProfile.id, customTemplates);
+                }
             }
 
             return newTemplates;
@@ -1267,9 +1277,13 @@ export const WorkoutProvider = ({ children }) => {
 
     const saveWorkoutAsTemplate = (templateName) => {
         if (!activeWorkout) return;
+        if (!currentProfile) {
+            alert("Please select a profile to save templates.");
+            return;
+        }
 
         const newTemplate = {
-            id: 'tpl_custom_' + Date.now(),
+            id: 'tpl_custom_' + generateId(), // Robust ID
             name: templateName,
             isCustom: true,
             exercises: activeWorkout.exercises.map(ex => ({
@@ -1284,26 +1298,34 @@ export const WorkoutProvider = ({ children }) => {
             }))
         };
 
-        setTemplates(prev => [...prev, newTemplate]);
+        const updatedTemplates = [...templates, newTemplate];
+        setTemplates(updatedTemplates);
 
-        const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
-        customTemplates.push(newTemplate);
-        localStorage.setItem('fitness_custom_templates', JSON.stringify(customTemplates));
+        // Persist to Profile
+        // Only save the CUSTOM ones to storage (filter out defaults or just append to existing storage list)
+        // Better: Read storage, append, write.
+        const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
+        const newStored = [...storedTemplates, newTemplate];
+        StorageService.saveCustomTemplates(currentProfile.id, newStored);
     };
 
     const deleteTemplate = (templateId) => {
+        if (!currentProfile) return;
+
         // Remove from state
         setTemplates(prev => prev.filter(t => t.id !== templateId));
 
         // Remove from storage
-        const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
-        const updatedTemplates = customTemplates.filter(t => t.id !== templateId);
-        localStorage.setItem('fitness_custom_templates', JSON.stringify(updatedTemplates));
+        const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
+        const updatedStored = storedTemplates.filter(t => t.id !== templateId);
+        StorageService.saveCustomTemplates(currentProfile.id, updatedStored);
     };
 
     const saveCustomTemplate = (name, exercisesList) => {
+        if (!currentProfile) return;
+
         const newTemplate = {
-            id: 'tpl_custom_' + Date.now(),
+            id: 'tpl_custom_' + generateId(),
             name: name,
             isCustom: true,
             exercises: exercisesList, // Expects standard format
@@ -1312,9 +1334,9 @@ export const WorkoutProvider = ({ children }) => {
 
         setTemplates(prev => [...prev, newTemplate]);
 
-        const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
-        customTemplates.push(newTemplate);
-        localStorage.setItem('fitness_custom_templates', JSON.stringify(customTemplates));
+        const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
+        const newStored = [...storedTemplates, newTemplate];
+        StorageService.saveCustomTemplates(currentProfile.id, newStored);
 
         return newTemplate;
     };
@@ -1402,8 +1424,12 @@ export const WorkoutProvider = ({ children }) => {
 
             setTemplates(prev => [...prev, ...readyTemplates]);
 
-            const savedTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
-            localStorage.setItem('fitness_custom_templates', JSON.stringify([...savedTemplates, ...readyTemplates]));
+            setTemplates(prev => [...prev, ...readyTemplates]);
+
+            if (currentProfile) {
+                const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
+                StorageService.saveCustomTemplates(currentProfile.id, [...storedTemplates, ...readyTemplates]);
+            }
 
             return true; // Success
         } catch (error) {

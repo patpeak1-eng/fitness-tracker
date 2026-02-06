@@ -172,12 +172,14 @@ const StorageService = {
     },
 
     // ---------- Custom/global (to be scoped later) ----------
-    loadCustomTemplates() {
-        return readJSON(`${PREFIX}custom_templates`, []);
+    loadCustomTemplates(uid) {
+        const key = uid ? keyProfile(uid, "custom_templates") : `${PREFIX}custom_templates`;
+        return readJSON(key, []);
     },
 
-    saveCustomTemplates(templates) {
-        writeJSON(`${PREFIX}custom_templates`, templates);
+    saveCustomTemplates(uid, templates) {
+        const key = uid ? keyProfile(uid, "custom_templates") : `${PREFIX}custom_templates`;
+        writeJSON(key, templates);
     },
 
     loadCustomExercises() {

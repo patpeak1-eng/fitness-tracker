@@ -43,7 +43,8 @@ const TrackWorkout = () => {
             <div className="track-workout-container">
                 <div className="start-screen-container">
                     {/* Quick Start Card */}
-                    <div className="quick-start-card" onClick={() => startWorkout("Quick Workout")}>
+                    {/* Quick Start Card - DISABLED FOR V0 STABILIZATION (P0-1) */}
+                    {/* <div className="quick-start-card" onClick={() => startWorkout("Quick Workout")}>
                         <div className="glow-effect"></div>
                         <div className="quick-start-content">
                             <div className="quick-play-icon">
@@ -52,7 +53,7 @@ const TrackWorkout = () => {
                             <h2>Quick Start</h2>
                             <p>Jump straight in, track on the fly</p>
                         </div>
-                    </div>
+                    </div> */}
 
                     {/* Templates Section */}
                     <div>
