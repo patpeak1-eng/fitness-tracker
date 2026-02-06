@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import StorageService from '../services/storage/StorageService';
+import StorageService from '../services/StorageService';
 
 export const WorkoutContext = createContext();
 
@@ -144,7 +144,7 @@ export const WorkoutProvider = ({ children }) => {
     // Load custom templates on mount and merge
     // MOVED TO refreshProfileData for profile scoping
     // useEffect(() => {
-    //     const customTemplates = JSON.parse(localStorage.getItem('fitness_custom_templates') || '[]');
+    //     const customTemplates = StorageService.loadCustomTemplates();
     //     if (customTemplates.length > 0) {
     //         setTemplates(prev => [...prev, ...customTemplates]);
     //     }
@@ -216,43 +216,7 @@ export const WorkoutProvider = ({ children }) => {
     // --- 1. INITIALIZATION & MIGRATION ---
     // --- 1. INITIALIZATION & MIGRATION ---
     const refreshGlobalState = () => {
-        let profilesData = StorageService.loadProfiles();
-
-        if (profilesData.length === 0) {
-            // MIGRATION: No profiles exist, check for legacy data
-            const legacyHistory = localStorage.getItem('fitness_history');
-
-            // Create Default Profile
-            const defaultProfile = {
-                id: 'user_default',
-                name: 'Main User',
-                color: '#bfff00',
-                avatar: 'M'
-            };
-            profilesData = [defaultProfile];
-            StorageService.saveProfiles(profilesData);
-
-            // Migrate Legacy History
-            if (legacyHistory) {
-                localStorage.setItem(`fitness_history_${defaultProfile.id}`, legacyHistory);
-            }
-            // Migrate Legacy Settings
-            const legacyTheme = localStorage.getItem('fitness_theme');
-            if (legacyTheme) localStorage.setItem(`fitness_theme_${defaultProfile.id}`, legacyTheme);
-
-            const legacyUnits = localStorage.getItem('fitness_units');
-            if (legacyUnits) localStorage.setItem(`fitness_units_${defaultProfile.id}`, legacyUnits);
-
-            const legacySound = localStorage.getItem('fitness_sound');
-            if (legacySound) localStorage.setItem(`fitness_sound_${defaultProfile.id}`, legacySound);
-
-            const legacyActive = localStorage.getItem('fitness_active_workout');
-            if (legacyActive) {
-                // Only migrate if we are clean (which we are, as this is the no-profiles block)
-                localStorage.setItem(`fitness_active_workout_${defaultProfile.id}`, legacyActive);
-                localStorage.removeItem('fitness_active_workout');
-            }
-        }
+        const profilesData = StorageService.getOrCreateProfiles();
 
         setProfiles(profilesData);
 
@@ -272,11 +236,8 @@ export const WorkoutProvider = ({ children }) => {
         // Ensure all legacy/corrupt data is gone
         // if (typeof window !== 'undefined') {
         //     console.warn("PERFORMING FULL FACTORY RESET");
-        //     localStorage.clear();
+        //     StorageService.importSnapshot({});
         // }
-
-        // One-time cleanup of global legacy key (only if it exists) to enforce profile-scoped source of truth
-        localStorage.removeItem('fitness_active_workout');
 
         refreshGlobalState();
 
@@ -293,7 +254,7 @@ export const WorkoutProvider = ({ children }) => {
 
         const uid = profile.id;
 
-        const ps = StorageService.loadProfileState(uid);
+        const ps = StorageService.loadProfileScopedState(uid);
 
         setHistory(ps.history);
         setAssessments(ps.assessments);
@@ -472,7 +433,7 @@ export const WorkoutProvider = ({ children }) => {
             };
             const updatedProfiles = [...profiles, newProfile];
             setProfiles(updatedProfiles);
-            localStorage.setItem('fitness_profiles', JSON.stringify(updatedProfiles));
+            StorageService.saveProfiles(updatedProfiles);
 
             // DEBUG: Disable auto-switch to test if creation itself is safe
             // setCurrentProfile(newProfile);
@@ -498,27 +459,10 @@ export const WorkoutProvider = ({ children }) => {
         // 1. Remove from state
         const updatedProfiles = profiles.filter(p => p.id !== profileId);
         setProfiles(updatedProfiles);
-        localStorage.setItem('fitness_profiles', JSON.stringify(updatedProfiles));
+        StorageService.saveProfiles(updatedProfiles);
 
         // 2. Clean up scoped data
-        const keysToRemove = [
-            `fitness_history_${profileId}`,
-            `fitness_active_workout_${profileId}`,
-            `fitness_theme_${profileId}`,
-            `fitness_units_${profileId}`,
-            `fitness_sound_${profileId}`,
-            `fitness_default_rest_${profileId}`, // Cleanup
-            `fitness_default_work_${profileId}`, // Cleanup
-            `fitness_stats_${profileId}`,
-            `fitness_stats_${profileId}`,
-            `fitness_weight_history_${profileId}`,
-            `fitness_exercise_prefs_${profileId}`,
-            `fitness_smart_prog_${profileId}`,
-            `fitness_prog_mode_${profileId}`,
-            `fitness_prog_type_${profileId}`,
-            `fitness_prog_inc_${profileId}`
-        ];
-        keysToRemove.forEach(key => localStorage.removeItem(key));
+        StorageService.clearProfileData(profileId);
 
         // 3. If deleting current user, logout
         if (currentProfile && currentProfile.id === profileId) {
@@ -1244,9 +1188,9 @@ export const WorkoutProvider = ({ children }) => {
         const updatedList = [...exercises, exerciseWithId];
         setExercises(updatedList);
 
-        const customExercises = JSON.parse(localStorage.getItem('fitness_custom_exercises') || '[]');
+        const customExercises = StorageService.loadCustomExercises(currentProfile?.id);
         customExercises.push(exerciseWithId);
-        localStorage.setItem('fitness_custom_exercises', JSON.stringify(customExercises));
+        StorageService.saveCustomExercises(currentProfile?.id, customExercises);
     };
 
     const addWeightEntry = (weight) => {
@@ -1355,7 +1299,7 @@ export const WorkoutProvider = ({ children }) => {
         setAssessments(updated);
 
         // Save to storage
-        localStorage.setItem(`fitness_assessments_${currentProfile.id}`, JSON.stringify(updated));
+        StorageService.saveAssessments(currentProfile.id, updated);
     };
 
     // --- 10. HISTORY LOOKUP (Previous Stats) ---
@@ -1402,8 +1346,8 @@ export const WorkoutProvider = ({ children }) => {
             // Persist new exercises
             if (newCustomExercises.length > 0) {
                 setExercises(updatedExercises);
-                const savedCustom = JSON.parse(localStorage.getItem('fitness_custom_exercises') || '[]');
-                localStorage.setItem('fitness_custom_exercises', JSON.stringify([...savedCustom, ...newCustomExercises]));
+                const savedCustom = StorageService.loadCustomExercises(currentProfile?.id);
+                StorageService.saveCustomExercises(currentProfile?.id, [...savedCustom, ...newCustomExercises]);
             }
 
             // 2. Create Templates
@@ -1440,11 +1384,14 @@ export const WorkoutProvider = ({ children }) => {
 
     // Load custom exercises on mount
     useEffect(() => {
-        const customExercises = JSON.parse(localStorage.getItem('fitness_custom_exercises') || '[]');
+        if (!currentProfile) return;
+        const customExercises = StorageService.loadCustomExercises(currentProfile.id);
         if (customExercises.length > 0) {
-            setExercises(prev => [...prev, ...customExercises]);
+            setExercises([...DEFAULT_EXERCISES, ...customExercises]);
+        } else {
+            setExercises(DEFAULT_EXERCISES);
         }
-    }, []);
+    }, [currentProfile]);
 
     // --- ANALYTICS HELPERS (Phase B) ---
     const getMuscleVolumeDistribution = () => {
@@ -1525,17 +1472,7 @@ export const WorkoutProvider = ({ children }) => {
     };
 
     // --- 8. DATA MANAGEMENT ---
-    const getBackupData = () => {
-        const data = {};
-        // Scrape all app-specific data
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('fitness_')) {
-                data[key] = localStorage.getItem(key);
-            }
-        }
-        return data;
-    };
+    const getBackupData = () => StorageService.exportSnapshot();
 
     const exportData = () => {
         const data = getBackupData();
@@ -1554,28 +1491,7 @@ export const WorkoutProvider = ({ children }) => {
 
 
     const processImportedData = (data) => {
-        // Validate basic structure (check if it has at least one fitness key)
-        const keys = Object.keys(data);
-        const hasValidKeys = keys.some(k => k.startsWith('fitness_'));
-
-        if (!hasValidKeys) {
-            throw new Error("Invalid backup file: No fitness data found.");
-        }
-
-        // Clear existing app data
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('fitness_')) {
-                keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(k => localStorage.removeItem(k));
-
-        // Restore new data
-        Object.entries(data).forEach(([key, value]) => {
-            localStorage.setItem(key, value);
-        });
+        StorageService.importSnapshot(data);
     };
 
     const importData = (file) => {
