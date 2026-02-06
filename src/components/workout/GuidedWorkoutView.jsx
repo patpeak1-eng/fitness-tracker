@@ -33,7 +33,8 @@ const GuidedWorkoutView = () => {
         toggleWorkTimer,
         resetWorkTimer,
         addTimeWork,
-        toggleSetComplete
+        toggleSetComplete,
+        units // Grab units context
     } = useWorkout();
 
     const navigate = useNavigate();
@@ -270,6 +271,10 @@ const GuidedWorkoutView = () => {
                         <span className="label-small">Current Exercise</span>
                         <h1 className="exercise-title-split">{currentExerciseInstance.exercise.name}</h1>
 
+                        <button className="view-instructions-btn" onClick={() => setInfoModalOpen(true)}>
+                            <Info size={18} /> Description
+                        </button>
+
                         <span className="label-small" style={{ marginTop: '20px' }}>Up Next</span>
                         <div className="up-next-name">
                             {nextExerciseInstance ? nextExerciseInstance.exercise.name : "Workout Complete"}
@@ -307,7 +312,7 @@ const GuidedWorkoutView = () => {
                             onClick={() => setTargetModal({ isOpen: true, type: 'weight', value: currentSet.weight || 0 })}
                         >
                             <span style={{ color: 'var(--primary)' }}>{currentSet.weight > 0 ? `${currentSet.weight}` : 'BW'}</span>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>LBS</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{units === 'imperial' ? 'LBS' : 'KGS'}</span>
                         </button>
 
                         <button
@@ -410,7 +415,7 @@ const GuidedWorkoutView = () => {
                                 />
                             </div>
                             <div className="input-group">
-                                <label>Weight (lbs)</label>
+                                <label>Weight ({units === 'imperial' ? 'lbs' : 'kgs'})</label>
                                 <input
                                     type="number"
                                     value={inputValues.weight}

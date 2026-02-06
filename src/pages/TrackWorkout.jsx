@@ -3,6 +3,7 @@ import { WorkoutContext } from '../context/WorkoutContext';
 import ExerciseResult from '../components/workout/ExerciseResult';
 import CreateTemplateModal from '../components/workout/CreateTemplateModal';
 import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
+import Modal from '../components/common/Modal'; // Import reusable Modal
 import { Play, Plus, Clock, XCircle, Check } from 'lucide-react';
 import './TrackWorkout.css';
 
@@ -36,7 +37,12 @@ const TrackWorkout = () => {
         return `${m}:${s}`;
     };
 
-    const [hasStarted, setHasStarted] = useState(false);
+    // Confirm Delete Modal State
+    const [deleteConfirmation, setDeleteConfirmation] = useState({
+        isOpen: false,
+        templateId: null,
+        templateName: ''
+    });
 
     if (!activeWorkout) {
         return (
@@ -74,9 +80,11 @@ const TrackWorkout = () => {
                                                 className="delete-mini-btn"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (window.confirm('Delete this template?')) {
-                                                        deleteTemplate(template.id);
-                                                    }
+                                                    setDeleteConfirmation({
+                                                        isOpen: true,
+                                                        templateId: template.id,
+                                                        templateName: template.name
+                                                    });
                                                 }}
                                             >
                                                 <XCircle size={14} />
@@ -108,13 +116,55 @@ const TrackWorkout = () => {
                         onClose={() => setShowSelector(false)}
                     />
                 )}
+
+                {/* Delete Confirmation Modal */}
+                <Modal
+                    isOpen={deleteConfirmation.isOpen}
+                    onClose={() => setDeleteConfirmation({ ...deleteConfirmation, isOpen: false })}
+                    title="Delete Template"
+                    actions={
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
+                            <button
+                                className="secondary-btn"
+                                onClick={() => setDeleteConfirmation({ ...deleteConfirmation, isOpen: false })}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="delete-tpl-btn"
+                                onClick={() => {
+                                    deleteTemplate(deleteConfirmation.templateId);
+                                    setDeleteConfirmation({ ...deleteConfirmation, isOpen: false });
+                                }}
+                                style={{
+                                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                                    color: '#ef4444',
+                                    border: '1px solid #ef4444',
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <XCircle size={16} /> Delete
+                            </button>
+                        </div>
+                    }
+                >
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.5' }}>
+                        Are you sure you want to permanently delete <strong>{deleteConfirmation.templateName}</strong>?
+                    </p>
+                </Modal>
             </div>
         );
     }
 
     // 2. WORKOUT PREP & REVIEW (The "Preparation" Phase)
     // Check local state OR persisted status from context
-    const isGuidedMode = hasStarted || activeWorkout.status === 'active';
+    const isGuidedMode = activeWorkout.status === 'active';
 
     if (!isGuidedMode) {
         return (
@@ -138,7 +188,6 @@ const TrackWorkout = () => {
                         <button
                             onClick={() => {
                                 startGuidedSession();
-                                setHasStarted(true);
                             }}
                             className="finish-btn"
                             style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -170,7 +219,6 @@ const TrackWorkout = () => {
                         <button
                             onClick={() => {
                                 startGuidedSession();
-                                setHasStarted(true);
                             }}
                             className="finish-btn"
                             style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}

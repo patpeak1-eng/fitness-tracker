@@ -92,6 +92,7 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false }) 
             {showModal && (
                 <InstructionModal
                     exercise={exercise}
+                    isOpen={true}
                     onClose={() => setShowModal(false)}
                 />
             )}

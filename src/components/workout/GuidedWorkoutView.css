@@ -153,16 +153,70 @@
 .timer-circle.working {
     border-color: rgba(204, 255, 0, 0.3);
     box-shadow: 0 0 50px rgba(204, 255, 0, 0.1);
+    animation: pulse-ring-lime 2s infinite ease-in-out;
 }
 
 .timer-circle.working.duration-mode {
     border-color: rgba(0, 243, 255, 0.3);
     box-shadow: 0 0 50px rgba(0, 243, 255, 0.1);
+    animation: pulse-ring-cyan 2s infinite ease-in-out;
 }
 
 .timer-circle.resting {
     border-color: rgba(0, 150, 255, 0.3);
     box-shadow: 0 0 50px rgba(0, 150, 255, 0.1);
+    animation: pulse-ring-blue 2s infinite ease-in-out;
+}
+
+@keyframes pulse-ring-lime {
+    0% {
+        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
+        border-color: rgba(204, 255, 0, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 60px rgba(204, 255, 0, 0.4);
+        border-color: rgba(204, 255, 0, 0.6);
+    }
+
+    100% {
+        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
+        border-color: rgba(204, 255, 0, 0.3);
+    }
+}
+
+@keyframes pulse-ring-cyan {
+    0% {
+        box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+        border-color: rgba(0, 243, 255, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 60px rgba(0, 243, 255, 0.4);
+        border-color: rgba(0, 243, 255, 0.6);
+    }
+
+    100% {
+        box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+        border-color: rgba(0, 243, 255, 0.3);
+    }
+}
+
+@keyframes pulse-ring-blue {
+    0% {
+        box-shadow: 0 0 30px rgba(0, 150, 255, 0.1);
+        border-color: rgba(0, 150, 255, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 60px rgba(0, 150, 255, 0.4);
+        border-color: rgba(0, 150, 255, 0.6);
+    }
+
+    100% {
+        box-shadow: 0 0 30px rgba(0, 150, 255, 0.1);
+        border-color: rgba(0, 150, 255, 0.3);
+    }
 }
 
 .timer-value {
@@ -318,6 +372,30 @@
 .up-next-name {
     font-size: 1.2rem;
     color: var(--text-muted);
+}
+
+.view-instructions-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--primary);
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 10px 0 25px 0;
+    font-weight: 500;
+}
+
+.view-instructions-btn:hover {
+    background: rgba(204, 255, 0, 0.15);
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 0 15px rgba(204, 255, 0, 0.2);
+    color: #fff;
 }
 
 /* NAVIGATION (Bottom Left) */

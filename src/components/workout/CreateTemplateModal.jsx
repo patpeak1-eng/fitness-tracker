@@ -71,8 +71,10 @@ const CreateTemplateModal = ({ onClose }) => {
         const newTemplate = saveCustomTemplate(name, templateData);
         if (newTemplate) {
             startWorkoutFromTemplate(newTemplate);
+            onClose();
+        } else {
+            alert("Failed to save template. Please check that a profile is active.");
         }
-        onClose();
     };
 
     return (
