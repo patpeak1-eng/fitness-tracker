@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import StorageService from '../services/StorageService';
+import ActiveWorkoutService from "../services/ActiveWorkoutService";
+
 
 export const WorkoutContext = createContext();
 
@@ -873,10 +875,10 @@ export const WorkoutProvider = ({ children }) => {
                 completed: false
             }]
         };
-        setActiveWorkout(prev => ({
-            ...prev,
-            exercises: [...prev.exercises, newWorkoutExercise]
-        }));
+        setActiveWorkout(prev =>
+    ActiveWorkoutService.addExercise(prev, { newWorkoutExercise })
+);
+
     };
 
     const updateSet = (exerciseInstanceId, setId, updates) => {
