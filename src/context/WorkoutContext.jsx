@@ -200,14 +200,14 @@ export const WorkoutProvider = ({ children }) => {
     const setCurrentExerciseIndex = (index) => {
         _setCurrentExerciseIndex(index);
         if (activeWorkout) {
-            setActiveWorkout(prev => ({ ...prev, currentExerciseIndex: index }));
+            updateActiveWorkout({ type: 'SET_CURRENT_EXERCISE_INDEX', index });
         }
     };
 
     const setCurrentSetIndex = (index) => {
         _setCurrentSetIndex(index);
         if (activeWorkout) {
-            setActiveWorkout(prev => ({ ...prev, currentSetIndex: index }));
+            updateActiveWorkout({ type: 'SET_CURRENT_SET_INDEX', index });
         }
     };
 
