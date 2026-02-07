@@ -899,21 +899,13 @@ export const WorkoutProvider = ({ children }) => {
                 syncToTemplate(prev.sourceTemplateId, exIndex, setIndex, updates);
             }
 
-            return {
-                ...prev,
-                exercises: prev.exercises.map((ex, i) => {
-                    if (i !== exIndex) return ex;
-                    return {
-                        ...ex,
-                        sets: ex.sets.map((s, j) => {
-                            if (j !== setIndex) return s;
-                            return { ...s, ...updates };
-                        })
-                    };
-                })
-            };
+     return ActiveWorkoutService.updateSet(prev, {
+            exerciseInstanceId,
+            setId,
+            updates
         });
-    };
+    });
+};
 
     // Helper to sync changes back to source template
     const syncToTemplate = (templateId, exIndex, setIndex, updates) => {

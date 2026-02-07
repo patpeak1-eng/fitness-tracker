@@ -10,8 +10,27 @@ const addExercise = (state, { newWorkoutExercise }) => {
     };
 };
 
+const updateSet = (state, { exerciseInstanceId, setId, updates }) => {
+    if (!state) return state;
+
+    return {
+        ...state,
+        exercises: (state.exercises || []).map(ex => {
+            if (ex.id !== exerciseInstanceId) return ex;
+
+            return {
+                ...ex,
+                sets: (ex.sets || []).map(set =>
+                    set.id === setId ? { ...set, ...updates } : set
+                )
+            };
+        })
+    };
+};
+
 const ActiveWorkoutService = {
-    addExercise
+    addExercise,
+    updateSet
 };
 
 export default ActiveWorkoutService;
