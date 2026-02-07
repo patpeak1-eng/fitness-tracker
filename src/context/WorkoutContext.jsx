@@ -1171,10 +1171,10 @@ export const WorkoutProvider = ({ children }) => {
 
     const removeExerciseFromWorkout = (exerciseInstanceId) => {
         if (!activeWorkout) return;
-        setActiveWorkout(prev => ({
-            ...prev,
-            exercises: prev.exercises.filter(ex => ex.id !== exerciseInstanceId)
-        }));
+        setActiveWorkout(prev =>
+    ActiveWorkoutService.removeExercise(prev, { exerciseInstanceId })
+);
+
     };
 
     const addCustomExercise = (newExercise) => {

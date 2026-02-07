@@ -28,9 +28,21 @@ const updateSet = (state, { exerciseInstanceId, setId, updates }) => {
     };
 };
 
+const removeExercise = (state, { exerciseInstanceId }) => {
+    if (!state) return state;
+
+    return {
+        ...state,
+        exercises: (state.exercises || []).filter(
+            ex => ex.id !== exerciseInstanceId
+        )
+    };
+};
+
 const ActiveWorkoutService = {
     addExercise,
-    updateSet
+    updateSet,
+    removeExercise
 };
 
 export default ActiveWorkoutService;
