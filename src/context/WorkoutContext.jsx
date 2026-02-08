@@ -1115,59 +1115,56 @@ export const WorkoutProvider = ({ children }) => {
     };
 
     const addSet = (exerciseInstanceId) => {
-        if (!activeWorkout) return;
-        setActiveWorkout(prev => ({
-            ...prev,
-            exercises: prev.exercises.map(ex => {
-                if (ex.id !== exerciseInstanceId) return ex;
+    if (!activeWorkout) return;
 
-                // Determine default weight for new set
-                let defaultWeight = 0;
-                const previousSet = ex.sets[ex.sets.length - 1];
+    setActiveWorkout(prev => {
+        const ex = prev.exercises.find(e => e.id === exerciseInstanceId);
+        if (!ex) return prev;
 
-                if (previousSet) {
-                    defaultWeight = previousSet.weight;
-                } else if (ex.exercise.isBodyweight) {
-                    // Fallback to profile weight if no previous sets exist
-                    defaultWeight = parseFloat(userStats.currentWeight) || 0;
-                }
+        // Determine default weight for new set
+        let defaultWeight = 0;
+        const previousSet = ex.sets[ex.sets.length - 1];
 
-                const previousTarget = previousSet ? (previousSet.targetReps || 0) : 0;
-                const previousTargetDist = previousSet ? (previousSet.targetDistance || 0) : 0;
-                const previousTargetTime = previousSet ? (previousSet.targetTime || 0) : 0;
+        if (previousSet) {
+            defaultWeight = previousSet.weight;
+        } else if (ex.exercise.isBodyweight) {
+            // Fallback to profile weight if no previous sets exist
+            defaultWeight = parseFloat(userStats.currentWeight) || 0;
+        }
 
-                const previousReps = previousSet ? previousSet.reps : 0;
-                const previousDist = previousSet ? previousSet.distance : 0;
-                const previousTime = previousSet ? previousSet.time : 0;
+        const previousTarget = previousSet ? (previousSet.targetReps || 0) : 0;
+        const previousTargetDist = previousSet ? (previousSet.targetDistance || 0) : 0;
+        const previousTargetTime = previousSet ? (previousSet.targetTime || 0) : 0;
 
-                return {
-                    ...ex,
-                    sets: [...ex.sets, {
-                        id: generateId(),
-                        weight: defaultWeight,
-                        targetReps: previousTarget,
-                        targetDistance: previousTargetDist,
-                        targetTime: previousTargetTime,
-                        reps: previousReps,
-                        distance: previousDist,
-                        time: previousTime,
-                        completed: false
-                    }]
-                };
-            })
-        }));
-    };
+        const previousReps = previousSet ? previousSet.reps : 0;
+        const previousDist = previousSet ? previousSet.distance : 0;
+        const previousTime = previousSet ? previousSet.time : 0;
+
+        const newSet = {
+            id: generateId(),
+            weight: defaultWeight,
+            targetReps: previousTarget,
+            targetDistance: previousTargetDist,
+            targetTime: previousTargetTime,
+            reps: previousReps,
+            distance: previousDist,
+            time: previousTime,
+            completed: false
+        };
+
+        return ActiveWorkoutService.addSet(prev, { exerciseInstanceId, newSet });
+    });
+};
+
 
     const removeSet = (exerciseInstanceId, setId) => {
-        if (!activeWorkout) return;
-        setActiveWorkout(prev => ({
-            ...prev,
-            exercises: prev.exercises.map(ex => {
-                if (ex.id !== exerciseInstanceId) return ex;
-                return { ...ex, sets: ex.sets.filter(s => s.id !== setId) };
-            })
-        }));
-    };
+    if (!activeWorkout) return;
+
+    setActiveWorkout(prev =>
+        ActiveWorkoutService.removeSet(prev, { exerciseInstanceId, setId })
+    );
+};
+
 
     const removeExerciseFromWorkout = (exerciseInstanceId) => {
         if (!activeWorkout) return;

@@ -33,16 +33,45 @@ const removeExercise = (state, { exerciseInstanceId }) => {
 
     return {
         ...state,
-        exercises: (state.exercises || []).filter(
-            ex => ex.id !== exerciseInstanceId
-        )
+        exercises: (state.exercises || []).filter(ex => ex.id !== exerciseInstanceId)
     };
 };
+
+const addSet = (state, { exerciseInstanceId, newSet }) => {
+    if (!state) return state;
+
+    return {
+        ...state,
+        exercises: (state.exercises || []).map(ex => {
+            if (ex.id !== exerciseInstanceId) return ex;
+
+            return {
+                ...ex,
+                sets: [...(ex.sets || []), newSet]
+            };
+        })
+    };
+};
+
+const removeSet = (state, { exerciseInstanceId, setId }) => {
+    if (!state) return state;
+
+    return {
+        ...state,
+        exercises: (state.exercises || []).map(ex => {
+            if (ex.id !== exerciseInstanceId) return ex;
+            return { ...ex, sets: (ex.sets || []).filter(s => s.id !== setId) };
+        })
+    };
+};
+
 
 const ActiveWorkoutService = {
     addExercise,
     updateSet,
-    removeExercise
+    removeExercise,
+    addSet,
+    removeSet
 };
 
 export default ActiveWorkoutService;
