@@ -1409,7 +1409,7 @@ export const WorkoutProvider = ({ children }) => {
             if (!workout.exercises) return;
 
             workout.exercises.forEach(exData => {
-                let group = exData.exercise.muscleGroup;
+                let group = exData.exercise.primary_muscle;
 
                 // Normalization
                 if (!counts.hasOwnProperty(group)) {
