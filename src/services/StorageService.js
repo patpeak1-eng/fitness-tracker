@@ -1,3 +1,5 @@
+import { isAvailable, saveWorkout, saveActiveWorkout, clearActiveWorkout } from './ApiService';
+
 const LEGACY_PREFIX = 'fitness_';
 const USER_SEGMENT = '_user_';
 
@@ -319,6 +321,42 @@ const StorageService = {
         toRemove.forEach(k => localStorage.removeItem(k));
 
         Object.entries(data).forEach(([k, v]) => localStorage.setItem(k, String(v)));
+    },
+
+    async syncToApi(uid) {
+        if (!isAvailable()) return false;
+        try {
+            const state = this.loadProfileState(uid);
+            // Best-effort sync — the caller need not await this; localStorage stays the source of truth.
+            // Per-call failures are warned and swallowed so one bad request can't abort the rest.
+            // Sync history
+            if (state.history && state.history.length > 0) {
+                const lastWorkout = state.history[0];
+                await saveWorkout(lastWorkout).catch(e => console.warn('API sync: saveWorkout failed', e));
+            }
+            // Sync active workout
+            if (state.activeWorkout) {
+                await saveActiveWorkout(state.activeWorkout).catch(e => console.warn('API sync: saveActiveWorkout failed', e));
+            } else {
+                await clearActiveWorkout().catch(e => console.warn('API sync: clearActiveWorkout failed', e));
+            }
+            return true;
+        } catch (e) {
+            console.warn('API sync failed, localStorage is source of truth', e);
+            return false;
+        }
+    },
+
+    saveAuthToken(token) {
+        localStorage.setItem('fitness_auth_token', token);
+    },
+
+    loadAuthToken() {
+        return localStorage.getItem('fitness_auth_token');
+    },
+
+    clearAuthToken() {
+        localStorage.removeItem('fitness_auth_token');
     }
 };
 
