@@ -331,6 +331,15 @@ export const WorkoutProvider = ({ children }) => {
         }
     }, [history, currentProfile]);
 
+    // Auto-sync to API after a workout is completed (i.e. history changes).
+    useEffect(() => {
+        if (currentProfile && history.length > 0) {
+            // Fire and forget — don't await, don't block UI.
+            // localStorage stays the source of truth if this fails.
+            StorageService.syncToApi(currentProfile.id).catch(() => {});
+        }
+    }, [history]);
+
     // Persist Active Workout
     useEffect(() => {
         if (currentProfile) {
