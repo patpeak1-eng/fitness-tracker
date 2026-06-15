@@ -63,17 +63,6 @@ const Profile = () => {
         setConfirmImport({ isOpen: false, file: null });
     };
 
-    const handleConnect = async () => {
-        const result = await connectDataFile();
-        if (result && result.message) {
-            setDataModal({
-                isOpen: true,
-                title: result.success ? 'Success' : 'Connection Failed',
-                message: result.message
-            });
-        }
-    };
-
     const handleChange = (e) => {
         const { name, value } = e.target;
         setUserStats(prev => ({
