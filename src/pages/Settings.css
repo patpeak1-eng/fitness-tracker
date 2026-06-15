@@ -112,10 +112,60 @@
 
 .version-info {
     text-align: center;
+    /* Muted via color (not opacity) so the status colors below render at full
+       strength — opacity on this container would composite down onto them. */
     color: var(--text-muted);
     font-size: 0.8rem;
     margin-top: 3rem;
-    opacity: 0.5;
+}
+
+.version-info p {
+    margin: 2px 0;
+}
+
+.backend-status {
+    font-weight: 600;
+}
+
+.backend-status.connected {
+    color: var(--success);
+}
+
+.backend-status.local {
+    color: var(--text-muted);
+}
+
+/* "Saved" confirmation toast — fades in when a setting changes, out after 2s. */
+.save-toast {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-12px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    border-radius: 999px;
+    box-shadow: 0 4px 16px var(--primary-glow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 1000;
+}
+
+.save-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .save-toast {
+        transition: opacity 0.01ms;
+    }
 }
 
 .smart-progression-content {
