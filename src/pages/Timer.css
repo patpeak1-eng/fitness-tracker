@@ -1,0 +1,229 @@
+.timer-page {
+    padding: 20px;
+    padding-bottom: 120px;
+    /* clear the floating bottom nav */
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.tp-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.tp-header h1 {
+    font-size: 1.8rem;
+}
+
+/* Countdown display — mirrors the GuidedWorkoutView timer circle */
+.tp-display {
+    width: 280px;
+    height: 280px;
+    max-width: 80vw;
+    max-height: 80vw;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 30px 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.2) 70%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+    transition: all 0.5s ease;
+}
+
+.tp-display.running {
+    border-color: rgba(204, 255, 0, 0.3);
+    box-shadow: 0 0 50px rgba(204, 255, 0, 0.1);
+    animation: tp-pulse 2s infinite ease-in-out;
+}
+
+.tp-display.complete {
+    border-color: rgba(204, 255, 0, 0.5);
+    box-shadow: 0 0 60px rgba(204, 255, 0, 0.25);
+}
+
+@keyframes tp-pulse {
+    0% {
+        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
+        border-color: rgba(204, 255, 0, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 60px rgba(204, 255, 0, 0.4);
+        border-color: rgba(204, 255, 0, 0.6);
+    }
+
+    100% {
+        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
+        border-color: rgba(204, 255, 0, 0.3);
+    }
+}
+
+.tp-time {
+    font-size: 4.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: -2px;
+    /* idle state */
+    color: var(--text-secondary);
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+/* active / completed state = neon green */
+.tp-display.running .tp-time,
+.tp-display.complete .tp-time {
+    color: var(--primary);
+    text-shadow: 0 0 20px var(--primary-glow);
+}
+
+.tp-label {
+    margin-top: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.tp-display.running .tp-label,
+.tp-display.complete .tp-label {
+    color: var(--primary);
+}
+
+/* Quick presets */
+.tp-presets {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.tp-preset {
+    background: var(--bg-card);
+    border: var(--border-glass);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: all 0.2s ease;
+}
+
+.tp-preset:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.tp-preset:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Duration inputs */
+.tp-inputs {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.tp-input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.tp-input-group label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+}
+
+.tp-input {
+    width: 80px;
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    background: rgba(0, 0, 0, 0.3);
+    border: var(--border-glass);
+    color: var(--text-primary);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.tp-input:disabled {
+    opacity: 0.5;
+}
+
+.tp-colon {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    padding-bottom: 10px;
+}
+
+/* Controls */
+.tp-controls {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    max-width: 360px;
+}
+
+.tp-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+.tp-btn.start {
+    background: var(--primary);
+    color: #000;
+    box-shadow: 0 0 20px var(--primary-glow);
+}
+
+.tp-btn.pause {
+    background: var(--accent);
+    color: #000;
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.tp-btn.reset {
+    background: rgba(255, 255, 255, 0.06);
+    border: var(--border-glass);
+    color: var(--text-secondary);
+}
+
+.tp-btn.reset:hover {
+    color: var(--text-primary);
+}
+
+.tp-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+}

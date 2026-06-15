@@ -36,7 +36,17 @@ const WorkoutSummary = () => {
 
     const { name, endTime, startTime, exercises, recommendations } = summaryWorkout;
     const durationMs = new Date(endTime) - new Date(startTime);
-    const durationMin = Math.floor(durationMs / 60000);
+    const formatDuration = (ms) => {
+        if (!Number.isFinite(ms) || ms < 0) return '0:00';
+        const totalSec = Math.floor(ms / 1000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        return h > 0
+            ? `${h}h ${m}m`
+            : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+    const durationStr = formatDuration(durationMs);
 
     const totalSets = exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.completed).length, 0);
     const totalVolume = exercises.reduce((acc, ex) => {
@@ -75,7 +85,7 @@ const WorkoutSummary = () => {
                 <div className="stats-row">
                     <div className="stat-box">
                         <span className="sc-label">Duration</span>
-                        <span className="sc-value">{durationMin}m</span>
+                        <span className="sc-value">{durationStr}</span>
                     </div>
                     <div className="stat-box">
                         <span className="sc-label">Sets</span>
