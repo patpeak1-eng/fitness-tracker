@@ -26,6 +26,7 @@ const AppRoutes = () => {
 
     return (
         <Routes>
+            <Route path="/login" element={<Login />} />
             <Route path="/" element={<Layout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="track" element={<TrackWorkout />} />
