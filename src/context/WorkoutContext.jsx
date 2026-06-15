@@ -1517,11 +1517,15 @@ export const WorkoutProvider = ({ children }) => {
         });
     };
 
+    // Derived: cloud sync is active when an auth token exists AND an API URL is configured.
+    const isCloudSynced = !!(StorageService.loadAuthToken() && import.meta.env.VITE_API_URL);
+
     const value = {
         activeWorkout,
         exercises,
         templates,
         history,
+        isCloudSynced,
         profiles,
         currentProfile,
         setCurrentProfile,
