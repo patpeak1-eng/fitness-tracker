@@ -61,7 +61,7 @@ const GuidedWorkoutView = () => {
 
     const currentExerciseInstance = activeWorkout.exercises[currentExerciseIndex];
     const nextExerciseInstance = activeWorkout.exercises[currentExerciseIndex + 1];
-    const isDurationBased = currentExerciseInstance?.exercise.default_duration > 0 || currentExerciseInstance?.exercise.category === 'Yoga' || currentExerciseInstance?.exercise.category === 'Cardio';
+    const isDurationBased = currentExerciseInstance?.exercise.isDurationBased === true || currentExerciseInstance?.exercise.default_duration > 0 || currentExerciseInstance?.exercise.category === 'Yoga' || currentExerciseInstance?.exercise.category === 'Cardio';
 
     if (!currentExerciseInstance) return null;
 
