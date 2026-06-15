@@ -135,3 +135,83 @@
     color: var(--primary);
     border: 1px solid var(--primary);
 }
+
+/* --- "More" overflow menu --- */
+.nav-more-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+}
+
+.nav-more-btn {
+    width: 100%;
+    background: none;
+}
+
+.nav-more-btn.active {
+    color: var(--text-primary);
+}
+
+.nav-more-btn.active svg {
+    color: var(--primary);
+    filter: drop-shadow(0 0 8px var(--primary-glow));
+    opacity: 1;
+}
+
+.nav-more-menu {
+    position: absolute;
+    bottom: calc(100% + 14px);
+    right: 0;
+    min-width: 180px;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 1002;
+    animation: more-pop 0.18s ease;
+}
+
+@keyframes more-pop {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.nav-more-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.nav-more-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+}
+
+.nav-more-item.active {
+    color: var(--primary);
+    background: rgba(204, 255, 0, 0.08);
+}
+
+.nav-more-item svg {
+    opacity: 0.9;
+}
