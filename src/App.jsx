@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { WorkoutProvider, useWorkout } from './context/WorkoutContext';
-import ProfileSelector from './pages/ProfileSelector';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import TrackWorkout from './pages/TrackWorkout';
 import History from './pages/History';
@@ -21,7 +21,7 @@ const AppRoutes = () => {
     const { currentProfile } = useWorkout();
 
     if (!currentProfile) {
-        return <ProfileSelector />;
+        return <Login />;
     }
 
     return (
