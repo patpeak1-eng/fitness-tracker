@@ -331,7 +331,18 @@ export const WorkoutProvider = ({ children }) => {
         }
     }, [history, currentProfile]);
 
+    // Persist Active Workout
+    useEffect(() => {
+        if (currentProfile) {
+            StorageService.saveActiveWorkout(currentProfile.id, activeWorkout || null);
+        }
+    }, [activeWorkout, currentProfile]);
+
     // Auto-sync to API after a workout is completed (i.e. history changes).
+    // Placed after the history AND active-workout persistence effects so that
+    // localStorage reflects the latest state (including a cleared active workout)
+    // before syncToApi reads it — otherwise a just-finished workout could be
+    // re-synced to the API as still-active.
     useEffect(() => {
         if (currentProfile && history.length > 0) {
             // Fire and forget — don't await, don't block UI.
@@ -339,13 +350,6 @@ export const WorkoutProvider = ({ children }) => {
             StorageService.syncToApi(currentProfile.id).catch(() => {});
         }
     }, [history]);
-
-    // Persist Active Workout
-    useEffect(() => {
-        if (currentProfile) {
-            StorageService.saveActiveWorkout(currentProfile.id, activeWorkout || null);
-        }
-    }, [activeWorkout, currentProfile]);
 
     // Persist Theme
     useEffect(() => {
