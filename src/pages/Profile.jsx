@@ -95,7 +95,10 @@ const Profile = () => {
         if (!newName || newName === currentProfile?.name) return;
 
         if (typeof updateProfile === 'function') {
-            updateProfile({ name: newName });
+            updateProfile({
+                name: newName,
+                avatar: newName.charAt(0).toUpperCase()
+            });
         } else {
             // updateProfile not yet available in WorkoutContext (owned by T4).
             setNameNote('Name editing is coming soon.');
@@ -405,9 +408,9 @@ const Profile = () => {
                     <div className="sync-status">
                         <span className={`sync-dot ${isSynced ? 'online' : 'offline'}`}></span>
                         <div className="sync-text">
-                            <span className="sync-title">{isSynced ? 'Synced to cloud' : 'Local only'}</span>
+                            <span className="sync-title">{isSynced ? 'Synced to cloud' : 'Sign in to sync across devices'}</span>
                             <span className="sync-sub">
-                                {isSynced ? 'Your data is backed up to your account' : 'Data stays on this device'}
+                                {isSynced ? 'Your data is backed up to your account' : 'Create an account to back up and sync your data'}
                             </span>
                         </div>
                     </div>
