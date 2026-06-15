@@ -961,7 +961,7 @@ export const WorkoutProvider = ({ children }) => {
 
     const getSuggestedLoad = (exerciseId) => {
         // 1. Find last workout with this exercise
-        const lastWorkout = history.find(w => w.exercises && w.exercises.some(e => e.e.id === exerciseId));
+        const lastWorkout = history.find(w => w.exercises && w.exercises.some(e => e.exercise.id === exerciseId));
         if (!lastWorkout) return null;
 
         const exData = lastWorkout.exercises.find(e => e.exercise.id === exerciseId);
