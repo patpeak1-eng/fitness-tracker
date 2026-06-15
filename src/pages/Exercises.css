@@ -1,0 +1,187 @@
+.exercises-page {
+    padding: 20px;
+    padding-bottom: 120px;
+    /* clear the floating bottom nav */
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.ex-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.ex-header h1 {
+    font-size: 1.8rem;
+}
+
+/* Search */
+.ex-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.ex-search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+.ex-search-input {
+    width: 100%;
+    padding: 12px 14px 12px 42px;
+    background: var(--surface, var(--bg-card));
+    border: var(--border-glass);
+    border-radius: 14px;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+/* Category tabs */
+.ex-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    padding-bottom: 4px;
+}
+
+.ex-tab {
+    flex: 0 0 auto;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: var(--surface, var(--bg-card));
+    border: var(--border-glass);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.ex-tab.active {
+    background: var(--primary);
+    color: #000;
+    border-color: var(--primary);
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.ex-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+/* List + glassmorphism cards */
+.ex-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ex-card {
+    background: var(--surface, var(--bg-card));
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-glass);
+    border-radius: 16px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ex-card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.ex-card.open {
+    border-color: var(--primary);
+}
+
+.ex-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ex-card-info {
+    min-width: 0;
+}
+
+.ex-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+}
+
+.ex-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ex-muscle,
+.ex-equip {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.ex-equip::before {
+    content: '•';
+    margin-right: 8px;
+    color: var(--text-muted);
+}
+
+.ex-card-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.ex-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--primary);
+    background: rgba(204, 255, 0, 0.1);
+    border: 1px solid rgba(204, 255, 0, 0.2);
+    padding: 4px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.ex-chevron {
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.ex-chevron.open {
+    transform: rotate(180deg);
+}
+
+.ex-instructions {
+    margin: 14px 0 0 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.ex-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 0.95rem;
+}
