@@ -12,8 +12,8 @@ const Layout = () => {
     const isGuidedMode = activeWorkout?.status === 'active';
 
     return (
-        <div className="layout">
-            <main className="content">
+        <div className="layout-container">
+            <main className="main-content">
                 <Outlet />
             </main>
 

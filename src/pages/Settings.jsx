@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Moon, Sun, Ruler, Check, Volume2, VolumeX, Users, LogOut, ChevronLeft } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +25,30 @@ const Settings = () => {
         progressionIncrement, setProgressionIncrement
     } = useWorkout();
 
+    // Backend connection status. VITE_API_URL is baked in at build time, so a
+    // truthy value means this build was pointed at the deployed backend.
+    const apiConnected = Boolean(import.meta.env.VITE_API_URL);
+
+    // "Saved ✓" confirmation. Settings persist automatically through
+    // WorkoutContext's useEffect, so we surface a brief, auto-fading
+    // confirmation whenever any setting value changes. The initial mount is
+    // skipped so the toast doesn't flash on first load.
+    const [showSaved, setShowSaved] = useState(false);
+    const isInitialMount = useRef(true);
+
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        setShowSaved(true);
+        const timer = setTimeout(() => setShowSaved(false), 2000);
+        return () => clearTimeout(timer);
+    }, [
+        theme, units, soundEnabled, defaultRestTime, defaultWorkTime,
+        smartProgressionEnabled, progressionMode, progressionType, progressionIncrement
+    ]);
+
     const handleSwitchProfile = () => {
         setShowLogoutModal(false);
         switchProfile(null);
@@ -32,6 +56,9 @@ const Settings = () => {
 
     return (
         <div className="page settings-page" style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div className={`save-toast ${showSaved ? 'visible' : ''}`} role="status" aria-live="polite">
+                <Check size={16} /> Saved
+            </div>
             <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <BackButton />
                 <h1 style={{ margin: 0 }}>Settings</h1>
@@ -283,7 +310,13 @@ const Settings = () => {
             </section>
 
             <div className="version-info">
-                <p>FitTrack v1.0.0</p>
+                <p>App: FitTrack v1.0</p>
+                <p>
+                    Backend:{' '}
+                    <span className={`backend-status ${apiConnected ? 'connected' : 'local'}`}>
+                        {apiConnected ? 'Connected' : 'Local only'}
+                    </span>
+                </p>
             </div>
 
             <Modal
