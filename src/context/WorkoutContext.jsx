@@ -1303,7 +1303,11 @@ export const WorkoutProvider = ({ children }) => {
             // 1. Ensure all exercises exist
             programData.templates.forEach(tpl => {
                 tpl.exercises.forEach(exData => {
-                    const existing = updatedExercises.find(e => e.name === exData.name);
+                    const existing = updatedExercises.find(e => {
+                        const en = String(e.name ?? '').toLowerCase().trim();
+                        const xn = String(exData.name ?? '').toLowerCase().trim();
+                        return en === xn || en === xn + 's' || en + 's' === xn;
+                    });
                     if (!existing) {
                         // Create new exercise
                         const newEx = {
