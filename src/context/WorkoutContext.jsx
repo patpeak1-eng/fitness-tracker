@@ -1515,6 +1515,7 @@ export const WorkoutProvider = ({ children }) => {
         history,
         profiles,
         currentProfile,
+        setCurrentProfile,
         theme,
         setTheme,
         units,
