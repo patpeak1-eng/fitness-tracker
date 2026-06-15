@@ -18,7 +18,7 @@ import CustomSelect from '../components/common/CustomSelect'; // Using new custo
 import './AnalyticsView.css';
 
 const Analytics = () => {
-    const { workoutHistory, exercises, units } = useWorkout();
+    const { history, exercises, units } = useWorkout();
     const navigate = useNavigate();
 
     // State
@@ -32,12 +32,12 @@ const Analytics = () => {
 
     // Process Data based on selection
     const chartData = useMemo(() => {
-        if (!workoutHistory || workoutHistory.length === 0 || !selectedExerciseId) return [];
+        if (!history || history.length === 0 || !selectedExerciseId) return [];
 
         const dataPoints = [];
 
         // Loop through all past workouts
-        workoutHistory.forEach(workout => {
+        history.forEach(workout => {
             // Find if this workout included the selected exercise
             const exerciseData = workout.exercises.find(ex => ex.exercise.id === selectedExerciseId);
 
@@ -77,7 +77,7 @@ const Analytics = () => {
         // Sort by date
         return dataPoints.sort((a, b) => a.originalDate - b.originalDate);
 
-    }, [workoutHistory, selectedExerciseId]);
+    }, [history, selectedExerciseId]);
 
     // Calculate Personal Records
     const records = useMemo(() => {

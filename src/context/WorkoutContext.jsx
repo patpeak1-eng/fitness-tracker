@@ -5,8 +5,6 @@ import ActiveWorkoutService from "../services/ActiveWorkoutService";
 
 export const WorkoutContext = createContext();
 
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
 const DEFAULT_EXERCISES = [
     { "id": "wt_ohp", "name": "Overhead Press", "category": "Weights", "primary_muscle": "Shoulders", "equipment": "Barbell/Dumbbells", "instructions": "Press the weight directly overhead until arms lock, keeping core tight and avoiding a back arch." },
     { "id": "wt_lat_raise", "name": "Dumbbell Side Raise", "category": "Weights", "primary_muscle": "Shoulders", "equipment": "Dumbbells", "instructions": "Raise dumbbells out to the sides with a slight elbow bend until arms are parallel to the floor." },
@@ -309,8 +307,6 @@ export const WorkoutProvider = ({ children }) => {
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
         setExercisePrefs(ps.exercisePrefs);
-        setWeightHistory(ps.weightHistory);
-        setExercisePrefs(ps.exercisePrefs);
 
         // Load Templates Scoped to User
         const userTemplates = StorageService.loadCustomTemplates(uid);
@@ -338,7 +334,6 @@ export const WorkoutProvider = ({ children }) => {
     // Persist Active Workout
     useEffect(() => {
         if (currentProfile) {
-            console.log("[persist activeWorkout]", currentProfile.id, activeWorkout?.id, activeWorkout?.status);
             StorageService.saveActiveWorkout(currentProfile.id, activeWorkout || null);
         }
     }, [activeWorkout, currentProfile]);
@@ -620,7 +615,7 @@ export const WorkoutProvider = ({ children }) => {
             for (let i = 0; i < history.length; i++) {
                 const workout = history[i]; // History is sorted new -> old (index 0 is newest)
 
-                if (!workout.completed) continue;
+                if (workout.status !== 'completed') continue;
 
                 const exData = workout.exercises ? workout.exercises.find(e => e && e.exercise && e.exercise.id === exerciseId) : null;
                 if (exData && exData.sets && exData.sets.length > 0) {
@@ -664,7 +659,6 @@ export const WorkoutProvider = ({ children }) => {
             exercises: []
         };
         setActiveWorkout(newWorkout);
-        setActiveWorkout(newWorkout);
         _setCurrentExerciseIndex(0);
         _setCurrentSetIndex(0);
     };
@@ -678,11 +672,9 @@ export const WorkoutProvider = ({ children }) => {
                 // Object passed directly (e.g. from creation)
                 template = templateIdOrObj;
                 templateId = template.id;
-                console.log("DEBUG: Using provided template object:", template.name);
             } else {
                 // ID passed
                 templateId = templateIdOrObj;
-                console.log("DEBUG: Attempting to load template ID:", templateId);
                 template = templates.find(t => t.id === templateId);
             }
 
@@ -690,7 +682,6 @@ export const WorkoutProvider = ({ children }) => {
                 console.error("DEBUG: Template not found for:", templateIdOrObj);
                 return;
             }
-            console.log("DEBUG: Found/Using template:", template.name);
 
             // Handle both legacy (object) and new (string ID) exercise formats
             const newWorkoutExercises = template.exercises.map(exItem => {
@@ -746,7 +737,6 @@ export const WorkoutProvider = ({ children }) => {
                 exercises: newWorkoutExercises
             };
 
-            console.log("DEBUG: Setting active workout:", newWorkout);
             setActiveWorkout(newWorkout);
             _setCurrentExerciseIndex(0);
             _setCurrentSetIndex(0);
@@ -961,7 +951,7 @@ export const WorkoutProvider = ({ children }) => {
 
     const getSuggestedLoad = (exerciseId) => {
         // 1. Find last workout with this exercise
-        const lastWorkout = history.find(w => w.exercises && w.exercises.some(e => e.e.id === exerciseId));
+        const lastWorkout = history.find(w => w.exercises && w.exercises.some(e => e.exercise.id === exerciseId));
         if (!lastWorkout) return null;
 
         const exData = lastWorkout.exercises.find(e => e.exercise.id === exerciseId);
@@ -1097,7 +1087,6 @@ export const WorkoutProvider = ({ children }) => {
     // Start the guided session (transition from prep to active)
     const startGuidedSession = () => {
         if (!activeWorkout) return;
-        console.log("[startGuidedSession] setting status=active", activeWorkout?.id);
 
         // Initialize indices as 0 in the persistent object
         setActiveWorkout(prev => ({
@@ -1359,8 +1348,6 @@ export const WorkoutProvider = ({ children }) => {
 
             setTemplates(prev => [...prev, ...readyTemplates]);
 
-            setTemplates(prev => [...prev, ...readyTemplates]);
-
             if (currentProfile) {
                 const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
                 StorageService.saveCustomTemplates(currentProfile.id, [...storedTemplates, ...readyTemplates]);
@@ -1404,12 +1391,12 @@ export const WorkoutProvider = ({ children }) => {
 
         history.forEach(workout => {
             const wDate = new Date(workout.startTime);
-            if (wDate < cutoff || !workout.completed) return;
+            if (wDate < cutoff || workout.status !== 'completed') return;
 
             if (!workout.exercises) return;
 
             workout.exercises.forEach(exData => {
-                let group = exData.exercise.muscleGroup;
+                let group = exData.exercise.primary_muscle;
 
                 // Normalization
                 if (!counts.hasOwnProperty(group)) {

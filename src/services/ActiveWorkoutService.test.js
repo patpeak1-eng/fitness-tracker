@@ -27,7 +27,7 @@ describe("ActiveWorkoutService", () => {
     expect(next.exercises[0].exerciseId).toBe("ex_1");
     expect(next.exercises[0].sets).toEqual([]);
   });
-});
+
   it("updateSet updates only the targeted set", () => {
     const workout = {
       ...mkWorkout(),
@@ -64,3 +64,4 @@ describe("ActiveWorkoutService", () => {
       completed: true,
     });
   });
+});

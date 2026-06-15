@@ -9,7 +9,7 @@ import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp }
 import './TrackWorkout.css';
 
 const TrackWorkout = () => {
-    const { activeWorkout, exercises, completeWorkout, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession } = useContext(WorkoutContext);
+    const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
