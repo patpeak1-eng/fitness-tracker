@@ -620,7 +620,7 @@ export const WorkoutProvider = ({ children }) => {
             for (let i = 0; i < history.length; i++) {
                 const workout = history[i]; // History is sorted new -> old (index 0 is newest)
 
-                if (!workout.completed) continue;
+                if (workout.status !== 'completed') continue;
 
                 const exData = workout.exercises ? workout.exercises.find(e => e && e.exercise && e.exercise.id === exerciseId) : null;
                 if (exData && exData.sets && exData.sets.length > 0) {
@@ -1404,7 +1404,7 @@ export const WorkoutProvider = ({ children }) => {
 
         history.forEach(workout => {
             const wDate = new Date(workout.startTime);
-            if (wDate < cutoff || !workout.completed) return;
+            if (wDate < cutoff || workout.status !== 'completed') return;
 
             if (!workout.exercises) return;
 
