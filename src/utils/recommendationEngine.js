@@ -8,7 +8,6 @@
 const EX = {
     // CALISTHENICS
     PUSHUP: { id: 'cal_pushup', name: 'Classic Push-up' },
-    PIKE_PUSHUP: { id: 'cal_pike_pushup', name: 'Pike Push-up' },
     PULLUP: { id: 'cal_pullup', name: 'Pull-up' },
     DIP: { id: 'cal_dip', name: 'Tricep Dip' },
     SQUAT_BW: { id: 'cal_squat', name: 'Bodyweight Squat' },
@@ -22,7 +21,7 @@ const EX = {
     // WEIGHTS
     SQUAT: { id: 'wt_squat', name: 'Weighted Squat' },
     BENCH: { id: 'wt_flat_bench', name: 'Flat Bench Press' },
-    INC_BENCH: { id: 'wt_inc_bench', name: 'Incline Bench Press' },
+    INC_BENCH: { id: 'wt_incline_bench', name: 'Incline Bench Press' },
     OHP: { id: 'wt_ohp', name: 'Overhead Press' },
     ROW: { id: 'wt_seated_row', name: 'Seated Row' },
     LAT_PULL: { id: 'wt_lat_pulldown', name: 'Lat Pulldown' },
@@ -34,7 +33,6 @@ const EX = {
     CHEST_FLY: { id: 'wt_chest_fly', name: 'Chest Fly' },
     LUNGE: { id: 'wt_lunge', name: 'Weighted Lunge' },
     CALF: { id: 'wt_calf_raise', name: 'Calf Raise' },
-    FARMER: { id: 'wt_farmer_walk', name: 'Farmer\'s Walk' },
 
     // YOGA
     MTN_POSE: { id: 'yoga_mtn', name: 'Tall Mountain Pose' },
