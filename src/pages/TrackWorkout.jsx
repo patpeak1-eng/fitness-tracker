@@ -3,14 +3,16 @@ import { WorkoutContext } from '../context/WorkoutContext';
 import ExerciseResult from '../components/workout/ExerciseResult';
 import CreateTemplateModal from '../components/workout/CreateTemplateModal';
 import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
+import PlateCalculator from '../components/workout/PlateCalculator';
 import Modal from '../components/common/Modal'; // Import reusable Modal
-import { Play, Plus, Clock, XCircle, Check } from 'lucide-react';
+import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp } from 'lucide-react';
 import './TrackWorkout.css';
 
 const TrackWorkout = () => {
     const { activeWorkout, exercises, completeWorkout, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
+    const [showPlateCalc, setShowPlateCalc] = useState(false);
 
     // Timer Logic
     useEffect(() => {
@@ -214,6 +216,37 @@ const TrackWorkout = () => {
                             />
                         );
                     })}
+
+                    {/* Collapsible Plate Calculator (utility for the prep screen) */}
+                    <div style={{ padding: '0 20px', marginTop: '10px' }}>
+                        <button
+                            onClick={() => setShowPlateCalc(v => !v)}
+                            aria-expanded={showPlateCalc}
+                            style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                padding: '12px 0',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '10px',
+                                color: 'var(--text-primary)',
+                                cursor: 'pointer',
+                                fontSize: '1rem'
+                            }}
+                        >
+                            <Calculator size={18} />
+                            Plate Calculator
+                            {showPlateCalc ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                        {showPlateCalc && (
+                            <div style={{ marginTop: '12px', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                                <PlateCalculator />
+                            </div>
+                        )}
+                    </div>
 
                     <div style={{ padding: '0 20px', marginTop: '20px' }}>
                         <button
