@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Target, Activity, Heart, Database, ChevronLeft, Download, Upload, HelpCircle } from 'lucide-react';
+import { User, Target, Activity, Heart, Download, Upload, HelpCircle, Pencil, Check, Cloud, LogOut, UserPlus, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
+import StorageService from '../services/StorageService';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import Card from '../components/common/Card';
@@ -18,19 +19,95 @@ const Profile = () => {
         units,
         weightHistory,
         addWeightEntry,
-        exportData, // NEW
-        importData  // NEW
+        exportData,
+        importData,
+        // May be added by T4 later; undefined for now (see name-edit flag).
+        updateProfile
     } = useWorkout();
 
     // Local state for BMI calculation display
     const [bmi, setBmi] = useState(null);
     const [bmiCategory, setBmiCategory] = useState('');
 
+    // Save feedback state (Improvement 1 + 4)
+    const [savedSection, setSavedSection] = useState(null); // 'personal' | 'measurements' | null
+    const [autoSaved, setAutoSaved] = useState(false);
+    const savedTimer = useRef(null);
+    const autoSaveTimer = useRef(null);
+
+    // Profile name editing state (Improvement 2)
+    const [editingName, setEditingName] = useState(false);
+    const [nameDraft, setNameDraft] = useState('');
+    const [nameNote, setNameNote] = useState(null);
+    const nameNoteTimer = useRef(null);
+
+    // Advanced (data tools) collapse state (Improvement 3)
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     // Data Management State
     const [dataModal, setDataModal] = useState({ isOpen: false, title: '', message: '' });
-    // Import Confirmation State
     const [confirmImport, setConfirmImport] = useState({ isOpen: false, file: null });
     const fileInputRef = useRef(null);
+
+    // --- Sync status (Improvement 3) ---
+    const authToken = StorageService.loadAuthToken();
+    const isSynced = !!authToken;
+
+    const handleSignOut = () => {
+        StorageService.clearAuthToken();
+        window.location.reload();
+    };
+
+    // --- Auto-save visual feedback ---
+    const triggerAutoSaved = () => {
+        setAutoSaved(true);
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => setAutoSaved(false), 2000);
+    };
+
+    const handleSave = (section) => {
+        // Data is already persisted on each change; this re-triggers persistence
+        // and gives the user explicit confirmation.
+        setUserStats(prev => ({ ...prev }));
+        setSavedSection(section);
+        if (savedTimer.current) clearTimeout(savedTimer.current);
+        savedTimer.current = setTimeout(() => setSavedSection(null), 2000);
+    };
+
+    // Clean up timers on unmount
+    useEffect(() => {
+        return () => {
+            if (savedTimer.current) clearTimeout(savedTimer.current);
+            if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+            if (nameNoteTimer.current) clearTimeout(nameNoteTimer.current);
+        };
+    }, []);
+
+    // --- Name editing ---
+    const startEditName = () => {
+        setNameDraft(currentProfile?.name || '');
+        setEditingName(true);
+    };
+
+    const commitName = () => {
+        const newName = nameDraft.trim();
+        setEditingName(false);
+        if (!newName || newName === currentProfile?.name) return;
+
+        if (typeof updateProfile === 'function') {
+            updateProfile({ name: newName });
+        } else {
+            // updateProfile not yet available in WorkoutContext (owned by T4).
+            setNameNote('Name editing is coming soon.');
+            if (nameNoteTimer.current) clearTimeout(nameNoteTimer.current);
+            nameNoteTimer.current = setTimeout(() => setNameNote(null), 3000);
+        }
+    };
+
+    const handleNameKeyDown = (e) => {
+        if (e.key === 'Enter') commitName();
+        else if (e.key === 'Escape') setEditingName(false);
+    };
 
     const handleImportClick = () => {
         fileInputRef.current.click();
@@ -39,11 +116,7 @@ const Profile = () => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
-        // Open Confirmation Modal instead of window.confirm
         setConfirmImport({ isOpen: true, file });
-
-        // Reset input immediately so same file can be selected again if cancelled
         e.target.value = null;
     };
 
@@ -52,7 +125,6 @@ const Profile = () => {
 
         try {
             await importData(confirmImport.file);
-            // Page reloads on success logic is inside importData if successful
         } catch (error) {
             setDataModal({
                 isOpen: true,
@@ -69,6 +141,7 @@ const Profile = () => {
             ...prev,
             [name]: value
         }));
+        triggerAutoSaved();
     };
 
     // When weight input loses focus, add entry if different from last entry
@@ -76,7 +149,6 @@ const Profile = () => {
         const newWeight = parseFloat(userStats.currentWeight);
         if (isNaN(newWeight) || newWeight <= 0) return;
 
-        // Check last entry to avoid duplicates (optional, but good UX)
         const lastEntry = weightHistory[weightHistory.length - 1];
         if (!lastEntry || Math.abs(lastEntry.weight - newWeight) > 0.1) {
             addWeightEntry(newWeight);
@@ -91,10 +163,8 @@ const Profile = () => {
         if (height > 0 && weight > 0) {
             let calculatedBmi = 0;
             if (units === 'metric') {
-                // kg / m^2 (Height is usually in cm, so convert to m)
                 calculatedBmi = weight / ((height / 100) * (height / 100));
             } else {
-                // (lb / in^2) * 703
                 calculatedBmi = (weight / (height * height)) * 703;
             }
 
@@ -114,11 +184,16 @@ const Profile = () => {
         ? { height: 'cm', weight: 'kg' }
         : { height: 'in', weight: 'lbs' };
 
-    // Format Data for Chart
     const weightGraphData = weightHistory.map(entry => ({
         name: format(new Date(entry.date), 'MMM d'),
         weight: entry.weight
     }));
+
+    const AutoSaveIndicator = () => (
+        <div className={`autosave-indicator ${autoSaved ? 'visible' : ''}`}>
+            <Check size={14} /> All changes saved
+        </div>
+    );
 
     return (
         <div className="page profile-page">
@@ -133,12 +208,36 @@ const Profile = () => {
                 </button>
             </header>
 
+            {/* PROFILE NAME (Improvement 2) */}
             <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ margin: 0, fontSize: '2rem' }}>My Profile</h1>
-                <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)' }}>Track your progress</p>
+                <div className="profile-name-row">
+                    {editingName ? (
+                        <input
+                            className="name-input"
+                            value={nameDraft}
+                            autoFocus
+                            onChange={(e) => setNameDraft(e.target.value)}
+                            onBlur={commitName}
+                            onKeyDown={handleNameKeyDown}
+                            aria-label="Profile name"
+                        />
+                    ) : (
+                        <>
+                            <h1 className="profile-name">{currentProfile?.name || 'My Profile'}</h1>
+                            <button
+                                className="name-edit-btn"
+                                onClick={startEditName}
+                                title="Edit name"
+                                aria-label="Edit profile name"
+                            >
+                                <Pencil size={16} />
+                            </button>
+                        </>
+                    )}
+                </div>
+                {nameNote && <span className="name-note">{nameNote}</span>}
+                <p className="subtitle" style={{ marginTop: '5px' }}>Track your progress</p>
             </div>
-
-
 
             <section className="profile-section">
                 <h2><User size={20} /> Personal Information</h2>
@@ -163,6 +262,13 @@ const Profile = () => {
                             placeholder={`Height in ${unitLabels.height}`}
                         />
                     </div>
+                    <div className="section-footer">
+                        <AutoSaveIndicator />
+                        <button className="save-btn" onClick={() => handleSave('personal')}>Save</button>
+                        <span className={`save-confirm ${savedSection === 'personal' ? 'visible' : ''}`}>
+                            <Check size={16} /> Saved
+                        </span>
+                    </div>
                 </Card>
             </section>
 
@@ -185,7 +291,7 @@ const Profile = () => {
                                 name="currentWeight"
                                 value={userStats.currentWeight}
                                 onChange={handleChange}
-                                onBlur={handleWeightBlur} // Save on blur
+                                onBlur={handleWeightBlur}
                                 placeholder="0.0"
                             />
                         </div>
@@ -199,6 +305,13 @@ const Profile = () => {
                                 placeholder="0.0"
                             />
                         </div>
+                    </div>
+                    <div className="section-footer">
+                        <AutoSaveIndicator />
+                        <button className="save-btn" onClick={() => handleSave('measurements')}>Save</button>
+                        <span className={`save-confirm ${savedSection === 'measurements' ? 'visible' : ''}`}>
+                            <Check size={16} /> Saved
+                        </span>
                     </div>
                 </Card>
             </section>
@@ -242,6 +355,7 @@ const Profile = () => {
                             rows={3}
                         />
                     </div>
+                    <AutoSaveIndicator />
                 </Card>
             </section>
 
@@ -280,42 +394,75 @@ const Profile = () => {
                             />
                         </div>
                     </div>
+                    <AutoSaveIndicator />
                 </Card>
             </section>
 
-
-
-            {/* DATA MANAGEMENT */}
+            {/* ACCOUNT & SYNC (replaces Manual Backup) */}
             <section className="profile-section">
-                <h2><Download size={20} /> Manual Backup</h2>
-                <Card className="form-card" style={{ padding: '20px' }}>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
-                        Backup your data to transfer between devices.
-                    </p>
-                    <div className="form-row-2">
-                        <button
-                            className="secondary-btn"
-                            onClick={exportData}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                        >
-                            <Download size={18} /> Export Backup
-                        </button>
-                        <button
-                            className="secondary-btn"
-                            onClick={handleImportClick}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderColor: 'var(--accent)', color: 'var(--accent)' }}
-                        >
-                            <Upload size={18} /> Import Backup
-                        </button>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            style={{ display: 'none' }}
-                            accept=".json"
-                        />
+                <h2><Cloud size={20} /> Account & Sync</h2>
+                <Card className="form-card sync-card">
+                    <div className="sync-status">
+                        <span className={`sync-dot ${isSynced ? 'online' : 'offline'}`}></span>
+                        <div className="sync-text">
+                            <span className="sync-title">{isSynced ? 'Synced to cloud' : 'Local only'}</span>
+                            <span className="sync-sub">
+                                {isSynced ? 'Your data is backed up to your account' : 'Data stays on this device'}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="sync-actions">
+                        {isSynced ? (
+                            <button className="secondary-btn" onClick={handleSignOut}>
+                                <LogOut size={18} /> Sign Out
+                            </button>
+                        ) : (
+                            <button className="primary-btn" onClick={() => navigate('/login')}>
+                                <UserPlus size={18} /> Create Account
+                            </button>
+                        )}
                     </div>
                 </Card>
+
+                {/* Advanced data tools (collapsed) */}
+                <button
+                    className="advanced-toggle"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    aria-expanded={showAdvanced}
+                >
+                    <span>Advanced</span>
+                    <ChevronDown size={18} className={`adv-chevron ${showAdvanced ? 'open' : ''}`} />
+                </button>
+                {showAdvanced && (
+                    <Card className="form-card advanced-content">
+                        <p className="advanced-note">
+                            Manually transfer your data between devices.
+                        </p>
+                        <div className="form-row-2">
+                            <button
+                                className="secondary-btn"
+                                onClick={exportData}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            >
+                                <Download size={18} /> Export Backup
+                            </button>
+                            <button
+                                className="secondary-btn"
+                                onClick={handleImportClick}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                            >
+                                <Upload size={18} /> Import Backup
+                            </button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                style={{ display: 'none' }}
+                                accept=".json"
+                            />
+                        </div>
+                    </Card>
+                )}
             </section>
 
             <Modal

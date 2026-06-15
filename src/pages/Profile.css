@@ -155,3 +155,207 @@
 .form-group textarea {
     resize: vertical;
 }
+
+/* --- Profile name editing (Improvement 2) --- */
+.profile-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-name {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.name-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.name-edit-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.name-input {
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--primary);
+    border-radius: 8px;
+    padding: 4px 10px;
+    color: var(--text-primary);
+    max-width: 100%;
+}
+
+.name-note {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--accent);
+}
+
+/* --- Save button + confirmation (Improvement 1) --- */
+.section-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.save-btn {
+    background: var(--primary);
+    color: #000;
+    font-weight: 700;
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.save-btn:hover {
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.save-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--success);
+    font-weight: 600;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.save-confirm.visible {
+    opacity: 1;
+}
+
+/* --- Auto-save indicator (Improvement 4) --- */
+.autosave-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.autosave-indicator.visible {
+    opacity: 1;
+}
+
+.autosave-indicator svg {
+    color: var(--success);
+}
+
+/* When paired with a Save button, sit at the left of the footer row */
+.section-footer .autosave-indicator {
+    margin-top: 0;
+    margin-right: auto;
+}
+
+/* --- Account & Sync (Improvement 3) --- */
+.sync-card {
+    gap: 1rem;
+}
+
+.sync-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sync-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sync-dot.online {
+    background: var(--success);
+    box-shadow: 0 0 10px var(--success);
+}
+
+.sync-dot.offline {
+    background: var(--text-muted);
+}
+
+.sync-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.sync-title {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sync-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.sync-actions {
+    display: flex;
+}
+
+.sync-actions button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- Advanced data tools (collapsed) --- */
+.advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-top: 12px;
+    cursor: pointer;
+}
+
+.advanced-toggle:hover {
+    color: var(--text-primary);
+}
+
+.adv-chevron {
+    transition: transform 0.2s ease;
+}
+
+.adv-chevron.open {
+    transform: rotate(180deg);
+}
+
+.advanced-content {
+    margin-top: 10px;
+}
+
+.advanced-note {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0 0 4px 0;
+}
