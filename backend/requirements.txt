@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+alembic
+python-jose[cryptography]
+passlib[bcrypt]
+# Pin bcrypt: passlib 1.7.4's backend self-test breaks on bcrypt >= 4.1
+# (and hard-fails on 5.0). 4.0.1 is the last fully passlib-compatible release.
+bcrypt==4.0.1
+python-dotenv
+pydantic[email]
