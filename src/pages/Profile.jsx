@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Target, Activity, Heart, Database, ChevronLeft, Download, Upload, HelpCircle } from 'lucide-react';
+import { User, Target, Activity, Heart, Database, ChevronLeft, Download, Upload, HelpCircle, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
@@ -18,19 +18,48 @@ const Profile = () => {
         units,
         weightHistory,
         addWeightEntry,
-        exportData, // NEW
-        importData  // NEW
+        exportData,
+        importData
     } = useWorkout();
 
     // Local state for BMI calculation display
     const [bmi, setBmi] = useState(null);
     const [bmiCategory, setBmiCategory] = useState('');
 
+    // Save feedback state (Improvement 1 + 4)
+    const [savedSection, setSavedSection] = useState(null); // 'personal' | 'measurements' | null
+    const [autoSaved, setAutoSaved] = useState(false);
+    const savedTimer = useRef(null);
+    const autoSaveTimer = useRef(null);
+
     // Data Management State
     const [dataModal, setDataModal] = useState({ isOpen: false, title: '', message: '' });
-    // Import Confirmation State
     const [confirmImport, setConfirmImport] = useState({ isOpen: false, file: null });
     const fileInputRef = useRef(null);
+
+    // --- Auto-save visual feedback ---
+    const triggerAutoSaved = () => {
+        setAutoSaved(true);
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(() => setAutoSaved(false), 2000);
+    };
+
+    const handleSave = (section) => {
+        // Data is already persisted on each change; this re-triggers persistence
+        // and gives the user explicit confirmation.
+        setUserStats(prev => ({ ...prev }));
+        setSavedSection(section);
+        if (savedTimer.current) clearTimeout(savedTimer.current);
+        savedTimer.current = setTimeout(() => setSavedSection(null), 2000);
+    };
+
+    // Clean up timers on unmount
+    useEffect(() => {
+        return () => {
+            if (savedTimer.current) clearTimeout(savedTimer.current);
+            if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        };
+    }, []);
 
     const handleImportClick = () => {
         fileInputRef.current.click();
@@ -39,11 +68,7 @@ const Profile = () => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
-        // Open Confirmation Modal instead of window.confirm
         setConfirmImport({ isOpen: true, file });
-
-        // Reset input immediately so same file can be selected again if cancelled
         e.target.value = null;
     };
 
@@ -52,7 +77,6 @@ const Profile = () => {
 
         try {
             await importData(confirmImport.file);
-            // Page reloads on success logic is inside importData if successful
         } catch (error) {
             setDataModal({
                 isOpen: true,
@@ -69,6 +93,7 @@ const Profile = () => {
             ...prev,
             [name]: value
         }));
+        triggerAutoSaved();
     };
 
     // When weight input loses focus, add entry if different from last entry
@@ -76,7 +101,6 @@ const Profile = () => {
         const newWeight = parseFloat(userStats.currentWeight);
         if (isNaN(newWeight) || newWeight <= 0) return;
 
-        // Check last entry to avoid duplicates (optional, but good UX)
         const lastEntry = weightHistory[weightHistory.length - 1];
         if (!lastEntry || Math.abs(lastEntry.weight - newWeight) > 0.1) {
             addWeightEntry(newWeight);
@@ -91,10 +115,8 @@ const Profile = () => {
         if (height > 0 && weight > 0) {
             let calculatedBmi = 0;
             if (units === 'metric') {
-                // kg / m^2 (Height is usually in cm, so convert to m)
                 calculatedBmi = weight / ((height / 100) * (height / 100));
             } else {
-                // (lb / in^2) * 703
                 calculatedBmi = (weight / (height * height)) * 703;
             }
 
@@ -114,11 +136,16 @@ const Profile = () => {
         ? { height: 'cm', weight: 'kg' }
         : { height: 'in', weight: 'lbs' };
 
-    // Format Data for Chart
     const weightGraphData = weightHistory.map(entry => ({
         name: format(new Date(entry.date), 'MMM d'),
         weight: entry.weight
     }));
+
+    const AutoSaveIndicator = () => (
+        <div className={`autosave-indicator ${autoSaved ? 'visible' : ''}`}>
+            <Check size={14} /> All changes saved
+        </div>
+    );
 
     return (
         <div className="page profile-page">
@@ -137,8 +164,6 @@ const Profile = () => {
                 <h1 style={{ margin: 0, fontSize: '2rem' }}>My Profile</h1>
                 <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)' }}>Track your progress</p>
             </div>
-
-
 
             <section className="profile-section">
                 <h2><User size={20} /> Personal Information</h2>
@@ -163,6 +188,13 @@ const Profile = () => {
                             placeholder={`Height in ${unitLabels.height}`}
                         />
                     </div>
+                    <div className="section-footer">
+                        <AutoSaveIndicator />
+                        <button className="save-btn" onClick={() => handleSave('personal')}>Save</button>
+                        <span className={`save-confirm ${savedSection === 'personal' ? 'visible' : ''}`}>
+                            <Check size={16} /> Saved
+                        </span>
+                    </div>
                 </Card>
             </section>
 
@@ -185,7 +217,7 @@ const Profile = () => {
                                 name="currentWeight"
                                 value={userStats.currentWeight}
                                 onChange={handleChange}
-                                onBlur={handleWeightBlur} // Save on blur
+                                onBlur={handleWeightBlur}
                                 placeholder="0.0"
                             />
                         </div>
@@ -199,6 +231,13 @@ const Profile = () => {
                                 placeholder="0.0"
                             />
                         </div>
+                    </div>
+                    <div className="section-footer">
+                        <AutoSaveIndicator />
+                        <button className="save-btn" onClick={() => handleSave('measurements')}>Save</button>
+                        <span className={`save-confirm ${savedSection === 'measurements' ? 'visible' : ''}`}>
+                            <Check size={16} /> Saved
+                        </span>
                     </div>
                 </Card>
             </section>
@@ -242,6 +281,7 @@ const Profile = () => {
                             rows={3}
                         />
                     </div>
+                    <AutoSaveIndicator />
                 </Card>
             </section>
 
@@ -280,10 +320,9 @@ const Profile = () => {
                             />
                         </div>
                     </div>
+                    <AutoSaveIndicator />
                 </Card>
             </section>
-
-
 
             {/* DATA MANAGEMENT */}
             <section className="profile-section">
