@@ -269,3 +269,93 @@
     margin-top: 0;
     margin-right: auto;
 }
+
+/* --- Account & Sync (Improvement 3) --- */
+.sync-card {
+    gap: 1rem;
+}
+
+.sync-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sync-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sync-dot.online {
+    background: var(--success);
+    box-shadow: 0 0 10px var(--success);
+}
+
+.sync-dot.offline {
+    background: var(--text-muted);
+}
+
+.sync-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.sync-title {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sync-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.sync-actions {
+    display: flex;
+}
+
+.sync-actions button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- Advanced data tools (collapsed) --- */
+.advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-top: 12px;
+    cursor: pointer;
+}
+
+.advanced-toggle:hover {
+    color: var(--text-primary);
+}
+
+.adv-chevron {
+    transition: transform 0.2s ease;
+}
+
+.adv-chevron.open {
+    transform: rotate(180deg);
+}
+
+.advanced-content {
+    margin-top: 10px;
+}
+
+.advanced-note {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0 0 4px 0;
+}

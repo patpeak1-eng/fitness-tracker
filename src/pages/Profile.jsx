@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Target, Activity, Heart, Database, ChevronLeft, Download, Upload, HelpCircle, Check, Pencil } from 'lucide-react';
+import { User, Target, Activity, Heart, Download, Upload, HelpCircle, Pencil, Check, Cloud, LogOut, UserPlus, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
+import StorageService from '../services/StorageService';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import Card from '../components/common/Card';
@@ -40,10 +41,22 @@ const Profile = () => {
     const [nameNote, setNameNote] = useState(null);
     const nameNoteTimer = useRef(null);
 
+    // Advanced (data tools) collapse state (Improvement 3)
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     // Data Management State
     const [dataModal, setDataModal] = useState({ isOpen: false, title: '', message: '' });
     const [confirmImport, setConfirmImport] = useState({ isOpen: false, file: null });
     const fileInputRef = useRef(null);
+
+    // --- Sync status (Improvement 3) ---
+    const authToken = StorageService.loadAuthToken();
+    const isSynced = !!authToken;
+
+    const handleSignOut = () => {
+        StorageService.clearAuthToken();
+        window.location.reload();
+    };
 
     // --- Auto-save visual feedback ---
     const triggerAutoSaved = () => {
@@ -385,37 +398,71 @@ const Profile = () => {
                 </Card>
             </section>
 
-            {/* DATA MANAGEMENT */}
+            {/* ACCOUNT & SYNC (replaces Manual Backup) */}
             <section className="profile-section">
-                <h2><Download size={20} /> Manual Backup</h2>
-                <Card className="form-card" style={{ padding: '20px' }}>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
-                        Backup your data to transfer between devices.
-                    </p>
-                    <div className="form-row-2">
-                        <button
-                            className="secondary-btn"
-                            onClick={exportData}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                        >
-                            <Download size={18} /> Export Backup
-                        </button>
-                        <button
-                            className="secondary-btn"
-                            onClick={handleImportClick}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderColor: 'var(--accent)', color: 'var(--accent)' }}
-                        >
-                            <Upload size={18} /> Import Backup
-                        </button>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            style={{ display: 'none' }}
-                            accept=".json"
-                        />
+                <h2><Cloud size={20} /> Account & Sync</h2>
+                <Card className="form-card sync-card">
+                    <div className="sync-status">
+                        <span className={`sync-dot ${isSynced ? 'online' : 'offline'}`}></span>
+                        <div className="sync-text">
+                            <span className="sync-title">{isSynced ? 'Synced to cloud' : 'Local only'}</span>
+                            <span className="sync-sub">
+                                {isSynced ? 'Your data is backed up to your account' : 'Data stays on this device'}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="sync-actions">
+                        {isSynced ? (
+                            <button className="secondary-btn" onClick={handleSignOut}>
+                                <LogOut size={18} /> Sign Out
+                            </button>
+                        ) : (
+                            <button className="primary-btn" onClick={() => navigate('/login')}>
+                                <UserPlus size={18} /> Create Account
+                            </button>
+                        )}
                     </div>
                 </Card>
+
+                {/* Advanced data tools (collapsed) */}
+                <button
+                    className="advanced-toggle"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    aria-expanded={showAdvanced}
+                >
+                    <span>Advanced</span>
+                    <ChevronDown size={18} className={`adv-chevron ${showAdvanced ? 'open' : ''}`} />
+                </button>
+                {showAdvanced && (
+                    <Card className="form-card advanced-content">
+                        <p className="advanced-note">
+                            Manually transfer your data between devices.
+                        </p>
+                        <div className="form-row-2">
+                            <button
+                                className="secondary-btn"
+                                onClick={exportData}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            >
+                                <Download size={18} /> Export Backup
+                            </button>
+                            <button
+                                className="secondary-btn"
+                                onClick={handleImportClick}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                            >
+                                <Upload size={18} /> Import Backup
+                            </button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                style={{ display: 'none' }}
+                                accept=".json"
+                            />
+                        </div>
+                    </Card>
+                )}
             </section>
 
             <Modal
