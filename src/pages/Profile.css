@@ -156,6 +156,56 @@
     resize: vertical;
 }
 
+/* --- Profile name editing (Improvement 2) --- */
+.profile-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-name {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.name-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.name-edit-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.name-input {
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--primary);
+    border-radius: 8px;
+    padding: 4px 10px;
+    color: var(--text-primary);
+    max-width: 100%;
+}
+
+.name-note {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--accent);
+}
+
 /* --- Save button + confirmation (Improvement 1) --- */
 .section-footer {
     display: flex;

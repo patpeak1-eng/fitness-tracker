@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Target, Activity, Heart, Database, ChevronLeft, Download, Upload, HelpCircle, Check } from 'lucide-react';
+import { User, Target, Activity, Heart, Database, ChevronLeft, Download, Upload, HelpCircle, Check, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
@@ -19,7 +19,9 @@ const Profile = () => {
         weightHistory,
         addWeightEntry,
         exportData,
-        importData
+        importData,
+        // May be added by T4 later; undefined for now (see name-edit flag).
+        updateProfile
     } = useWorkout();
 
     // Local state for BMI calculation display
@@ -31,6 +33,12 @@ const Profile = () => {
     const [autoSaved, setAutoSaved] = useState(false);
     const savedTimer = useRef(null);
     const autoSaveTimer = useRef(null);
+
+    // Profile name editing state (Improvement 2)
+    const [editingName, setEditingName] = useState(false);
+    const [nameDraft, setNameDraft] = useState('');
+    const [nameNote, setNameNote] = useState(null);
+    const nameNoteTimer = useRef(null);
 
     // Data Management State
     const [dataModal, setDataModal] = useState({ isOpen: false, title: '', message: '' });
@@ -58,8 +66,35 @@ const Profile = () => {
         return () => {
             if (savedTimer.current) clearTimeout(savedTimer.current);
             if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+            if (nameNoteTimer.current) clearTimeout(nameNoteTimer.current);
         };
     }, []);
+
+    // --- Name editing ---
+    const startEditName = () => {
+        setNameDraft(currentProfile?.name || '');
+        setEditingName(true);
+    };
+
+    const commitName = () => {
+        const newName = nameDraft.trim();
+        setEditingName(false);
+        if (!newName || newName === currentProfile?.name) return;
+
+        if (typeof updateProfile === 'function') {
+            updateProfile({ name: newName });
+        } else {
+            // updateProfile not yet available in WorkoutContext (owned by T4).
+            setNameNote('Name editing is coming soon.');
+            if (nameNoteTimer.current) clearTimeout(nameNoteTimer.current);
+            nameNoteTimer.current = setTimeout(() => setNameNote(null), 3000);
+        }
+    };
+
+    const handleNameKeyDown = (e) => {
+        if (e.key === 'Enter') commitName();
+        else if (e.key === 'Escape') setEditingName(false);
+    };
 
     const handleImportClick = () => {
         fileInputRef.current.click();
@@ -160,9 +195,35 @@ const Profile = () => {
                 </button>
             </header>
 
+            {/* PROFILE NAME (Improvement 2) */}
             <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ margin: 0, fontSize: '2rem' }}>My Profile</h1>
-                <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)' }}>Track your progress</p>
+                <div className="profile-name-row">
+                    {editingName ? (
+                        <input
+                            className="name-input"
+                            value={nameDraft}
+                            autoFocus
+                            onChange={(e) => setNameDraft(e.target.value)}
+                            onBlur={commitName}
+                            onKeyDown={handleNameKeyDown}
+                            aria-label="Profile name"
+                        />
+                    ) : (
+                        <>
+                            <h1 className="profile-name">{currentProfile?.name || 'My Profile'}</h1>
+                            <button
+                                className="name-edit-btn"
+                                onClick={startEditName}
+                                title="Edit name"
+                                aria-label="Edit profile name"
+                            >
+                                <Pencil size={16} />
+                            </button>
+                        </>
+                    )}
+                </div>
+                {nameNote && <span className="name-note">{nameNote}</span>}
+                <p className="subtitle" style={{ marginTop: '5px' }}>Track your progress</p>
             </div>
 
             <section className="profile-section">
