@@ -338,6 +338,19 @@ export const WorkoutProvider = ({ children }) => {
         }
     }, [activeWorkout, currentProfile]);
 
+    // Auto-sync to API after a workout is completed (i.e. history changes).
+    // Placed after the history AND active-workout persistence effects so that
+    // localStorage reflects the latest state (including a cleared active workout)
+    // before syncToApi reads it — otherwise a just-finished workout could be
+    // re-synced to the API as still-active.
+    useEffect(() => {
+        if (currentProfile && history.length > 0) {
+            // Fire and forget — don't await, don't block UI.
+            // localStorage stays the source of truth if this fails.
+            StorageService.syncToApi(currentProfile.id).catch(() => {});
+        }
+    }, [history]);
+
     // Persist Theme
     useEffect(() => {
         if (currentProfile) {
@@ -465,6 +478,20 @@ export const WorkoutProvider = ({ children }) => {
         if (currentProfile && currentProfile.id === profileId) {
             setCurrentProfile(null);
         }
+    };
+
+    const updateProfile = (updates) => {
+        if (!currentProfile) return;
+        const updatedProfile = { ...currentProfile, ...updates };
+
+        // Update in profiles array
+        const updatedProfiles = profiles.map(p =>
+            p.id === currentProfile.id ? updatedProfile : p
+        );
+
+        setProfiles(updatedProfiles);
+        setCurrentProfile(updatedProfile);
+        StorageService.saveProfiles(updatedProfiles);
     };
 
 
@@ -1494,13 +1521,18 @@ export const WorkoutProvider = ({ children }) => {
         });
     };
 
+    // Derived: cloud sync is active when an auth token exists AND an API URL is configured.
+    const isCloudSynced = !!(StorageService.loadAuthToken() && import.meta.env.VITE_API_URL);
+
     const value = {
         activeWorkout,
         exercises,
         templates,
         history,
+        isCloudSynced,
         profiles,
         currentProfile,
+        setCurrentProfile,
         theme,
         setTheme,
         units,
@@ -1532,6 +1564,7 @@ export const WorkoutProvider = ({ children }) => {
         createProfile,
         switchProfile,
         deleteProfile,
+        updateProfile,
         addCustomExercise,
         saveWorkoutAsTemplate,
         deleteTemplate,
