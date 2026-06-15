@@ -467,6 +467,20 @@ export const WorkoutProvider = ({ children }) => {
         }
     };
 
+    const updateProfile = (updates) => {
+        if (!currentProfile) return;
+        const updatedProfile = { ...currentProfile, ...updates };
+
+        // Update in profiles array
+        const updatedProfiles = profiles.map(p =>
+            p.id === currentProfile.id ? updatedProfile : p
+        );
+
+        setProfiles(updatedProfiles);
+        setCurrentProfile(updatedProfile);
+        StorageService.saveProfiles(updatedProfiles);
+    };
+
 
     // --- 5. AUDIO UTILS ---
     // --- 5. AUDIO UTILS ---
@@ -1532,6 +1546,7 @@ export const WorkoutProvider = ({ children }) => {
         createProfile,
         switchProfile,
         deleteProfile,
+        updateProfile,
         addCustomExercise,
         saveWorkoutAsTemplate,
         deleteTemplate,
