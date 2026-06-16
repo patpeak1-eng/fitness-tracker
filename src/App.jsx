@@ -19,7 +19,19 @@ import HelpView from './pages/HelpView';
 
 // Inner component to check profile status
 const AppRoutes = () => {
-    const { currentProfile } = useWorkout();
+    const { currentProfile, authChecked } = useWorkout();
+
+    if (!authChecked) {
+        return (
+            <div style={{
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'center', height: '100vh',
+                background: '#000', color: '#bfff00'
+            }}>
+                Loading...
+            </div>
+        );
+    }
 
     // Always render these routes regardless of auth state, so the Google OAuth
     // callback (/auth/callback) and /login work even when no profile exists yet.

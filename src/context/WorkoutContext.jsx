@@ -153,7 +153,20 @@ export const WorkoutProvider = ({ children }) => {
 
     // Profile State
     const [profiles, setProfiles] = useState([]);
-    const [currentProfile, setCurrentProfile] = useState(null);
+    const [currentProfile, setCurrentProfile] = useState(() => {
+        try {
+            const profiles = StorageService.loadProfiles();
+            const lastId = StorageService.loadCurrentProfileId();
+            if (profiles.length > 0 && !StorageService.isLoggedOut()) {
+                const found = profiles.find(p => p.id === lastId);
+                return found || profiles[0];
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    });
+    const [authChecked, setAuthChecked] = useState(false);
 
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
@@ -249,6 +262,10 @@ export const WorkoutProvider = ({ children }) => {
     useEffect(() => {
         // Check if user has a valid cloud session
         // (HttpOnly cookie set by Google OAuth)
+        // Safety net: never leave the UI gated on a hung getMe() — if the cloud
+        // check hasn't settled in 8s, unblock with the localStorage profile.
+        const authTimeout = setTimeout(() => setAuthChecked(true), 8000);
+
         const checkCloudAuth = async () => {
             try {
                 const user = await getMe();
@@ -274,10 +291,15 @@ export const WorkoutProvider = ({ children }) => {
             } catch (e) {
                 // No cloud session — localStorage profile takes over.
                 // This is the normal offline path.
+            } finally {
+                clearTimeout(authTimeout);
+                setAuthChecked(true);
             }
         };
 
         checkCloudAuth();
+
+        return () => clearTimeout(authTimeout);
     }, []); // Run once on mount
 
     // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
@@ -1569,6 +1591,7 @@ export const WorkoutProvider = ({ children }) => {
         profiles,
         currentProfile,
         setCurrentProfile,
+        authChecked,
         theme,
         setTheme,
         units,
