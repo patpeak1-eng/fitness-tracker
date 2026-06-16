@@ -7,8 +7,7 @@ const AuthCallback = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
+    const params = new URLSearchParams(window.location.search);
 
     const token = params.get('token');
     const name = params.get('name');
