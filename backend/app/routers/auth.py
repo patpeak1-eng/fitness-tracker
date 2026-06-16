@@ -110,8 +110,6 @@ async def google_callback(
 ) -> RedirectResponse:
     """Handle Google's OAuth callback: exchange the code for the user's profile,
     find or create the user, and redirect to the frontend with a JWT."""
-    import logging
-    logger = logging.getLogger(__name__)
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
@@ -138,10 +136,8 @@ async def google_callback(
             },
         )
     token_data = token_response.json()
-    logger.warning(f"[OAUTH_DEBUG] status={token_response.status_code} keys={list(token_data.keys())} error={token_data.get('error')}")
 
     google_access_token = token_data.get("access_token")
-    logger.warning(f"[OAUTH_DEBUG] access_token={'YES' if google_access_token else 'NO'}")
     if not google_access_token:
         return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
@@ -194,7 +190,6 @@ async def google_callback(
     # SameSite=None (with Secure) is REQUIRED: the backend and frontend are on
     # different domains, so the /api/me call is a cross-site request. A Lax
     # cookie would be withheld on that cross-site fetch and /api/me would 401.
-    logger.warning(f"[OAUTH_DEBUG] SUCCESS redirecting to {frontend_url}/ for {google_email}")
     response = RedirectResponse(url=f"{frontend_url}/", status_code=302)
     response.set_cookie(
         key="session_token",
