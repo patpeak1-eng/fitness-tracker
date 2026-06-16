@@ -385,12 +385,19 @@ export const WorkoutProvider = ({ children }) => {
         if (profile.email && ApiService.isAvailable()) {
             (async () => {
                 try {
-                    const [profileData, workoutData, weightData, templateData] = await Promise.all([
+                    const results = await Promise.allSettled([
                         ApiService.getProfile(),
                         ApiService.getHistory(),
                         ApiService.getWeightHistory(),
                         ApiService.getCustomTemplates()
                     ]);
+                    results.forEach((result, i) => {
+                        if (result.status === 'rejected') {
+                            console.warn(`Cloud pull [${i}] failed:`, result.reason);
+                        }
+                    });
+                    const [profileData, workoutData, weightData, templateData] =
+                        results.map(r => r.status === 'fulfilled' ? r.value : null);
 
                     // The user may have switched profiles while these were in flight.
                     // Abandon the results rather than write them into another profile.
@@ -863,6 +870,7 @@ export const WorkoutProvider = ({ children }) => {
     const startWorkout = (name = 'New Workout') => {
         const newWorkout = {
             id: generateId(),
+            client_id: crypto.randomUUID(),
             name,
             startTime: new Date().toISOString(),
             status: 'preparing', // CHANGED: Start in prep mode
@@ -940,6 +948,7 @@ export const WorkoutProvider = ({ children }) => {
 
             const newWorkout = {
                 id: generateId(),
+                client_id: crypto.randomUUID(),
                 name: template.name,
                 startTime: new Date().toISOString(),
                 status: 'preparing',
@@ -1047,7 +1056,14 @@ export const WorkoutProvider = ({ children }) => {
         // Push the completed workout to the backend for cloud users (non-fatal).
         if (currentProfile?.email && ApiService.isAvailable()) {
             try {
-                await ApiService.saveWorkout(completedWorkout);
+                const savedWorkout = await ApiService.saveWorkout(completedWorkout);
+                if (savedWorkout?.id) {
+                    setHistory(prev => prev.map(w =>
+                        w.client_id === completedWorkout.client_id
+                            ? { ...w, backendId: savedWorkout.id }
+                            : w
+                    ));
+                }
             } catch (err) {
                 console.warn('[CloudSync] Workout push failed (non-fatal):', err.message);
             }
