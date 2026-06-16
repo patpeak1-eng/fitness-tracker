@@ -58,6 +58,7 @@ const Profile = () => {
         // hard-navigate to the Login screen. (saveCurrentProfileId(null) would
         // persist the string "null", so remove the key directly instead.)
         StorageService.clearAuthToken();
+        StorageService.setLoggedOut();
         StorageService.saveProfiles([]);
         localStorage.removeItem('fitness_current_profile_id');
         window.location.href = '/login';
