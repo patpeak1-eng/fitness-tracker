@@ -1,6 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#000000"/>
-  <circle cx="256" cy="256" r="200" fill="#bfff00"/>
-  <path d="M156 256h200" stroke="#000000" stroke-width="40" stroke-linecap="round"/>
-  <path d="M256 156v200" stroke="#000000" stroke-width="40" stroke-linecap="round"/>
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#0a0a0a"/>
+  <!-- Dumbbell bar -->
+  <rect x="156" y="236" width="200" height="40" rx="8" fill="#bfff00"/>
+  <!-- Left outer plate -->
+  <rect x="96" y="196" width="44" height="120" rx="10" fill="#bfff00"/>
+  <!-- Left inner plate -->
+  <rect x="148" y="210" width="20" height="92" rx="6" fill="#bfff00"/>
+  <!-- Right inner plate -->
+  <rect x="344" y="210" width="20" height="92" rx="6" fill="#bfff00"/>
+  <!-- Right outer plate -->
+  <rect x="372" y="196" width="44" height="120" rx="10" fill="#bfff00"/>
 </svg>
