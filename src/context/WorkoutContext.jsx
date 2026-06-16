@@ -543,29 +543,42 @@ export const WorkoutProvider = ({ children }) => {
     }, [history]);
 
     // Persist Theme
+    const themeMountRef = useRef(true);
     useEffect(() => {
+        // Apply theme to the DOM on every run (incl. mount) so the current/default
+        // theme is always reflected visually.
+        document.documentElement.setAttribute('data-theme', theme);
+        // Skip the persist write on initial mount: refreshProfileData loads the
+        // stored theme right after mount, and writing here first would clobber the
+        // saved value with the default before the load completes.
+        if (themeMountRef.current) { themeMountRef.current = false; return; }
         if (currentProfile) {
-            document.documentElement.setAttribute('data-theme', theme);
             StorageService.saveTheme(currentProfile.id, theme);
         }
     }, [theme, currentProfile]);
 
     // Persist Units
+    const unitsMountRef = useRef(true);
     useEffect(() => {
+        if (unitsMountRef.current) { unitsMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveUnits(currentProfile.id, units);
         }
     }, [units, currentProfile]);
 
     // Persist Sound
+    const soundMountRef = useRef(true);
     useEffect(() => {
+        if (soundMountRef.current) { soundMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveSound(currentProfile.id, soundEnabled);
         }
     }, [soundEnabled, currentProfile]);
 
     // Persist Timer Defaults
+    const timersMountRef = useRef(true);
     useEffect(() => {
+        if (timersMountRef.current) { timersMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveDefaultTimers(currentProfile.id, defaultRestTime, defaultWorkTime);
 
@@ -575,28 +588,36 @@ export const WorkoutProvider = ({ children }) => {
     }, [defaultRestTime, defaultWorkTime, currentProfile]);
 
     // Persist Stats
+    const statsMountRef = useRef(true);
     useEffect(() => {
+        if (statsMountRef.current) { statsMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveUserStats(currentProfile.id, userStats);
         }
     }, [userStats, currentProfile]);
 
     // Persist Weight History
+    const weightMountRef = useRef(true);
     useEffect(() => {
+        if (weightMountRef.current) { weightMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveWeightHistory(currentProfile.id, weightHistory);
         }
     }, [weightHistory, currentProfile]);
 
     // Persist Exercise Preferences
+    const prefsMountRef = useRef(true);
     useEffect(() => {
+        if (prefsMountRef.current) { prefsMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveExercisePrefs(currentProfile.id, exercisePrefs);
         }
     }, [exercisePrefs, currentProfile]);
 
     // Persist Progression Settings
+    const progressionMountRef = useRef(true);
     useEffect(() => {
+        if (progressionMountRef.current) { progressionMountRef.current = false; return; }
         if (currentProfile) {
             StorageService.saveProgressionSettings(currentProfile.id, {
                 smartProgressionEnabled,
