@@ -194,6 +194,13 @@ const StorageService = {
         let profiles = this.loadProfiles();
 
         if (profiles.length === 0) {
+            // Don't auto-create if the user explicitly logged out — let the auth gate fire.
+            if (this.isLoggedOut()) {
+                this.startupCleanup([]);
+                return [];
+            }
+
+            // Original auto-create behavior for first-time users.
             const defaultProfile = {
                 id: 'user_default',
                 name: 'Main User',
@@ -357,6 +364,18 @@ const StorageService = {
 
     clearAuthToken() {
         localStorage.removeItem('fitness_auth_token');
+    },
+
+    setLoggedOut() {
+        localStorage.setItem('fitness_logged_out', 'true');
+    },
+
+    isLoggedOut() {
+        return localStorage.getItem('fitness_logged_out') === 'true';
+    },
+
+    clearLoggedOut() {
+        localStorage.removeItem('fitness_logged_out');
     }
 };
 
