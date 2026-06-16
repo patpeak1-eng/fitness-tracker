@@ -93,3 +93,8 @@ export const deleteCustomTemplate = (id) =>
   }).then(r => r.json());
 
 export { isAvailable };
+
+export const getGoogleAuthUrl = () => {
+  if (!API_URL) return null;
+  return `${API_URL}/api/auth/google`;
+};
