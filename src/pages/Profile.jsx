@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
 import StorageService from '../services/StorageService';
+import * as ApiService from '../services/ApiService';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import Card from '../components/common/Card';
@@ -50,8 +51,9 @@ const Profile = () => {
     const fileInputRef = useRef(null);
 
     // --- Sync status (Improvement 3) ---
-    const authToken = StorageService.loadAuthToken();
-    const isSynced = !!authToken;
+    // Cloud sync is active for Google OAuth users (profile carries an email and
+    // the backend URL is configured). The auth itself rides on the session cookie.
+    const isSynced = !!(currentProfile?.email && ApiService.isAvailable());
 
     const handleSignOut = async () => {
         // Best-effort backend logout: clears the HttpOnly auth cookie server-side.
@@ -85,13 +87,38 @@ const Profile = () => {
         autoSaveTimer.current = setTimeout(() => setAutoSaved(false), 2000);
     };
 
-    const handleSave = (section) => {
+    const handleSave = async (section) => {
         // Data is already persisted on each change; this re-triggers persistence
         // and gives the user explicit confirmation.
         setUserStats(prev => ({ ...prev }));
+
+        // Show the local "Saved" confirmation immediately — persistence already
+        // happened; the best-effort cloud push below shouldn't delay the badge.
         setSavedSection(section);
         if (savedTimer.current) clearTimeout(savedTimer.current);
         savedTimer.current = setTimeout(() => setSavedSection(null), 2000);
+
+        // Push body stats to the backend for cloud (Google OAuth) users.
+        // Non-fatal: localStorage stays the source of truth on failure.
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            try {
+                await ApiService.saveProfile({
+                    stats: {
+                        age: userStats.age || null,
+                        height: userStats.height || null,
+                        current_weight: userStats.currentWeight || null,
+                        target_weight: userStats.targetWeight || null,
+                        goal: userStats.goal || null,
+                        motivation: userStats.motivation || null,
+                        body_fat: userStats.bodyFat || null,
+                        muscle_mass: userStats.muscleMass || null,
+                        bone_density: userStats.boneDensity || null
+                    }
+                });
+            } catch (err) {
+                console.warn('[CloudSync] Profile push failed:', err.message);
+            }
+        }
     };
 
     // Clean up timers on unmount

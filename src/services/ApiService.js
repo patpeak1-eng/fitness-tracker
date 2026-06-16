@@ -60,7 +60,18 @@ export const getHistory = () =>
 export const saveWorkout = (workout) =>
   apiFetch('/api/workouts', {
     method: 'POST',
-    body: JSON.stringify(workout)
+    // Map the camelCase local shape to the backend's snake_case WorkoutCreate.
+    // Without this, start_time/end_time arrive as unknown fields and persist as
+    // null — which also defeats the name+startTime dedup used by the cloud pull.
+    body: JSON.stringify({
+      name: workout.name,
+      start_time: workout.startTime ?? null,
+      end_time: workout.endTime ?? null,
+      status: workout.status ?? 'completed',
+      notes: workout.notes ?? null,
+      exercises: workout.exercises ?? null,
+      recommendations: workout.recommendations ?? null
+    })
   }).then(r => r.json());
 
 export const getActiveWorkout = () =>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import StorageService from '../services/StorageService';
 import ActiveWorkoutService from "../services/ActiveWorkoutService";
-import { getMe } from '../services/ApiService';
+import * as ApiService from '../services/ApiService';
 
 
 export const WorkoutContext = createContext();
@@ -268,7 +268,7 @@ export const WorkoutProvider = ({ children }) => {
 
         const checkCloudAuth = async () => {
             try {
-                const user = await getMe();
+                const user = await ApiService.getMe();
                 if (user && user.id) {
                     // Build profile from server response
                     const cloudProfile = {
@@ -304,8 +304,13 @@ export const WorkoutProvider = ({ children }) => {
 
     // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
     // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
+    // Tracks the profile whose load is currently active, so an in-flight cloud
+    // pull can detect a profile switch and avoid cross-writing the wrong state.
+    const latestProfileIdRef = useRef(null);
+
     const refreshProfileData = (profile) => {
         if (!profile) return;
+        latestProfileIdRef.current = profile.id;
 
         // Remember this user
         StorageService.saveCurrentProfileId(profile.id);
@@ -371,6 +376,101 @@ export const WorkoutProvider = ({ children }) => {
         // Reset to Defaults + User Custom
         // Use Set to prevent duplicates if any weird merging happens (though simply replacing is safer)
         setTemplates([...DEFAULT_TEMPLATES, ...userTemplates]);
+
+        // --- CLOUD PULL (Google OAuth users only) ---
+        // profile.email is only set on cloud profiles built from GET /api/auth/me.
+        // Fire-and-forget: localStorage is already loaded above, so a failed or
+        // slow pull never blocks the UI. Backend reads are authenticated by the
+        // session cookie (apiFetch sends credentials:'include').
+        if (profile.email && ApiService.isAvailable()) {
+            (async () => {
+                try {
+                    const [profileData, workoutData, weightData] = await Promise.all([
+                        ApiService.getProfile(),
+                        ApiService.getHistory(),
+                        ApiService.getWeightHistory()
+                    ]);
+
+                    // The user may have switched profiles while these were in flight.
+                    // Abandon the results rather than write them into another profile.
+                    if (latestProfileIdRef.current !== profile.id) return;
+
+                    // Profile stats — backend wins (most recently saved from any device)
+                    if (profileData?.stats) {
+                        const s = profileData.stats;
+                        const backendStats = {
+                            age: s.age || '',
+                            height: s.height || '',
+                            currentWeight: s.current_weight || '',
+                            targetWeight: s.target_weight || '',
+                            goal: s.goal || 'maintenance',
+                            motivation: s.motivation || '',
+                            bodyFat: s.body_fat || '',
+                            muscleMass: s.muscle_mass || '',
+                            boneDensity: s.bone_density || ''
+                        };
+                        setUserStats(backendStats);
+                        StorageService.saveUserStats(profile.id, backendStats);
+                    }
+
+                    // Workout history — union merge by a normalized name+startTime
+                    // fingerprint. Dedup by id is unreliable: the backend assigns its
+                    // own UUID on push, so the same workout returns with an id absent
+                    // locally. Timestamps are normalized to epoch-ms so format drift
+                    // (e.g. .000Z vs microseconds) doesn't cause false "new" items.
+                    if (workoutData?.items?.length > 0) {
+                        setHistory(prev => {
+                            // Timestamped items match cross-source by name+epoch-ms.
+                            // Timeless items (e.g. legacy backend rows with null
+                            // start_time) can't be matched that way, so key them by
+                            // their own id — otherwise a distinct same-named timeless
+                            // workout would be shadowed and never pulled.
+                            const keyOf = (name, t, id) => {
+                                const ms = t ? new Date(t).getTime() : NaN;
+                                return Number.isNaN(ms) ? `${name}|id:${id}` : `${name}|${ms}`;
+                            };
+                            const localKeys = new Set(prev.map(w => keyOf(w.name, w.startTime, w.id)));
+                            const newItems = workoutData.items
+                                .filter(w => !localKeys.has(keyOf(w.name, w.start_time, w.id)))
+                                .map(w => ({
+                                    id: w.id,
+                                    name: w.name,
+                                    startTime: w.start_time,
+                                    endTime: w.end_time,
+                                    status: w.status || 'completed',
+                                    completed: w.status === 'completed',
+                                    notes: w.notes || '',
+                                    exercises: w.exercises || [],
+                                    recommendations: w.recommendations || []
+                                }));
+                            if (!newItems.length) return prev;
+                            const merged = [...newItems, ...prev]
+                                .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+                            StorageService.saveHistory(profile.id, merged);
+                            return merged;
+                        });
+                    }
+
+                    // Weight history — union merge by recorded_at
+                    if (weightData?.length > 0) {
+                        setWeightHistory(prev => {
+                            const localDates = new Set(prev.map(e => e.date));
+                            const newEntries = weightData
+                                .filter(e => !localDates.has(e.recorded_at))
+                                .map(e => ({ date: e.recorded_at, weight: e.weight }));
+                            if (!newEntries.length) return prev;
+                            const merged = [...prev, ...newEntries]
+                                .sort((a, b) => new Date(a.date) - new Date(b.date));
+                            StorageService.saveWeightHistory(profile.id, merged);
+                            return merged;
+                        });
+                    }
+
+                } catch (err) {
+                    console.warn('[CloudSync] Pull failed (non-fatal):', err.message);
+                }
+            })();
+        }
     };
 
     useEffect(() => {
