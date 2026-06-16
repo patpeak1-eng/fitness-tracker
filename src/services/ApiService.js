@@ -2,12 +2,32 @@ const API_URL = import.meta.env.VITE_API_URL || null;
 
 const getToken = () => localStorage.getItem('fitness_auth_token');
 
-const headers = () => ({
-  'Content-Type': 'application/json',
-  'Authorization': `Bearer ${getToken()}`
-});
+// Single fetch wrapper for all authenticated data calls. It always sends the
+// HttpOnly session cookie (credentials:'include') for Google OAuth users, and
+// additionally attaches the Authorization: Bearer header for email/password
+// users when a localStorage token exists.
+//
+// The Bearer header is omitted when there is no token. This is deliberate: the
+// backend prefers the header over the cookie, so a present-but-empty
+// "Bearer null" header would shadow the cookie and fail auth for OAuth users.
+const apiFetch = (path, options = {}) => {
+  if (!API_URL) return Promise.reject(new Error('No API URL configured'));
+  const token = getToken();
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    }
+  });
+};
 
-const isAvailable = () => !!(API_URL && getToken());
+// Usable whenever a backend URL is configured. Auth is carried by the cookie
+// (OAuth) or the Bearer header (email/password); OAuth users have no readable
+// token, so this must NOT require getToken() or they could never sync.
+const isAvailable = () => !!API_URL;
 
 // Auth
 export const register = (email, password, name) =>
@@ -35,70 +55,58 @@ export const getMe = () =>
 
 // Workouts
 export const getHistory = () =>
-  fetch(`${API_URL}/api/workouts`, { headers: headers() })
-    .then(r => r.json());
+  apiFetch('/api/workouts').then(r => r.json());
 
 export const saveWorkout = (workout) =>
-  fetch(`${API_URL}/api/workouts`, {
+  apiFetch('/api/workouts', {
     method: 'POST',
-    headers: headers(),
     body: JSON.stringify(workout)
   }).then(r => r.json());
 
 export const getActiveWorkout = () =>
-  fetch(`${API_URL}/api/workouts/active`, { headers: headers() })
-    .then(r => r.json());
+  apiFetch('/api/workouts/active').then(r => r.json());
 
 export const saveActiveWorkout = (workout) =>
-  fetch(`${API_URL}/api/workouts/active`, {
+  apiFetch('/api/workouts/active', {
     method: 'PUT',
-    headers: headers(),
     body: JSON.stringify({ workout_data: workout })
   }).then(r => r.json());
 
 export const clearActiveWorkout = () =>
-  fetch(`${API_URL}/api/workouts/active`, {
-    method: 'DELETE',
-    headers: headers()
+  apiFetch('/api/workouts/active', {
+    method: 'DELETE'
   }).then(r => r.json());
 
 export const getProfile = () =>
-  fetch(`${API_URL}/api/profile`, { headers: headers() })
-    .then(r => r.json());
+  apiFetch('/api/profile').then(r => r.json());
 
 export const saveProfile = (profile) =>
-  fetch(`${API_URL}/api/profile`, {
+  apiFetch('/api/profile', {
     method: 'PUT',
-    headers: headers(),
     body: JSON.stringify(profile)
   }).then(r => r.json());
 
 export const getWeightHistory = () =>
-  fetch(`${API_URL}/api/weight`, { headers: headers() })
-    .then(r => r.json());
+  apiFetch('/api/weight').then(r => r.json());
 
 export const addWeightEntry = (weight) =>
-  fetch(`${API_URL}/api/weight`, {
+  apiFetch('/api/weight', {
     method: 'POST',
-    headers: headers(),
     body: JSON.stringify({ weight })
   }).then(r => r.json());
 
 export const getCustomTemplates = () =>
-  fetch(`${API_URL}/api/templates`, { headers: headers() })
-    .then(r => r.json());
+  apiFetch('/api/templates').then(r => r.json());
 
 export const saveCustomTemplate = (template) =>
-  fetch(`${API_URL}/api/templates`, {
+  apiFetch('/api/templates', {
     method: 'POST',
-    headers: headers(),
     body: JSON.stringify({ name: template.name, template_data: template })
   }).then(r => r.json());
 
 export const deleteCustomTemplate = (id) =>
-  fetch(`${API_URL}/api/templates/${id}`, {
-    method: 'DELETE',
-    headers: headers()
+  apiFetch(`/api/templates/${id}`, {
+    method: 'DELETE'
   }).then(r => r.json());
 
 export { isAvailable };
