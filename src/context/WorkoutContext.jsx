@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import StorageService from '../services/StorageService';
 import ActiveWorkoutService from "../services/ActiveWorkoutService";
+import { getMe } from '../services/ApiService';
 
 
 export const WorkoutContext = createContext();
@@ -243,6 +244,41 @@ export const WorkoutProvider = ({ children }) => {
 
 
     }, []);
+
+    // --- 1b. CLOUD AUTH CHECK (HttpOnly cookie session) ---
+    useEffect(() => {
+        // Check if user has a valid cloud session
+        // (HttpOnly cookie set by Google OAuth)
+        const checkCloudAuth = async () => {
+            try {
+                const user = await getMe();
+                if (user && user.id) {
+                    // Build profile from server response
+                    const cloudProfile = {
+                        id: user.id,
+                        name: user.name,
+                        color: user.color || '#bfff00',
+                        avatar: user.avatar ||
+                            (user.name ? user.name[0].toUpperCase() : 'U'),
+                        email: user.email
+                    };
+                    // Only set if not already set or different user
+                    if (!currentProfile ||
+                        currentProfile.id !== cloudProfile.id) {
+                        setCurrentProfile(cloudProfile);
+                        StorageService.saveProfiles([cloudProfile]);
+                        StorageService.saveCurrentProfileId(cloudProfile.id);
+                        StorageService.clearLoggedOut();
+                    }
+                }
+            } catch (e) {
+                // No cloud session — localStorage profile takes over.
+                // This is the normal offline path.
+            }
+        };
+
+        checkCloudAuth();
+    }, []); // Run once on mount
 
     // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
     // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
