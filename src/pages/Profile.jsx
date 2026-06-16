@@ -54,8 +54,13 @@ const Profile = () => {
     const isSynced = !!authToken;
 
     const handleSignOut = () => {
+        // Full logout: clear the auth token AND the local profile/session, then
+        // hard-navigate to the Login screen. (saveCurrentProfileId(null) would
+        // persist the string "null", so remove the key directly instead.)
         StorageService.clearAuthToken();
-        window.location.reload();
+        StorageService.saveProfiles([]);
+        localStorage.removeItem('fitness_current_profile_id');
+        window.location.href = '/login';
     };
 
     // --- Auto-save visual feedback ---
