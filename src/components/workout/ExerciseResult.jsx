@@ -67,13 +67,13 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false }) 
                         <div className="col-weight">
                             <input
                                 type={isBodyweight ? "text" : "number"}
-                                placeholder={isBodyweight ? "Body Wt" : "-"}
-                                defaultValue={isBodyweight ? "Body Wt" : set.weight}
+                                placeholder={isBodyweight ? "BW" : "--"}
+                                defaultValue={isBodyweight ? "BW" : (set.weight || '')}
                                 disabled={isBodyweight}
                             />
                         </div>
                         <div className="col-reps">
-                            <input type="number" placeholder="-" defaultValue={set.reps} />
+                            <input type="number" placeholder="--" defaultValue={set.reps || ''} />
                         </div>
                         {!isPrep && (
                             <div className="col-reps">
