@@ -24,6 +24,15 @@ export const login = (email, password) =>
     body: JSON.stringify({ email, password })
   }).then(r => r.json());
 
+export const getMe = () =>
+  fetch(`${API_URL}/api/auth/me`, {
+    credentials: 'include',  // sends the HttpOnly cookie
+    headers: { 'Content-Type': 'application/json' }
+  }).then(r => {
+    if (!r.ok) throw new Error('Not authenticated');
+    return r.json();
+  });
+
 // Workouts
 export const getHistory = () =>
   fetch(`${API_URL}/api/workouts`, { headers: headers() })
