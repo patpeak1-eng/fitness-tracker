@@ -385,10 +385,11 @@ export const WorkoutProvider = ({ children }) => {
         if (profile.email && ApiService.isAvailable()) {
             (async () => {
                 try {
-                    const [profileData, workoutData, weightData] = await Promise.all([
+                    const [profileData, workoutData, weightData, templateData] = await Promise.all([
                         ApiService.getProfile(),
                         ApiService.getHistory(),
-                        ApiService.getWeightHistory()
+                        ApiService.getWeightHistory(),
+                        ApiService.getCustomTemplates()
                     ]);
 
                     // The user may have switched profiles while these were in flight.
@@ -464,6 +465,31 @@ export const WorkoutProvider = ({ children }) => {
                             StorageService.saveWeightHistory(profile.id, merged);
                             return merged;
                         });
+                    }
+
+                    // Custom templates — merge backend templates into local.
+                    // Dedup by backendId (the backend UUID): templates we've already
+                    // pulled or pushed carry it locally, so a UUID-to-UUID compare avoids
+                    // re-adding the same template on every login. The local 'tpl_custom_*'
+                    // ids never equal the backend UUID, so keying on those would duplicate
+                    // templates each refresh.
+                    if (templateData?.length > 0) {
+                        const storedCustom = StorageService.loadCustomTemplates(profile.id);
+                        const localBackendIds = new Set(
+                            storedCustom.map(t => t.backendId).filter(Boolean)
+                        );
+                        const newTemplates = templateData
+                            .filter(t => !localBackendIds.has(t.id))
+                            .map(t => ({
+                                ...t.template_data,   // template_data contains the full template object
+                                backendId: t.id,      // store backend UUID for future deletes
+                                isCustom: true
+                            }));
+                        if (newTemplates.length > 0) {
+                            const merged = [...storedCustom, ...newTemplates];
+                            StorageService.saveCustomTemplates(profile.id, merged);
+                            setTemplates([...DEFAULT_TEMPLATES, ...merged]);
+                        }
                     }
 
                 } catch (err) {
@@ -1401,7 +1427,7 @@ export const WorkoutProvider = ({ children }) => {
         }));
     };
 
-    const saveWorkoutAsTemplate = (templateName) => {
+    const saveWorkoutAsTemplate = async (templateName) => {
         if (!activeWorkout) return;
         if (!currentProfile) {
             alert("Please select a profile to save templates.");
@@ -1433,18 +1459,52 @@ export const WorkoutProvider = ({ children }) => {
         const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
         const newStored = [...storedTemplates, newTemplate];
         StorageService.saveCustomTemplates(currentProfile.id, newStored);
+
+        // Cloud push (Google OAuth users only) — best-effort, non-fatal.
+        // Capture the backend UUID so a later delete can target the right row.
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            try {
+                const backendResponse = await ApiService.saveCustomTemplate(newTemplate);
+                if (backendResponse?.id) {
+                    newTemplate.backendId = backendResponse.id;
+                    // Persist the backendId onto the stored copy.
+                    const stored = StorageService.loadCustomTemplates(currentProfile.id);
+                    const idx = stored.findIndex(t => t.id === newTemplate.id);
+                    if (idx !== -1) {
+                        stored[idx].backendId = backendResponse.id;
+                        StorageService.saveCustomTemplates(currentProfile.id, stored);
+                    }
+                }
+            } catch (err) {
+                console.warn('[CloudSync] Template save failed (non-fatal):', err.message);
+            }
+        }
     };
 
-    const deleteTemplate = (templateId) => {
+    const deleteTemplate = async (templateId) => {
         if (!currentProfile) return;
+
+        // Read storage once, capturing the backend UUID BEFORE the local removal
+        // (a fresh re-load after removal would no longer find the template).
+        const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
+        const target = storedTemplates.find(t => t.id === templateId);
 
         // Remove from state
         setTemplates(prev => prev.filter(t => t.id !== templateId));
 
         // Remove from storage
-        const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
         const updatedStored = storedTemplates.filter(t => t.id !== templateId);
         StorageService.saveCustomTemplates(currentProfile.id, updatedStored);
+
+        // Cloud delete (Google OAuth users only) — best-effort, non-fatal.
+        // Targets the backend UUID captured at save/pull time.
+        if (target?.backendId && currentProfile?.email && ApiService.isAvailable()) {
+            try {
+                await ApiService.deleteCustomTemplate(target.backendId);
+            } catch (err) {
+                console.warn('[CloudSync] Template delete failed (non-fatal):', err.message);
+            }
+        }
     };
 
     const saveCustomTemplate = (name, exercisesList) => {
