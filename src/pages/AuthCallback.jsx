@@ -9,17 +9,19 @@ const AuthCallback = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
 
+    // Strip ?token=... from the URL immediately after reading it so the token
+    // does not persist in browser history.
+    if (window.history?.replaceState) {
+      window.history.replaceState(null, '', '/auth/callback');
+    }
+
     const token = params.get('token');
     const name = params.get('name');
     const email = params.get('email');
     const userId = params.get('user_id');
     const hashError = params.get('error');
 
-    // Also check query params for error
-    const queryParams = new URLSearchParams(window.location.search);
-    const queryError = queryParams.get('error');
-
-    if (hashError || queryError) {
+    if (hashError) {
       setError('Google sign-in failed. Please try again.');
       setTimeout(() => navigate('/login'), 3000);
       return;
@@ -28,6 +30,7 @@ const AuthCallback = () => {
     if (token && name) {
       // Store auth token
       StorageService.saveAuthToken(token);
+      StorageService.clearLoggedOut();
 
       // Create profile object
       const profileObj = {
