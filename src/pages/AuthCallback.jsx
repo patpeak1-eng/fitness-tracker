@@ -7,29 +7,18 @@ const AuthCallback = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // OAuth token is now delivered via cookies (the static server's
-    // `serve --single` flag strips URL query params), so read them from there.
-    const getCookie = (name) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2)
-        return parts.pop().split(';').shift();
-      return null;
-    };
+    const params = new URLSearchParams(window.location.search);
 
-    const token = getCookie('oauth_token');
-    const name = getCookie('oauth_name');
-    const email = getCookie('oauth_email');
-    const userId = getCookie('oauth_user_id');
-    const hashError = getCookie('oauth_error');
+    // Strip params from URL after reading (security)
+    if (window.history?.replaceState) {
+      window.history.replaceState(null, '', '/auth/callback');
+    }
 
-    const clearOAuthCookies = () => {
-      ['oauth_token', 'oauth_name', 'oauth_email', 'oauth_user_id', 'oauth_error'].forEach(key => {
-        document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; samesite=lax; secure`;
-      });
-    };
-
-    clearOAuthCookies();
+    const token = params.get('token');
+    const name = params.get('name');
+    const email = params.get('email');
+    const userId = params.get('user_id');
+    const hashError = params.get('error');
 
     if (hashError) {
       setError('Google sign-in failed. Please try again.');
