@@ -4,7 +4,7 @@
 
 ### Frontend (Railway Static Site)
 - Build: `npm run build`
-- Serve: `npx serve dist --single`
+- Serve: The app is served by Express (`server.js`). Deploy via Railway — push to `main` and Railway auto-deploys both frontend and backend. For local preview: `node server.js`
 - Environment variable required: `VITE_API_URL`
 
 ### Backend (Railway FastAPI service)
