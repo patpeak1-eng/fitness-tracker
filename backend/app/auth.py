@@ -7,7 +7,7 @@ from typing import Optional
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -40,7 +40,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTPBearer extracts the "Authorization: Bearer <token>" header and powers the
 # Swagger "Authorize" button. Applied as a dependency on every protected route.
-bearer_scheme = HTTPBearer()
+# auto_error=False so a missing/malformed header yields None instead of a 403,
+# letting get_current_user fall back to the HttpOnly session cookie below.
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -63,17 +65,27 @@ def create_access_token(
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Resolve and return the authenticated user, or raise 401."""
+    """Resolve and return the authenticated user, or raise 401.
+
+    Accepts either auth mechanism: the ``Authorization: Bearer`` header
+    (email/password users, who hold the JWT in localStorage) or the HttpOnly
+    ``session_token`` cookie (Google OAuth users, whose JWT is never exposed to
+    JS). The header takes precedence; the cookie is the fallback. Both carry the
+    same signed JWT, so the decode/lookup below is identical for either source.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    token = credentials.credentials
+    token = credentials.credentials if credentials else request.cookies.get("session_token")
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
