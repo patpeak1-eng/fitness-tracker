@@ -60,7 +60,23 @@ async def create_workout(
 ) -> WorkoutResponse:
     workout = WorkoutHistory(user_id=current_user.id, **payload.model_dump())
     db.add(workout)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        # client_id already exists for this user — return the existing record
+        # so re-syncs are idempotent instead of 500ing on the unique constraint.
+        if payload.client_id:
+            result = await db.execute(
+                select(WorkoutHistory).where(
+                    WorkoutHistory.user_id == current_user.id,
+                    WorkoutHistory.client_id == payload.client_id,
+                )
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                return WorkoutResponse.model_validate(existing)
+        raise  # unexpected constraint — re-raise
     await db.refresh(workout)
     return WorkoutResponse.model_validate(workout)
 
