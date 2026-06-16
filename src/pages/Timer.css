@@ -1,7 +1,4 @@
 .timer-page {
-    padding: 20px;
-    padding-bottom: 120px;
-    /* clear the floating bottom nav */
     max-width: 600px;
     margin: 0 auto;
     width: 100%;
