@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -110,8 +111,15 @@ class UserStats(Base):
 
 class WorkoutHistory(Base):
     __tablename__ = "workout_history"
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_id", name="uq_workout_user_client_id"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Frontend-generated id so a workout keeps one canonical id across the
+    # localStorage client and the backend UUID (prevents duplicate rows on
+    # re-login). Nullable for legacy rows; unique per user (NULLs allowed).
+    client_id = Column(String, nullable=True, index=True)
     user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),

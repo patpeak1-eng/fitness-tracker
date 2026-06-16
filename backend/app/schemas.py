@@ -92,6 +92,7 @@ class ProfileUpdate(BaseModel):
 # Workouts
 # --------------------------------------------------------------------------- #
 class WorkoutCreate(BaseModel):
+    client_id: Optional[str] = None
     name: str
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -105,6 +106,7 @@ class WorkoutResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    client_id: Optional[str] = None
     user_id: UUID
     name: str
     start_time: Optional[datetime] = None
