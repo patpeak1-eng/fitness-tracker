@@ -1358,12 +1358,20 @@ export const WorkoutProvider = ({ children }) => {
         StorageService.saveCustomExercises(currentProfile?.id, customExercises);
     };
 
-    const addWeightEntry = (weight) => {
+    const addWeightEntry = async (weight) => {
         const entry = {
             date: new Date().toISOString(),
             weight: parseFloat(weight)
         };
         setWeightHistory(prev => [...prev, entry]);
+        // Push to backend for cloud users, preserving the recorded_at timestamp
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            try {
+                await ApiService.addWeightEntry(parseFloat(weight), entry.date);
+            } catch (err) {
+                console.warn('[CloudSync] Weight push failed (non-fatal):', err.message);
+            }
+        }
     };
 
     const updateTimerPref = (exerciseId, type, duration) => {

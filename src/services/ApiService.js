@@ -100,10 +100,10 @@ export const saveProfile = (profile) =>
 export const getWeightHistory = () =>
   apiFetch('/api/weight').then(r => r.json());
 
-export const addWeightEntry = (weight) =>
+export const addWeightEntry = (weight, recordedAt) =>
   apiFetch('/api/weight', {
     method: 'POST',
-    body: JSON.stringify({ weight })
+    body: JSON.stringify({ weight, recorded_at: recordedAt })
   }).then(r => r.json());
 
 export const getCustomTemplates = () =>
