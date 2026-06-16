@@ -99,8 +99,15 @@
 
 .form-row-3 {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    /* Responsive columns for the Advanced (Optional) metric fields (Body Fat,
+       Muscle Mass, Bone Density). A fixed 1fr 1fr 1fr forced three tracks even
+       on narrow screens, and grid items default to min-width:auto, so the
+       inputs couldn't shrink and the rightmost field (Bone Density) overflowed
+       and was clipped. auto-fit + minmax reflows to fewer columns instead. */
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 0.75rem;
+    width: 100%;
+    overflow: visible;
 }
 
 /* Metrics Card */
