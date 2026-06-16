@@ -932,7 +932,7 @@ export const WorkoutProvider = ({ children }) => {
         }
     };
 
-    const finishWorkout = () => {
+    const finishWorkout = async () => {
         if (!activeWorkout) return;
 
         // Generate Recommendations
@@ -1017,6 +1017,15 @@ export const WorkoutProvider = ({ children }) => {
         setActiveWorkout(null);
         skipRest();        // Stop rest timer
         resetWorkTimer();  // Stop/Reset work timer
+
+        // Push the completed workout to the backend for cloud users (non-fatal).
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            try {
+                await ApiService.saveWorkout(completedWorkout);
+            } catch (err) {
+                console.warn('[CloudSync] Workout push failed (non-fatal):', err.message);
+            }
+        }
 
         return completedWorkout; // RETURN for immediate UI use
     };

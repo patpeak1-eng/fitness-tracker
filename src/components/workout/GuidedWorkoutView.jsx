@@ -183,9 +183,9 @@ const GuidedWorkoutView = () => {
         }
     };
 
-    const handleConfirmFinish = () => {
+    const handleConfirmFinish = async () => {
         setConfirmModal({ isOpen: false });
-        const completedWorkout = finishWorkout();
+        const completedWorkout = await finishWorkout();
         navigate('/summary', { state: { workout: completedWorkout } });
     };
 
