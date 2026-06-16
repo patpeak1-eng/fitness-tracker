@@ -191,4 +191,4 @@ async def google_callback(
         f"&email={quote(google_email)}"
         f"&user_id={quote(str(user.id))}"
     )
-    return RedirectResponse(url=f"{frontend_url}/auth/callback#{fragment}")
+    return RedirectResponse(url=f"{frontend_url}/auth/callback?{fragment}")
