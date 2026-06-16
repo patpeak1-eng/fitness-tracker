@@ -45,6 +45,8 @@ const GuidedWorkoutView = () => {
     const [infoModalOpen, setInfoModalOpen] = React.useState(false);
 
     const [confirmModal, setConfirmModal] = React.useState({ isOpen: false });
+    // Guard against double-submit on the Finish button (finishWorkout is async).
+    const [isFinishing, setIsFinishing] = React.useState(false);
 
     // TARGET ADJUSTMENT STATE
     const [targetModal, setTargetModal] = React.useState({ isOpen: false, type: '', value: 0 });
@@ -184,7 +186,11 @@ const GuidedWorkoutView = () => {
     };
 
     const handleConfirmFinish = async () => {
+        if (isFinishing) return;
+        setIsFinishing(true);
         setConfirmModal({ isOpen: false });
+        // finishWorkout() already pushes the completed workout to the cloud
+        // internally (non-fatal), so no extra ApiService.saveWorkout call here.
         const completedWorkout = await finishWorkout();
         navigate('/summary', { state: { workout: completedWorkout } });
     };
@@ -460,7 +466,7 @@ const GuidedWorkoutView = () => {
                 onClose={() => setConfirmModal({ isOpen: false })}
                 title="Finish Workout?"
                 actions={
-                    <button className="primary-btn" style={{ width: '100%' }} onClick={handleConfirmFinish}>Finish Workout</button>
+                    <button className="primary-btn" style={{ width: '100%' }} onClick={handleConfirmFinish} disabled={isFinishing}>{isFinishing ? 'Finishing...' : 'Finish Workout'}</button>
                 }
             >
                 <p>Great job! Ready to save this session?</p>

@@ -65,6 +65,7 @@ export const saveWorkout = (workout) =>
     // null — which also defeats the name+startTime dedup used by the cloud pull.
     body: JSON.stringify({
       name: workout.name,
+      client_id: workout.client_id || null,
       start_time: workout.startTime ?? null,
       end_time: workout.endTime ?? null,
       status: workout.status ?? 'completed',
