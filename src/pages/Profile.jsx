@@ -53,7 +53,21 @@ const Profile = () => {
     const authToken = StorageService.loadAuthToken();
     const isSynced = !!authToken;
 
-    const handleSignOut = () => {
+    const handleSignOut = async () => {
+        // Best-effort backend logout: clears the HttpOnly auth cookie server-side.
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (apiUrl) {
+                await fetch(`${apiUrl}/api/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            }
+        } catch (e) {
+            // Backend unreachable — still clear local state
+            console.warn('Logout endpoint unreachable:', e);
+        }
+
         // Full logout: clear the auth token AND the local profile/session, then
         // hard-navigate to the Login screen. (saveCurrentProfileId(null) would
         // persist the string "null", so remove the key directly instead.)
