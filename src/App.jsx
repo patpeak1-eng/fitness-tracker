@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { WorkoutProvider, useWorkout } from './context/WorkoutContext';
 import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import TrackWorkout from './pages/TrackWorkout';
 import History from './pages/History';
@@ -27,6 +28,7 @@ const AppRoutes = () => {
     return (
         <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/" element={<Layout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="track" element={<TrackWorkout />} />
