@@ -30,6 +30,7 @@ const Login = () => {
         StorageService.saveProfiles([profileObj]);
         StorageService.saveCurrentProfileId(profileObj.id);
         if (token) StorageService.saveAuthToken(token);
+        StorageService.clearLoggedOut();
         window.location.href = '/';
     };
 
@@ -110,6 +111,7 @@ const Login = () => {
             avatar: 'M'
         }]);
         StorageService.saveCurrentProfileId('user_default');
+        StorageService.clearLoggedOut();
         window.location.href = '/';
     };
 
