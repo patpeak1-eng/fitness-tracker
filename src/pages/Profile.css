@@ -352,10 +352,31 @@
 
 .advanced-content {
     margin-top: 10px;
+    /* .card sets overflow:hidden (to clip its ::before shine sweep). That was
+       clipping the Export/Import buttons when they overflowed the grid on
+       narrow screens — let the expanded panel show its content instead. */
+    overflow: visible;
+    /* Comfortable inner padding for the expanded panel. */
+    padding: 16px;
 }
 
 .advanced-note {
     color: var(--text-secondary);
     font-size: 0.9rem;
     margin: 0 0 4px 0;
+}
+
+/* The backup buttons reuse the generic .form-row-2 grid, which forces two
+   equal columns too narrow for the buttons on small screens. Scope a wrapping
+   flex layout to the Advanced panel only (leaving other .form-row-2 uses such
+   as the weight inputs untouched) so the buttons wrap instead of clipping. */
+.advanced-content .form-row-2 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.advanced-content .form-row-2 .secondary-btn {
+    flex: 1 1 160px;
+    min-width: auto;
 }
