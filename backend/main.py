@@ -14,14 +14,17 @@ from app.routers import (
 
 app = FastAPI(title="Fitness Tracker API", version="0.1.0")
 
-# Allow all origins for now; lock this down to the deployed frontend in
-# production. Bearer tokens travel in the Authorization header (not cookies),
-# so credentialed CORS is not required and allow_credentials stays False —
-# which is also what lets the "*" wildcard origin remain valid.
+# The HttpOnly session cookie is sent on cross-origin requests from the
+# frontend (e.g. GET /api/auth/me with credentials), so CORS must allow
+# credentials. Credentialed CORS forbids the "*" wildcard origin, so the
+# allowed origins are listed explicitly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "https://fitness-tracker-production-54a4.up.railway.app",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

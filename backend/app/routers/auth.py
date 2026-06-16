@@ -1,15 +1,22 @@
-"""Authentication routes: register, login, and Google OAuth (all public)."""
+"""Authentication routes: register, login, Google OAuth, session (/me), logout."""
 import os
-from urllib.parse import quote
+from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import create_access_token, hash_password, verify_password
+from app.auth import (
+    ALGORITHM,
+    SECRET_KEY,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 from app.database import get_db
 from app.models import User
 from app.schemas import Token, UserLogin, UserRegister
@@ -111,14 +118,10 @@ async def google_callback(
     # Google redirects here with ?error=... and no code when the user cancels
     # or denies consent; handle it gracefully instead of returning a 422.
     if error or not code:
-        return RedirectResponse(
-            url=f"{frontend_url}/login?error=google_auth_cancelled"
-        )
+        return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
     if not client_id or not client_secret or not redirect_uri:
-        return RedirectResponse(
-            url=f"{frontend_url}/login?error=google_not_configured"
-        )
+        return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
     # Exchange the authorization code for an access token.
     async with httpx.AsyncClient() as client:
@@ -136,9 +139,7 @@ async def google_callback(
 
     google_access_token = token_data.get("access_token")
     if not google_access_token:
-        return RedirectResponse(
-            url=f"{frontend_url}/login?error=google_auth_failed"
-        )
+        return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
     # Fetch the user's profile from Google.
     async with httpx.AsyncClient() as client:
@@ -150,7 +151,7 @@ async def google_callback(
 
     google_email = userinfo.get("email")
     if not google_email:
-        return RedirectResponse(url=f"{frontend_url}/login?error=no_email")
+        return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
     # Compute the display name only after confirming we have an email (the email
     # prefix is the fallback), so a missing email can't raise here.
@@ -182,13 +183,74 @@ async def google_callback(
 
     jwt_token = create_access_token(subject=str(user.id))
 
-    # Hand the JWT back via the URL fragment (kept out of server logs / Referer).
-    # Values are URL-encoded; the frontend should decode them (URLSearchParams
-    # does this automatically).
-    fragment = (
-        f"token={quote(jwt_token)}"
-        f"&name={quote(google_name)}"
-        f"&email={quote(google_email)}"
-        f"&user_id={quote(str(user.id))}"
+    # Store the JWT in an HttpOnly session cookie (never in the URL/JS), then
+    # send the user to the app. The frontend learns who they are by calling
+    # GET /api/auth/me with credentials; it never reads this cookie directly.
+    #
+    # SameSite=None (with Secure) is REQUIRED: the backend and frontend are on
+    # different domains, so the /api/me call is a cross-site request. A Lax
+    # cookie would be withheld on that cross-site fetch and /api/me would 401.
+    response = RedirectResponse(url=f"{frontend_url}/", status_code=302)
+    response.set_cookie(
+        key="session_token",
+        value=jwt_token,
+        httponly=True,
+        max_age=2592000,  # 30 days
+        samesite="none",
+        secure=True,
     )
-    return RedirectResponse(url=f"{frontend_url}/auth/callback?{fragment}")
+    return response
+
+
+def _user_id_from_session(token: str) -> UUID:
+    """Decode the session JWT and return its user id (the ``sub`` claim).
+
+    app/auth.py exposes no standalone verify helper, so decode here with the
+    same SECRET_KEY/ALGORITHM. Raises (JWTError / ValueError / KeyError) on an
+    invalid, expired, or malformed token.
+    """
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return UUID(str(payload["sub"]))
+
+
+@router.get("/me")
+async def get_current_user_info(
+    request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Return the current user's info, identified by the session cookie."""
+    session_token = request.cookies.get("session_token")
+    if not session_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
+
+    try:
+        user_id = _user_id_from_session(session_token)
+    except (JWTError, ValueError, KeyError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session"
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        )
+
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "name": user.name,
+        "color": user.color or "#bfff00",
+        "avatar": user.avatar or (user.name[0].upper() if user.name else "U"),
+    }
+
+
+@router.post("/logout")
+async def logout() -> RedirectResponse:
+    """Clear the session cookie."""
+    response = RedirectResponse(url="/login", status_code=302)
+    # Match the attributes used when setting the cookie so the browser clears it.
+    response.delete_cookie(key="session_token", samesite="none", secure=True)
+    return response
