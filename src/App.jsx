@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { WorkoutProvider, useWorkout } from './context/WorkoutContext';
@@ -21,15 +21,13 @@ import HelpView from './pages/HelpView';
 const AppRoutes = () => {
     const { currentProfile } = useWorkout();
 
-    if (!currentProfile) {
-        return <Login />;
-    }
-
+    // Always render these routes regardless of auth state, so the Google OAuth
+    // callback (/auth/callback) and /login work even when no profile exists yet.
     return (
         <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/" element={<Layout />}>
+            <Route path="/" element={currentProfile ? <Layout /> : <Navigate to="/login" />}>
                 <Route index element={<Dashboard />} />
                 <Route path="track" element={<TrackWorkout />} />
                 <Route path="history" element={<History />} />
