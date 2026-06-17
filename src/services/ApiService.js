@@ -127,3 +127,22 @@ export const getGoogleAuthUrl = () => {
   if (!API_URL) return null;
   return `${API_URL}/api/auth/google`;
 };
+
+// Coach
+export const sendCoachMessage = async (message, workoutContext = null) => {
+  const res = await apiFetch('/api/coach/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message, workout_context: workoutContext })
+  });
+  // Returns raw Response for SSE streaming — do NOT call .json()
+  return res;
+};
+
+export const getCoachHistory = () =>
+  apiFetch('/api/coach/history').then(r => r.json());
+
+export const synthesizeVoice = (text, voiceId = 'FxZjRiAEBESrb7srpme7') =>
+  apiFetch('/api/voice/coach-synthesize', {
+    method: 'POST',
+    body: JSON.stringify({ text, voice_id: voiceId })
+  }).then(r => r.json());
