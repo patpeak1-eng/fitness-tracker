@@ -1,0 +1,222 @@
+/* CoachView.css — AI Coach chat surface (cyber/fitness aesthetic) */
+
+/* Full-height column pinned above the floating bottom nav. Centered to the
+   same 600px column the rest of the app uses. Opaque so it cleanly covers the
+   page content behind it, with the signature lime/cyan radial glow. */
+.coach-view {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 600px;
+    bottom: calc(var(--nav-height) + var(--safe-area-bottom));
+    z-index: 50;
+
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+
+    background-color: var(--bg-app);
+    background-image:
+        radial-gradient(circle at 15% 15%, var(--primary-glow) 0%, transparent 30%),
+        radial-gradient(circle at 85% 5%, var(--accent-glow) 0%, transparent 28%);
+    background-repeat: no-repeat;
+}
+
+/* --- Header (pinned top) --- */
+.coach-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    padding: 16px 0 12px;
+    border-bottom: var(--border-glass);
+}
+
+.coach-header-titles {
+    flex: 1;
+    min-width: 0;
+}
+
+.coach-header-titles h1 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.coach-subtitle {
+    margin: 2px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.coach-voice-toggle {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    border: var(--border-glass);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition: all 0.2s ease;
+}
+
+.coach-voice-toggle:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.coach-voice-toggle.active {
+    color: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+/* --- Message thread (scrollable, fills the middle) --- */
+.coach-thread {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 2px;
+}
+
+/* Empty state */
+.coach-empty {
+    margin: auto;
+    max-width: 300px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.coach-empty-icon {
+    color: var(--primary);
+    filter: drop-shadow(0 0 10px var(--primary-glow));
+}
+
+/* --- Message bubbles --- */
+.coach-bubble {
+    max-width: 82%;
+    padding: 11px 15px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.coach-bubble-user {
+    align-self: flex-end;
+    background: var(--primary);
+    /* Dark text on lime — mirrors .primary-btn; --bg-app can't be used here as
+       it inverts in light mode while --primary stays lime. */
+    color: #0a0a0a;
+    font-weight: 600;
+    border-radius: 18px 18px 4px 18px;
+    box-shadow: 0 4px 16px var(--primary-glow);
+}
+
+.coach-bubble-coach {
+    align-self: flex-start;
+    background: var(--bg-card);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-glass);
+    color: var(--text-primary);
+    border-radius: 18px 18px 18px 4px;
+    box-shadow: var(--shadow-glass);
+}
+
+.coach-bubble-error {
+    color: var(--error);
+    border-color: var(--error);
+}
+
+/* Streaming caret */
+.coach-cursor {
+    color: var(--primary);
+    font-weight: 700;
+    margin-left: 1px;
+    animation: coach-blink 1s step-end infinite;
+}
+
+@keyframes coach-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Speaking pulse on the coach bubble border while audio plays */
+.coach-bubble-speaking {
+    border-color: var(--primary);
+    animation: coach-speak 1.6s ease-in-out infinite;
+}
+
+@keyframes coach-speak {
+    0%, 100% {
+        box-shadow: 0 0 0 1px var(--primary-glow), 0 0 8px var(--primary-glow);
+    }
+    50% {
+        box-shadow: 0 0 0 1px var(--primary), 0 0 20px var(--primary-glow);
+    }
+}
+
+/* --- Input bar (bottom of the column, above the nav) --- */
+.coach-input-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0 14px;
+    border-top: var(--border-glass);
+}
+
+.coach-input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(0, 0, 0, 0.3);
+    border: var(--border-glass);
+    color: var(--text-primary);
+    border-radius: 24px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+}
+
+.coach-input::placeholder {
+    color: var(--text-muted);
+}
+
+.coach-send-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: #0a0a0a;
+    box-shadow: 0 0 15px var(--primary-glow);
+    transition: all 0.2s ease;
+}
+
+.coach-send-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+}
+
+.coach-send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+}
