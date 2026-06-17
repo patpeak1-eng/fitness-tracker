@@ -10,5 +10,7 @@ passlib[bcrypt]
 bcrypt==4.0.1
 python-dotenv
 pydantic[email]
-# Async HTTP client for Google OAuth token/userinfo calls.
+# Async HTTP client for Google OAuth token/userinfo calls and ElevenLabs TTS.
 httpx
+# Anthropic SDK for the AI coach (streaming Messages API + prompt caching).
+anthropic==0.40.0

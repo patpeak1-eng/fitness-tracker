@@ -5,9 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import (
     assessments,
     auth,
+    coach,
     exercises,
     profile,
     templates,
+    voice,
     weight,
     workouts,
 )
@@ -36,6 +38,8 @@ app.include_router(assessments.router)
 app.include_router(weight.router)
 app.include_router(templates.router)
 app.include_router(exercises.router)
+app.include_router(coach.router)
+app.include_router(voice.router)
 
 
 @app.get("/health")

@@ -79,6 +79,12 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    coach_messages = relationship(
+        "CoachMessage",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class UserStats(Base):
@@ -222,3 +228,20 @@ class CustomExercise(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="exercises")
+
+
+class CoachMessage(Base):
+    __tablename__ = "coach_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role = Column(String, nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="coach_messages")
