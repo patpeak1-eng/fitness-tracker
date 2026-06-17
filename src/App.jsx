@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import WorkoutSummary from './pages/WorkoutSummary';
 import Assessment from './pages/Assessment';
 import HelpView from './pages/HelpView';
+import CoachView from './pages/CoachView';
 
 // Inner component to check profile status
 const AppRoutes = () => {
@@ -46,6 +47,7 @@ const AppRoutes = () => {
                 <Route path="timer" element={<Timer />} />
                 <Route path="exercises" element={<Exercises />} />
                 <Route path="analytics" element={<Analytics />} />
+                <Route path="coach" element={<CoachView />} />
                 <Route path="summary" element={<WorkoutSummary />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="settings" element={<Settings />} />
