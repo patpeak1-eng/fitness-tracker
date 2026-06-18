@@ -5,7 +5,35 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
+import StorageService from '../services/StorageService';
 import './Settings.css';
+
+// ElevenLabs voice options for the AI coach (id -> display name).
+const COACH_VOICES = [
+    { id: 'FxZjRiAEBESrb7srpme7', name: 'Jarvis' },
+    { id: 'JSWO6cw2AyFE324d5kEr', name: 'Scarlet Jo' },
+    { id: 'u8GDilEiJPUbRk87Lcqs', name: 'Dan' },
+    { id: '7S3KNdLDL7aRgBVRQb1z', name: 'Nate' },
+];
+
+const COACH_PERSONALITIES = [
+    { id: 'apex', label: 'Apex', desc: 'Direct & data-driven' },
+    { id: 'hype', label: 'Hype', desc: 'High energy & motivating' },
+    { id: 'zen', label: 'Zen', desc: 'Calm & technical' },
+];
+
+// On/off switch matching the smart-progression master toggle style.
+const Toggle = ({ checked, onChange, label }) => (
+    <label className="coach-switch">
+        <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => onChange(e.target.checked)}
+            aria-label={label}
+        />
+        <span className="coach-switch-slider" />
+    </label>
+);
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -29,6 +57,19 @@ const Settings = () => {
     // truthy value means this build was pointed at the deployed backend.
     const apiConnected = Boolean(import.meta.env.VITE_API_URL);
 
+    // --- AI Coach settings (device-level, persisted immediately via StorageService) ---
+    const [coachEnabled, setCoachEnabled] = useState(StorageService.loadCoachEnabled());
+    const [coachPersonality, setCoachPersonality] = useState(StorageService.loadCoachPersonality());
+    const [coachVoiceId, setCoachVoiceId] = useState(StorageService.loadCoachVoiceId());
+    const [coachVoiceInput, setCoachVoiceInput] = useState(StorageService.loadCoachVoiceInput());
+    const [coachAutoplay, setCoachAutoplay] = useState(StorageService.loadCoachAutoplay());
+
+    const handleCoachEnabled = (val) => { setCoachEnabled(val); StorageService.saveCoachEnabled(val); };
+    const handleCoachPersonality = (val) => { setCoachPersonality(val); StorageService.saveCoachPersonality(val); };
+    const handleCoachVoiceId = (val) => { setCoachVoiceId(val); StorageService.saveCoachVoiceId(val); };
+    const handleCoachVoiceInput = (val) => { setCoachVoiceInput(val); StorageService.saveCoachVoiceInput(val); };
+    const handleCoachAutoplay = (val) => { setCoachAutoplay(val); StorageService.saveCoachAutoplay(val); };
+
     // "Saved ✓" confirmation. Settings persist automatically through
     // WorkoutContext's useEffect, so we surface a brief, auto-fading
     // confirmation whenever any setting value changes. The initial mount is
@@ -46,7 +87,8 @@ const Settings = () => {
         return () => clearTimeout(timer);
     }, [
         theme, units, soundEnabled, defaultRestTime, defaultWorkTime,
-        smartProgressionEnabled, progressionMode, progressionType, progressionIncrement
+        smartProgressionEnabled, progressionMode, progressionType, progressionIncrement,
+        coachEnabled, coachPersonality, coachVoiceId, coachVoiceInput, coachAutoplay
     ]);
 
     const handleSwitchProfile = () => {
@@ -307,6 +349,75 @@ const Settings = () => {
                         </div>
                     </Card>
                 </div>
+            </section>
+
+            <section className="settings-section">
+                <h2>AI Coach</h2>
+
+                <Card className="setting-row">
+                    <div className="setting-info">
+                        <span className="setting-label">Enable AI Coach</span>
+                        <span className="setting-desc">{coachEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+                    <Toggle checked={coachEnabled} onChange={handleCoachEnabled} label="Enable AI Coach" />
+                </Card>
+
+                {coachEnabled && (
+                    <>
+                        <Card>
+                            <span className="setting-label">Personality</span>
+                            <div className="unit-toggle coach-personality">
+                                {COACH_PERSONALITIES.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        className={`unit-btn ${coachPersonality === p.id ? 'active' : ''}`}
+                                        onClick={() => handleCoachPersonality(p.id)}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="setting-desc coach-personality-desc">
+                                {COACH_PERSONALITIES.find((p) => p.id === coachPersonality)?.desc}
+                            </p>
+                        </Card>
+
+                        <Card>
+                            <span className="setting-label">Voice</span>
+                            <div className="coach-voice-list">
+                                {COACH_VOICES.map((v) => (
+                                    <button
+                                        key={v.id}
+                                        type="button"
+                                        className="coach-voice-option"
+                                        onClick={() => handleCoachVoiceId(v.id)}
+                                        aria-pressed={coachVoiceId === v.id}
+                                    >
+                                        <span>{v.name}</span>
+                                        {coachVoiceId === v.id && <Check size={16} color="var(--primary)" />}
+                                    </button>
+                                ))}
+                            </div>
+                        </Card>
+
+                        <Card className="coach-toggle-card">
+                            <div className="setting-row">
+                                <div className="setting-info">
+                                    <span className="setting-label">Voice Input (Mic)</span>
+                                    <span className="setting-desc">Speak your messages to the coach</span>
+                                </div>
+                                <Toggle checked={coachVoiceInput} onChange={handleCoachVoiceInput} label="Voice input" />
+                            </div>
+                            <div className="setting-row">
+                                <div className="setting-info">
+                                    <span className="setting-label">Auto-play Voice</span>
+                                    <span className="setting-desc">Speak the coach&apos;s replies aloud</span>
+                                </div>
+                                <Toggle checked={coachAutoplay} onChange={handleCoachAutoplay} label="Auto-play voice" />
+                            </div>
+                        </Card>
+                    </>
+                )}
             </section>
 
             <div className="version-info">

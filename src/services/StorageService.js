@@ -165,6 +165,44 @@ const StorageService = {
         writeRaw(KEY.autoSync, enabled, { global: true });
     },
 
+    // --- AI Coach settings (device-level, not profile-scoped for now) ---
+    // Stored under bare keys (coach_*) so they match what the coach feature
+    // reads directly. Booleans are persisted as the strings "true"/"false".
+    loadCoachEnabled() {
+        return readRaw('coach_enabled', 'true', { global: true }) !== 'false';
+    },
+    saveCoachEnabled(enabled) {
+        writeRaw('coach_enabled', !!enabled, { global: true });
+    },
+
+    loadCoachPersonality() {
+        return readRaw('coach_personality', 'apex', { global: true });
+    },
+    saveCoachPersonality(personality) {
+        writeRaw('coach_personality', personality, { global: true });
+    },
+
+    loadCoachVoiceId() {
+        return readRaw('coach_voice_id', 'FxZjRiAEBESrb7srpme7', { global: true });
+    },
+    saveCoachVoiceId(voiceId) {
+        writeRaw('coach_voice_id', voiceId, { global: true });
+    },
+
+    loadCoachVoiceInput() {
+        return readRaw('coach_voice_input', 'false', { global: true }) === 'true';
+    },
+    saveCoachVoiceInput(enabled) {
+        writeRaw('coach_voice_input', !!enabled, { global: true });
+    },
+
+    loadCoachAutoplay() {
+        return readRaw('coach_autoplay', 'true', { global: true }) !== 'false';
+    },
+    saveCoachAutoplay(enabled) {
+        writeRaw('coach_autoplay', !!enabled, { global: true });
+    },
+
     migrateLegacyData(uid) {
         if (!uid) return;
 
