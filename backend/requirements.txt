@@ -14,3 +14,5 @@ pydantic[email]
 httpx
 # Anthropic SDK for the AI coach (streaming Messages API + prompt caching).
 anthropic>=0.40.0
+# WebSocket client for the ElevenLabs streaming-input TTS pipeline.
+websockets>=12.0
