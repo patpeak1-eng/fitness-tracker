@@ -1,6 +1,6 @@
 """add unique constraint on user_stats.user_id
 
-Revision ID: 0004_add_unique_constraint_user_stats
+Revision ID: 0004_uq_stats
 Revises: 0003_add_coach_messages
 Create Date: 2026-06-19
 
@@ -22,8 +22,11 @@ from typing import Sequence, Union
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
-revision: str = "0004_add_unique_constraint_user_stats"
+# revision identifiers, used by Alembic. Keep ``revision`` <= 32 chars:
+# alembic_version.version_num is VARCHAR(32), so a longer id fails the
+# "alembic upgrade head" that runs on Railway deploy. Shortened from
+# "0004_add_unique_constraint_user_stats" (37 chars) for exactly that reason.
+revision: str = "0004_uq_stats"
 down_revision: Union[str, None] = "0003_add_coach_messages"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
