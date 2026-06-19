@@ -19,13 +19,31 @@ from app.auth import (
 )
 from app.database import get_db
 from app.models import User
+from app.rate_limit import (
+    LOGIN_LIMIT,
+    LOGIN_WINDOW,
+    REGISTER_LIMIT,
+    REGISTER_WINDOW,
+    rate_limit,
+)
 from app.schemas import Token, UserLogin, UserRegister
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) -> Token:
+async def register(
+    payload: UserRegister,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    # Brute-force / abuse guardrail, keyed by client IP (no user yet).
+    await rate_limit(
+        f"register:{request.client.host if request.client else 'unknown'}",
+        REGISTER_LIMIT,
+        REGISTER_WINDOW,
+    )
+
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
@@ -56,7 +74,18 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/login", response_model=Token)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token:
+async def login(
+    payload: UserLogin,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    # Brute-force guardrail, keyed by client IP (no user yet).
+    await rate_limit(
+        f"login:{request.client.host if request.client else 'unknown'}",
+        LOGIN_LIMIT,
+        LOGIN_WINDOW,
+    )
+
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):

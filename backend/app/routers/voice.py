@@ -24,13 +24,14 @@ from fastapi import (
     status,
 )
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import ALGORITHM, SECRET_KEY, get_current_user
 from app.database import get_db
 from app.models import User
+from app.rate_limit import VOICE_LIMIT, VOICE_WINDOW, enforce_rate_limit, rate_limit
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
@@ -43,7 +44,7 @@ AUDIO_DRAIN_TIMEOUT = 30.0
 
 
 class VoiceSynthesizeRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=2000)
     voice_id: Optional[str] = DEFAULT_VOICE_ID
 
 
@@ -52,6 +53,9 @@ async def coach_synthesize(
     payload: VoiceSynthesizeRequest,
     current_user: User = Depends(get_current_user),
 ) -> dict:
+    # Cost guardrail: cap per-user synthesis calls (ElevenLabs bills per char).
+    await rate_limit("voice_synth", VOICE_LIMIT, VOICE_WINDOW, current_user)
+
     api_key = os.getenv("ELEVENLABS_API_KEY")
     if not api_key:
         raise HTTPException(
@@ -160,6 +164,15 @@ async def voice_stream_ws(
         await websocket.close(code=1008)  # 1008 = policy violation
         return
 
+    # Cost guardrail: cap new stream connections per user. Can't raise
+    # HTTPException over a WebSocket, so close with 1008 on the imperative check.
+    allowed, _retry_after = await enforce_rate_limit(
+        "voice_stream", VOICE_LIMIT, VOICE_WINDOW, user
+    )
+    if not allowed:
+        await websocket.close(code=1008)
+        return
+
     api_key = os.getenv("ELEVENLABS_API_KEY")
     if not api_key:
         await websocket.send_text(
@@ -197,10 +210,15 @@ async def voice_stream_ws(
                     async for message in websocket.iter_text():
                         data = json.loads(message)
                         if data.get("type") == "text":
+                            content = data.get("content", "")
+                            # Per-frame cap: an oversized frame is abuse — close.
+                            if len(content) > 1000:
+                                await websocket.close(code=1008)
+                                return
                             await el_ws.send(
                                 json.dumps(
                                     {
-                                        "text": data["content"],
+                                        "text": content,
                                         "flush": data.get("flush", False),
                                     }
                                 )

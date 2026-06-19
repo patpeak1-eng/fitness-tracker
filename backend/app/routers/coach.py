@@ -16,13 +16,14 @@ from uuid import UUID
 from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import CoachMessage, User, UserStats, WorkoutHistory
+from app.rate_limit import COACH_LIMIT, COACH_WINDOW, rate_limit
 
 router = APIRouter(prefix="/api/coach", tags=["coach"])
 
@@ -97,7 +98,7 @@ PERSONALITY_PROMPTS = {
 
 
 class CoachChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=4000)
     workout_context: Optional[dict] = None
     personality: Optional[str] = "apex"
 
@@ -171,6 +172,10 @@ async def coach_chat(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
+    # Cost guardrail: cap AI-coach calls per user before any Anthropic work.
+    # (Also covers the deprecated /chat/stream alias, which delegates here.)
+    await rate_limit("coach", COACH_LIMIT, COACH_WINDOW, current_user)
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(
