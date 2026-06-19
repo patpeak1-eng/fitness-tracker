@@ -31,6 +31,22 @@ from app.schemas import Token, UserLogin, UserRegister
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _client_ip(request: Request) -> str:
+    """Client IP for rate-limit keying on the unauthenticated auth routes.
+
+    Behind Railway's reverse proxy the socket peer is the proxy, so prefer the
+    leftmost ``X-Forwarded-For`` entry (the original client) — otherwise every
+    client collapses into one bucket. XFF can be spoofed if the edge doesn't
+    strip a client-supplied header, so this slows casual brute-force but is not
+    a substitute for account lockout. Falls back to the socket peer when no
+    header is present (e.g. local/dev).
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: UserRegister,
@@ -39,7 +55,7 @@ async def register(
 ) -> Token:
     # Brute-force / abuse guardrail, keyed by client IP (no user yet).
     await rate_limit(
-        f"register:{request.client.host if request.client else 'unknown'}",
+        f"register:{_client_ip(request)}",
         REGISTER_LIMIT,
         REGISTER_WINDOW,
     )
@@ -81,7 +97,7 @@ async def login(
 ) -> Token:
     # Brute-force guardrail, keyed by client IP (no user yet).
     await rate_limit(
-        f"login:{request.client.host if request.client else 'unknown'}",
+        f"login:{_client_ip(request)}",
         LOGIN_LIMIT,
         LOGIN_WINDOW,
     )
