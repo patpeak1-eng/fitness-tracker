@@ -57,22 +57,66 @@ const GuidedWorkoutView = () => {
     // REP COUNTER STATE
     const [activeRepCount, setActiveRepCount] = React.useState(0);
 
+    // POST SET INPUT STATE — hoisted above the early returns (Rules of Hooks).
+    const [showInputModal, setShowInputModal] = React.useState(false);
+    const [inputValues, setInputValues] = React.useState({ weight: 0, reps: 0, distance: 0, time: 0 });
+
+    // Auto-advance trackers — hoisted above the early returns (Rules of Hooks).
+    const wasRestingRef = React.useRef(false);
+    const wasWorkingRef = React.useRef(false);
+
+    // Derived values, computed null-safe so every hook below runs on every
+    // render — even before activeWorkout / the current exercise exist. The
+    // early returns further down still guard the actual render output.
+    const currentExerciseInstance = activeWorkout?.exercises[currentExerciseIndex];
+    const nextExerciseInstance = activeWorkout?.exercises[currentExerciseIndex + 1];
+    const isDurationBased = currentExerciseInstance?.exercise.isDurationBased === true || currentExerciseInstance?.exercise.default_duration > 0 || currentExerciseInstance?.exercise.category === 'Yoga' || currentExerciseInstance?.exercise.category === 'Cardio';
+    const currentSet = currentExerciseInstance?.sets[currentSetIndex];
+    const isResting = restTimer.isActive;
+    const isWorking = workTimer.isActive;
+
     // Reset rep count when set changes
     useEffect(() => {
         setActiveRepCount(0);
     }, [currentSetIndex, currentExerciseIndex]);
 
+    // --- CHECK PREFS ON EXERCISE LOAD ---
+    useEffect(() => {
+        if (!currentExerciseInstance) return;
+        const exId = currentExerciseInstance.exercise.id;
+        const savedWork = exercisePrefs[exId]?.work;
+        const savedRest = exercisePrefs[exId]?.rest;
+
+        if (savedWork && !isWorking) {
+            startWorkTimer(savedWork);
+            stopWorkTimer();
+        }
+        if (savedRest && !isResting) {
+            startRestTimer(savedRest);
+            skipRest();
+        }
+    }, [currentExerciseInstance?.id, exercisePrefs]);
+
+    // --- AUTO-ADVANCE LOGIC ---
+    useEffect(() => {
+        if (!currentExerciseInstance) return;
+        if (wasRestingRef.current && !restTimer.isActive && restTimer.timeLeft === 0) {
+            goToNext();
+        }
+        wasRestingRef.current = restTimer.isActive;
+    }, [restTimer.isActive, restTimer.timeLeft]);
+
+    useEffect(() => {
+        if (!currentExerciseInstance) return;
+        if (wasWorkingRef.current && !workTimer.isActive && workTimer.timeLeft === 0) {
+            openInputModal();
+        }
+        wasWorkingRef.current = workTimer.isActive;
+    }, [workTimer.isActive, workTimer.timeLeft]);
+
+    // --- EARLY RETURNS (safety guards) — every hook above runs on each render ---
     if (!activeWorkout) return null;
-
-    const currentExerciseInstance = activeWorkout.exercises[currentExerciseIndex];
-    const nextExerciseInstance = activeWorkout.exercises[currentExerciseIndex + 1];
-    const isDurationBased = currentExerciseInstance?.exercise.isDurationBased === true || currentExerciseInstance?.exercise.default_duration > 0 || currentExerciseInstance?.exercise.category === 'Yoga' || currentExerciseInstance?.exercise.category === 'Cardio';
-
     if (!currentExerciseInstance) return null;
-
-    const currentSet = currentExerciseInstance.sets[currentSetIndex];
-    const isResting = restTimer.isActive;
-    const isWorking = workTimer.isActive;
 
     // --- NAV HELPERS ---
     const prevExercise = () => {
@@ -94,22 +138,6 @@ const GuidedWorkoutView = () => {
             resetWorkTimer();
         }
     };
-
-    // --- CHECK PREFS ON EXERCISE LOAD ---
-    useEffect(() => {
-        const exId = currentExerciseInstance.exercise.id;
-        const savedWork = exercisePrefs[exId]?.work;
-        const savedRest = exercisePrefs[exId]?.rest;
-
-        if (savedWork && !isWorking) {
-            startWorkTimer(savedWork);
-            stopWorkTimer();
-        }
-        if (savedRest && !isResting) {
-            startRestTimer(savedRest);
-            skipRest();
-        }
-    }, [currentExerciseInstance.id, exercisePrefs]);
 
     // --- TIMER ADJUSTMENTS (PERSISTED) ---
     const adjustTimer = (seconds) => {
@@ -154,23 +182,6 @@ const GuidedWorkoutView = () => {
 
 
 
-    // --- AUTO-ADVANCE LOGIC ---
-    const wasRestingRef = React.useRef(false);
-    useEffect(() => {
-        if (wasRestingRef.current && !restTimer.isActive && restTimer.timeLeft === 0) {
-            goToNext();
-        }
-        wasRestingRef.current = restTimer.isActive;
-    }, [restTimer.isActive, restTimer.timeLeft]);
-
-    const wasWorkingRef = React.useRef(false);
-    useEffect(() => {
-        if (wasWorkingRef.current && !workTimer.isActive && workTimer.timeLeft === 0) {
-            openInputModal();
-        }
-        wasWorkingRef.current = workTimer.isActive;
-    }, [workTimer.isActive, workTimer.timeLeft]);
-
     const goToNext = () => {
         stopWorkTimer();
         skipRest();
@@ -197,10 +208,6 @@ const GuidedWorkoutView = () => {
         const completedWorkout = await finishWorkout();
         navigate('/summary', { state: { workout: completedWorkout } });
     };
-
-    // --- POST SET INPUT LOGIC ---
-    const [showInputModal, setShowInputModal] = React.useState(false);
-    const [inputValues, setInputValues] = React.useState({ weight: 0, reps: 0, distance: 0, time: 0 });
 
     const handleMainButton = () => {
         if (isResting) {
