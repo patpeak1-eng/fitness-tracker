@@ -3,3 +3,9 @@ dist/
 build/
 .env
 .DS_Store
+
+BACKUP_AFTER_CRASH_FIX_2026_01_29.zip
+backup workout files/
+fitness_data.json
+*.zip
+*.bat
