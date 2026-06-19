@@ -129,10 +129,10 @@ export const getGoogleAuthUrl = () => {
 };
 
 // Coach
-export const sendCoachMessage = async (message, workoutContext = null) => {
+export const sendCoachMessage = async (message, workoutContext = null, personality = null) => {
   const res = await apiFetch('/api/coach/chat', {
     method: 'POST',
-    body: JSON.stringify({ message, workout_context: workoutContext })
+    body: JSON.stringify({ message, workout_context: workoutContext, personality })
   });
   // Returns raw Response for SSE streaming — do NOT call .json()
   return res;

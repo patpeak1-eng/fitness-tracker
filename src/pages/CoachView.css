@@ -220,3 +220,62 @@
     cursor: not-allowed;
     box-shadow: none;
 }
+
+/* Mic (Web Speech) — secondary circular control beside Send. Pulses red while
+   actively listening. */
+.coach-mic-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    border: var(--border-glass);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition: all 0.2s ease;
+}
+
+.coach-mic-btn:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.coach-mic-btn.active {
+    color: var(--error);
+    border-color: var(--error);
+    animation: coach-mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes coach-mic-pulse {
+    0%, 100% { box-shadow: 0 0 8px var(--error); }
+    50% { box-shadow: 0 0 18px var(--error); }
+}
+
+/* Stop-speaking pill — floats centered just above the input bar, only while
+   audio is playing. */
+.coach-stop-btn {
+    align-self: center;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 auto 8px;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--error);
+    background: var(--bg-card);
+    border: 1px solid var(--error);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition: all 0.2s ease;
+}
+
+.coach-stop-btn:hover {
+    box-shadow: 0 0 14px var(--error);
+}
