@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Info, Plus, Check } from 'lucide-react';
+import { Info, Plus } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import InstructionModal from './InstructionModal';
 import './ExerciseResult.css';
 
-const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false }) => {
-    const { units } = useWorkout();
+const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [] }) => {
+    const { units, updateSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
 
     // CRITICAL: Find the exercise safely
@@ -24,7 +24,7 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false }) 
             { id: 3, weight: '', reps: '', completed: false }
         ];
 
-    const [sets, setSets] = useState(initialSets);
+    const sets = initialSets;
 
     // If exercise is missing, show a non-crashing UI
     if (!exercise || exercise.id === 'unknown') {
@@ -68,8 +68,17 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false }) 
                             <input
                                 type={isBodyweight ? "text" : "number"}
                                 placeholder={isBodyweight ? "BW" : "--"}
-                                defaultValue={isBodyweight ? "BW" : (set.weight || '')}
+                                value={isBodyweight ? "BW" : (set.weight || '')}
+                                min={isBodyweight ? undefined : "0"}
+                                step={isBodyweight ? undefined : "any"}
                                 disabled={isBodyweight}
+                                className={isPrep && invalidWeightSetKeys.includes(`${workoutData?.id}:${set.id}`) ? 'invalid-prep-input' : ''}
+                                aria-invalid={isPrep && invalidWeightSetKeys.includes(`${workoutData?.id}:${set.id}`)}
+                                onChange={(event) => {
+                                    if (!isPrep || isBodyweight || !workoutData) return;
+                                    const weight = event.target.value === '' ? '' : Number(event.target.value);
+                                    updateSet(workoutData.id, set.id, { weight });
+                                }}
                             />
                         </div>
                         <div className="col-reps">

@@ -6,6 +6,40 @@ import * as ApiService from '../services/ApiService';
 
 export const WorkoutContext = createContext();
 
+const exerciseRequiresExternalWeight = (exercise) => {
+    if (!exercise) return false;
+
+    return !(
+        exercise.isBodyweight ||
+        exercise.category === 'Calisthenics' ||
+        exercise.category === 'Yoga' ||
+        exercise.equipment === 'None'
+    );
+};
+
+const getPrepValidation = (activeWorkout) => {
+    if (!activeWorkout || activeWorkout.status !== 'preparing') {
+        return { canStartGuidedWorkout: true, invalidWeightSetKeys: [] };
+    }
+
+    const invalidWeightSetKeys = [];
+
+    (activeWorkout.exercises || []).forEach((workoutExercise) => {
+        if (!workoutExercise?.exercise || !exerciseRequiresExternalWeight(workoutExercise.exercise)) return;
+
+        (workoutExercise.sets || []).forEach((set) => {
+            if (!(Number(set.weight) > 0)) {
+                invalidWeightSetKeys.push(`${workoutExercise.id}:${set.id}`);
+            }
+        });
+    });
+
+    return {
+        canStartGuidedWorkout: (activeWorkout.exercises || []).length > 0 && invalidWeightSetKeys.length === 0,
+        invalidWeightSetKeys
+    };
+};
+
 const DEFAULT_EXERCISES = [
     { "id": "wt_ohp", "name": "Overhead Press", "category": "Weights", "primary_muscle": "Shoulders", "equipment": "Barbell/Dumbbells", "instructions": "Press the weight directly overhead until arms lock, keeping core tight and avoiding a back arch." },
     { "id": "wt_lat_raise", "name": "Dumbbell Side Raise", "category": "Weights", "primary_muscle": "Shoulders", "equipment": "Dumbbells", "instructions": "Raise dumbbells out to the sides with a slight elbow bend until arms are parallel to the floor." },
@@ -945,20 +979,34 @@ export const WorkoutProvider = ({ children }) => {
                     console.error("DEBUG: getLastExerciseStats failed for", fullExercise.id, e);
                 }
 
-                const smartWeight = lastStats ? lastStats.weight : 0;
-                const smartReps = lastStats ? lastStats.reps : 0;
+                const smartWeight = Number(lastStats?.weight) || 0;
+                const smartReps = Number(lastStats?.reps) || 0;
+                const configuredSets = typeof exItem === 'object' && Array.isArray(exItem.sets)
+                    ? exItem.sets
+                    : [];
+                const configuredSetCount = typeof exItem === 'object' && Number.isInteger(exItem.sets)
+                    ? exItem.sets
+                    : 0;
+                const targetSetCount = configuredSets.length || configuredSetCount || template.sets || 3;
+                const currentBodyweight = parseFloat(userStats.currentWeight) || 0;
 
-                // Determine set count
-                const targetSets = (typeof exItem === 'object' && exItem.sets) ? exItem.sets : (template.sets || 3);
+                const sets = Array.from({ length: targetSetCount }, (_, setIndex) => {
+                    const configuredSet = configuredSets[setIndex] || {};
+                    const configuredWeight = Number(configuredSet.weight) || 0;
+                    const configuredReps = Number(configuredSet.targetReps) || 0;
+                    const startingWeight = configuredWeight > 0
+                        ? configuredWeight
+                        : (fullExercise.isBodyweight ? currentBodyweight : smartWeight);
 
-                const sets = Array(targetSets).fill(0).map(() => ({
-                    id: generateId(),
-                    weight: lastStats ? lastStats.weight : (fullExercise.isBodyweight ? (parseFloat(userStats.currentWeight) || 0) : 0),
-                    targetReps: lastStats ? lastStats.reps : 0,
-                    targetTime: fullExercise.default_duration || 0,
-                    reps: 0, distance: 0, time: 0, completed: false,
-                    lastPerformance: lastStats // METADATA
-                }));
+                    return {
+                        id: generateId(),
+                        weight: startingWeight,
+                        targetReps: configuredReps || smartReps,
+                        targetTime: configuredSet.targetTime || fullExercise.default_duration || 0,
+                        reps: 0, distance: 0, time: 0, completed: false,
+                        lastPerformance: lastStats // METADATA
+                    };
+                });
 
                 return {
                     id: generateId(),
@@ -1341,9 +1389,11 @@ export const WorkoutProvider = ({ children }) => {
         syncToTemplate(activeWorkout.sourceTemplateId, exIndex, setIndex, updates);
     };
 
+    const prepValidation = getPrepValidation(activeWorkout);
+
     // Start the guided session (transition from prep to active)
     const startGuidedSession = () => {
-        if (!activeWorkout) return;
+        if (!activeWorkout || !prepValidation.canStartGuidedWorkout) return false;
 
         // Initialize indices as 0 in the persistent object
         setActiveWorkout(prev => ({
@@ -1357,7 +1407,8 @@ export const WorkoutProvider = ({ children }) => {
         _setCurrentSetIndex(0);
         // Do not auto-start work timer yet, let user click "Start" on the first set? 
         // Or if user wants total automation:
-        // startWorkTimer(); 
+        // startWorkTimer();
+        return true;
     };
 
     const addSet = (exerciseInstanceId) => {
@@ -1798,6 +1849,7 @@ export const WorkoutProvider = ({ children }) => {
 
     const value = {
         activeWorkout,
+        prepValidation,
         exercises,
         templates,
         history,

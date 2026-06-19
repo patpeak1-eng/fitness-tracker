@@ -9,7 +9,7 @@ import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp }
 import './TrackWorkout.css';
 
 const TrackWorkout = () => {
-    const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession } = useContext(WorkoutContext);
+    const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -188,15 +188,19 @@ const TrackWorkout = () => {
                     {/* Top Actions in Prep Mode */}
                     <div style={{ padding: '0 20px', marginBottom: '10px' }}>
                         <button
-                            onClick={() => {
-                                startGuidedSession();
-                            }}
+                            onClick={startGuidedSession}
+                            disabled={!prepValidation.canStartGuidedWorkout}
                             className="finish-btn"
-                            style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: prepValidation.canStartGuidedWorkout ? 1 : 0.5, cursor: prepValidation.canStartGuidedWorkout ? 'pointer' : 'not-allowed' }}
                         >
                             <Play size={20} fill="currentColor" />
                             START WORKOUT
                         </button>
+                        {!prepValidation.canStartGuidedWorkout && (
+                            <p style={{ margin: '0 0 15px', color: '#fca5a5', fontSize: '0.9rem', textAlign: 'center' }}>
+                                Enter a weight greater than 0 for every weighted set before starting.
+                            </p>
+                        )}
                     </div>
 
                     {activeWorkout.exercises && activeWorkout.exercises.map((item, index) => {
@@ -213,6 +217,7 @@ const TrackWorkout = () => {
                                 exercises={exercises}
                                 workoutData={typeof item === 'object' ? item : null}
                                 isPrep={true}
+                                invalidWeightSetKeys={prepValidation.invalidWeightSetKeys}
                             />
                         );
                     })}
@@ -250,11 +255,10 @@ const TrackWorkout = () => {
 
                     <div style={{ padding: '0 20px', marginTop: '20px' }}>
                         <button
-                            onClick={() => {
-                                startGuidedSession();
-                            }}
+                            onClick={startGuidedSession}
+                            disabled={!prepValidation.canStartGuidedWorkout}
                             className="finish-btn"
-                            style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: prepValidation.canStartGuidedWorkout ? 1 : 0.5, cursor: prepValidation.canStartGuidedWorkout ? 'pointer' : 'not-allowed' }}
                         >
                             <Play size={20} fill="currentColor" />
                             START WORKOUT
