@@ -5,19 +5,18 @@ import { useWorkout } from '../../context/WorkoutContext';
 import './WorkoutDetails.css';
 
 import BackButton from '../common/BackButton';
+import { displayWeight } from '../../utils/units';
 
 const WorkoutDetails = ({ workout, onBack }) => {
     const { units } = useWorkout();
 
     if (!workout) return null;
 
-    // Helper to format weight based on unit setting
-    const formatWeight = (kg) => {
-        if (units === 'imperial') {
-            return (kg * 2.20462).toFixed(1);
-        }
-        return kg;
-    };
+    // Weights are stored in the unit the workout was logged in; convert to the
+    // unit currently selected for display. Legacy workouts predate workout.units
+    // and fall back to metric.
+    const workoutUnit = workout.units || 'metric';
+    const formatWeight = (weight) => displayWeight(weight, workoutUnit, units);
 
     const unitLabel = units === 'imperial' ? 'lbs' : 'kg';
 
@@ -28,7 +27,7 @@ const WorkoutDetails = ({ workout, onBack }) => {
         return acc + ex.sets.reduce((sAcc, set) => sAcc + (set.weight * set.reps), 0);
     }, 0);
 
-    const displayVolume = Math.round(units === 'imperial' ? totalVolume * 2.20462 : totalVolume);
+    const displayVolume = Math.round(displayWeight(totalVolume, workoutUnit, units));
 
     const totalSets = validExercises.reduce((acc, ex) => acc + ex.sets.length, 0);
 

@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
 import BackButton from '../components/common/BackButton';
 import CustomSelect from '../components/common/CustomSelect'; // Using new custom select
+import { displayWeight } from '../utils/units';
 import './AnalyticsView.css';
 
 const Analytics = () => {
@@ -62,11 +63,14 @@ const Analytics = () => {
                 });
 
                 if (maxWeight > 0) {
+                    // Convert from the unit the workout was logged in to the
+                    // currently-selected display unit (legacy workouts → metric).
+                    const workoutUnit = workout.units || 'metric';
                     dataPoints.push({
                         date: new Date(workout.endTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
                         fullDate: new Date(workout.endTime).toLocaleDateString(),
-                        weight: maxWeight,
-                        volume: totalVolume,
+                        weight: displayWeight(maxWeight, workoutUnit, units),
+                        volume: displayWeight(totalVolume, workoutUnit, units),
                         reps: bestSet ? bestSet.reps : 0,
                         originalDate: new Date(workout.endTime) // For sorting
                     });
@@ -77,7 +81,7 @@ const Analytics = () => {
         // Sort by date
         return dataPoints.sort((a, b) => a.originalDate - b.originalDate);
 
-    }, [history, selectedExerciseId]);
+    }, [history, selectedExerciseId, units]);
 
     // Calculate Personal Records
     const records = useMemo(() => {
