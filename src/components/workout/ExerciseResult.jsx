@@ -5,7 +5,7 @@ import InstructionModal from './InstructionModal';
 import './ExerciseResult.css';
 
 const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [] }) => {
-    const { units, updateSet } = useWorkout();
+    const { units, updateSet, addSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
 
     // CRITICAL: Find the exercise safely
@@ -82,7 +82,17 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                             />
                         </div>
                         <div className="col-reps">
-                            <input type="number" placeholder="--" defaultValue={set.reps || ''} />
+                            <input
+                                type="number"
+                                placeholder="--"
+                                min="0"
+                                value={set.targetReps || ''}
+                                onChange={(event) => {
+                                    if (!isPrep || !workoutData) return;
+                                    const targetReps = event.target.value === '' ? '' : Number(event.target.value);
+                                    updateSet(workoutData.id, set.id, { targetReps });
+                                }}
+                            />
                         </div>
                         {!isPrep && (
                             <div className="col-reps">
@@ -93,7 +103,11 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                 ))}
             </div>
 
-            <button className="add-set-btn">
+            <button
+                className="add-set-btn"
+                onClick={() => workoutData && addSet(workoutData.id)}
+                disabled={!workoutData}
+            >
                 <Plus size={16} style={{ display: 'inline', marginRight: '5px' }} />
                 Add Set
             </button>

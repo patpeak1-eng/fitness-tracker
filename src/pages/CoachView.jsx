@@ -49,10 +49,17 @@ function stripMarkdownForDisplay(text) {
 const CoachView = () => {
     const { activeWorkout } = useWorkout();
 
+    // AI Coach can be turned off in Settings → AI Coach. Read once on mount; the
+    // view gates to a short notice below when it's disabled.
+    const coachEnabled = localStorage.getItem('coach_enabled') !== 'false';
+
     const [messages, setMessages] = useState([]); // [{ role, content, streaming?, error? }]
     const [input, setInput] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
-    const [voiceEnabled, setVoiceEnabled] = useState(false);
+    const [voiceEnabled, setVoiceEnabled] = useState(
+        localStorage.getItem('coach_autoplay') !== 'false'
+        && localStorage.getItem('coach_enabled') !== 'false'
+    );
     const [speakingIndex, setSpeakingIndex] = useState(null);
     const [isSpeaking, setIsSpeaking] = useState(false); // drives the Stop button
     const [isListening, setIsListening] = useState(false); // mic active
@@ -512,6 +519,28 @@ const CoachView = () => {
         if (voiceEnabled) ensureAudioContext();
         handleSend(input);
     };
+
+    // Gate the whole view when the coach is disabled in Settings. Placed after all
+    // hooks so the early return doesn't violate the Rules of Hooks.
+    if (!coachEnabled) {
+        return (
+            <div className="coach-view">
+                <header className="coach-header">
+                    <BackButton />
+                    <div className="coach-header-titles">
+                        <h1>AI Coach</h1>
+                        <p className="coach-subtitle">Your personal training partner</p>
+                    </div>
+                </header>
+                <div className="coach-thread">
+                    <div className="coach-empty">
+                        <Sparkles size={28} className="coach-empty-icon" />
+                        <p>AI Coach is disabled. Enable it in Settings → AI Coach.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="coach-view">
