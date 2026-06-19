@@ -4,7 +4,18 @@ import { ChevronLeft } from 'lucide-react';
 
 const BackButton = ({ to = '/', label = 'Dashboard', onClick, style = {} }) => {
     const navigate = useNavigate();
-    const handleClick = onClick || (() => navigate(to));
+
+    const handleBack = () => {
+        // Go back to the previous page; fall back to `to` (Dashboard) when there's
+        // no in-app history to return to (e.g. deep link or fresh tab).
+        if (window.history.length > 1) {
+            navigate(-1);
+        } else {
+            navigate(to);
+        }
+    };
+
+    const handleClick = onClick || handleBack;
 
     return (
         <button

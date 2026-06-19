@@ -18,11 +18,3 @@ try {
   </div>`;
     console.error("Startup Failed:", e);
 }
-
-// Global Error Handler for async or module errors
-window.onerror = function (message, source, lineno, colno, error) {
-    const errDiv = document.createElement('div');
-    errDiv.style.cssText = "position:fixed; top:0; left:0; width:100%; background:rgba(0,0,0,0.9); color:red; padding:20px; z-index:9999;";
-    errDiv.innerHTML = `<h3>Global Error</h3><pre>${message}\n${source}:${lineno}</pre>`;
-    document.body.appendChild(errDiv);
-};

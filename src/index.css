@@ -27,11 +27,19 @@
   --surface-light: var(--bg-card);
   --primary-light: var(--primary);
   --border-color: rgba(255, 255, 255, 0.1);
+  /* Surface & border tokens referenced across pages — defined once here */
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-card: rgba(255, 255, 255, 0.04);
+  --card-bg: rgba(255, 255, 255, 0.03);
+  /* --border is a COLOR, not a shorthand: all usages are `1px solid var(--border)` */
+  --border: rgba(255, 255, 255, 0.08);
 
   /* --- SPACING & LAYOUT --- */
   --nav-height: 80px;
   --header-height: 60px;
   --safe-area-bottom: env(safe-area-inset-bottom, 20px);
+  /* Clears the floating bottom nav (~90px footprint) + breathing room */
+  --nav-safe-padding: 120px;
   --radius-md: 24px;
   --radius-sm: 12px;
   /* Polish: Button Radius */

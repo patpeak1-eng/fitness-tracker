@@ -48,6 +48,9 @@ const GuidedWorkoutView = () => {
     // Guard against double-submit on the Finish button (finishWorkout is async).
     const [isFinishing, setIsFinishing] = React.useState(false);
 
+    // Require confirmation before discarding an in-progress session.
+    const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
+
     // TARGET ADJUSTMENT STATE
     const [targetModal, setTargetModal] = React.useState({ isOpen: false, type: '', value: 0 });
 
@@ -306,7 +309,7 @@ const GuidedWorkoutView = () => {
 
                     {/* Header Controls (Exit) */}
                     <div style={{ position: 'absolute', top: 0, right: 0, padding: '20px' }}>
-                        <button className="exit-btn-styled" onClick={cancelWorkout} style={{ borderColor: 'transparent', background: 'transparent', color: '#666' }}>
+                        <button className="exit-btn-styled" onClick={() => setShowCancelConfirm(true)} style={{ borderColor: 'transparent', background: 'transparent', color: '#666' }}>
                             <X size={24} /> End Session
                         </button>
                     </div>
@@ -470,6 +473,31 @@ const GuidedWorkoutView = () => {
                 }
             >
                 <p>Great job! Ready to save this session?</p>
+            </Modal>
+
+            <Modal
+                isOpen={showCancelConfirm}
+                onClose={() => setShowCancelConfirm(false)}
+                title="End Workout?"
+                actions={
+                    <>
+                        <button className="modal-btn-secondary" onClick={() => setShowCancelConfirm(false)}>
+                            Keep Going
+                        </button>
+                        <button
+                            className="modal-btn-primary"
+                            style={{ background: 'var(--danger)', color: '#fff', boxShadow: '0 0 10px rgba(255, 51, 102, 0.4)' }}
+                            onClick={() => {
+                                setShowCancelConfirm(false);
+                                cancelWorkout();
+                            }}
+                        >
+                            End Workout
+                        </button>
+                    </>
+                }
+            >
+                <p>Your progress will be lost. This cannot be undone.</p>
             </Modal>
 
             <InstructionModal exercise={currentExerciseInstance.exercise} isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
