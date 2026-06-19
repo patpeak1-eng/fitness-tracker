@@ -261,9 +261,11 @@ async def coach_chat(
     workouts = wk_result.scalars().all()
     stats = (
         await db.execute(
-            select(UserStats).where(UserStats.user_id == current_user.id)
+            select(UserStats)
+            .where(UserStats.user_id == current_user.id)
+            .order_by(UserStats.updated_at.desc())
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
 
     user_context = _build_user_context(stats, workouts, payload.workout_context)
 
@@ -376,9 +378,11 @@ async def coach_chat_stream(
     workouts = wk_result.scalars().all()
     stats = (
         await db.execute(
-            select(UserStats).where(UserStats.user_id == current_user.id)
+            select(UserStats)
+            .where(UserStats.user_id == current_user.id)
+            .order_by(UserStats.updated_at.desc())
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     user_context = _build_user_context_dict(stats, workouts, payload.workout_context)
 
     personality = payload.personality or "apex"

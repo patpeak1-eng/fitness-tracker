@@ -1,6 +1,7 @@
 """Profile routes: read and update the current user plus their body stats."""
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -48,18 +49,26 @@ async def update_profile(
     for field, value in data.items():
         setattr(current_user, field, value)
 
-    # Upsert the related stats row when stats fields were provided.
-    stats = await _get_stats(db, current_user.id)
+    # Upsert the related stats row when stats fields were provided. The
+    # uq_user_stats_user_id constraint guarantees one row per user; ON CONFLICT
+    # DO UPDATE makes this idempotent and race-safe (concurrent first-saves
+    # update the existing row instead of inserting a duplicate or raising
+    # IntegrityError). Only the supplied fields are written (exclude_unset), so
+    # partial updates preserve untouched columns; updated_at is bumped manually
+    # because the ORM onupdate hook does not fire for a Core INSERT...ON CONFLICT.
     if stats_data is not None:
-        if stats is None:
-            stats = UserStats(user_id=current_user.id)
-            db.add(stats)
-        for field, value in stats_data.items():
-            setattr(stats, field, value)
+        stmt = (
+            pg_insert(UserStats)
+            .values(user_id=current_user.id, **stats_data)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={**stats_data, "updated_at": func.now()},
+            )
+        )
+        await db.execute(stmt)
 
     await db.commit()
     await db.refresh(current_user)
-    if stats is not None:
-        await db.refresh(stats)
 
+    stats = await _get_stats(db, current_user.id)
     return ProfileResponse.model_validate({"user": current_user, "stats": stats})

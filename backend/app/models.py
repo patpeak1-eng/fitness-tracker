@@ -89,6 +89,9 @@ class User(Base):
 
 class UserStats(Base):
     __tablename__ = "user_stats"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_stats_user_id"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
