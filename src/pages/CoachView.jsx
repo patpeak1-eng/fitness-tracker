@@ -18,10 +18,10 @@ const MSE_SUPPORTED =
     typeof window.MediaSource.isTypeSupported === 'function' &&
     window.MediaSource.isTypeSupported(VOICE_MIME);
 
-// Strip common Markdown so the TTS pipeline speaks clean prose, not "asterisk
-// asterisk bold". Applied to each phrase right before it's sent to the voice WS;
-// the on-screen bubble keeps the original text.
-function stripMarkdown(text) {
+// Strip Markdown for the TTS pipeline so it speaks clean prose, not "asterisk
+// asterisk bold". Applied to each phrase right before it's sent to the voice WS.
+// Inline code is dropped entirely — you don't want code spans read aloud.
+function stripMarkdownForVoice(text) {
     return text
         .replace(/\*\*(.*?)\*\*/g, '$1')
         .replace(/\*(.*?)\*/g, '$1')
@@ -29,6 +29,20 @@ function stripMarkdown(text) {
         .replace(/`{1,3}[^`]*`{1,3}/g, '')
         .replace(/\[(.*?)\]\(.*?\)/g, '$1')
         .replace(/^\s*[-*+]\s/gm, '')
+        .trim();
+}
+
+// Strip Markdown for on-screen display so the coach bubble shows clean prose
+// instead of raw **bold** / `code` markers. Unlike the voice variant, inline
+// code keeps its text (only the backticks go). The personas are told not to
+// emit Markdown, so in practice this is a safety net.
+function stripMarkdownForDisplay(text) {
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/#{1,6}\s/g, '')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1')
         .trim();
 }
 
@@ -288,7 +302,7 @@ const CoachView = () => {
             hasPunctuation ||
             buffered.length > 80;
         if (shouldFlush) {
-            const chunk = stripMarkdown(buffered);
+            const chunk = stripMarkdownForVoice(buffered);
             if (chunk) sendVoiceChunk({ type: 'text', content: chunk });
             wordBufferRef.current = '';
             wordCountRef.current = 0;
@@ -296,7 +310,7 @@ const CoachView = () => {
     };
 
     const flushRemainingText = () => {
-        const chunk = stripMarkdown(wordBufferRef.current);
+        const chunk = stripMarkdownForVoice(wordBufferRef.current);
         if (chunk) sendVoiceChunk({ type: 'text', content: chunk, flush: true });
         // Tell the server we're done sending text. It will stream the final audio
         // frames and then close the socket — ws.onclose is what actually ends the
@@ -536,7 +550,7 @@ const CoachView = () => {
                                 speakingIndex === i ? 'coach-bubble-speaking' : '',
                             ].filter(Boolean).join(' ')}
                         >
-                            {m.content}
+                            {m.role === 'user' ? m.content : stripMarkdownForDisplay(m.content)}
                             {m.streaming && <span className="coach-cursor">|</span>}
                         </div>
                     ))

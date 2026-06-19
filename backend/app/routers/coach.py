@@ -2,9 +2,10 @@
 
 The chat endpoint persists the user's message, replays recent turns to the
 model, streams the assistant reply back over SSE, and persists the assembled
-reply once the stream completes. The system prompt is split into two blocks so
-the large, static coaching instructions (block 0) can be prompt-cached while
-the per-request user context (block 1) stays dynamic.
+reply once the stream completes. The system prompt is split into three blocks:
+the large, static coaching instructions (block 0) and the selected persona
+voice (block 1) are each prompt-cached, while the per-request user context
+(block 2) stays dynamic.
 """
 import json
 import os
@@ -98,11 +99,6 @@ PERSONALITY_PROMPTS = {
 class CoachChatRequest(BaseModel):
     message: str
     workout_context: Optional[dict] = None
-
-
-class CoachStreamRequest(BaseModel):
-    message: str
-    workout_context: Optional[dict] = None
     personality: Optional[str] = "apex"
 
 
@@ -169,48 +165,6 @@ def _build_user_context(
     return "\n\n".join(parts)
 
 
-def _build_user_context_dict(
-    stats: Optional[UserStats],
-    workouts: List[WorkoutHistory],
-    workout_context: Optional[dict],
-) -> dict:
-    """JSON-serializable variant of the user context for the stream endpoint."""
-    ctx: dict = {}
-
-    if stats is not None:
-        stats_dict = {
-            "age": stats.age,
-            "height": stats.height,
-            "current_weight": stats.current_weight,
-            "target_weight": stats.target_weight,
-            "goal": stats.goal,
-            "motivation": stats.motivation,
-            "body_fat": stats.body_fat,
-            "muscle_mass": stats.muscle_mass,
-            "bone_density": stats.bone_density,
-        }
-        stats_dict = {k: v for k, v in stats_dict.items() if v}
-        if stats_dict:
-            ctx["stats"] = stats_dict
-
-    if workouts:
-        ctx["recent_workouts"] = [
-            {
-                "name": w.name,
-                "start_time": w.start_time.isoformat() if w.start_time else None,
-                "status": w.status,
-                "exercises": w.exercises,
-                "recommendations": w.recommendations,
-            }
-            for w in workouts
-        ]
-
-    if workout_context:
-        ctx["workout_context"] = workout_context
-
-    return ctx
-
-
 @router.post("/chat")
 async def coach_chat(
     payload: CoachChatRequest,
@@ -269,11 +223,22 @@ async def coach_chat(
 
     user_context = _build_user_context(stats, workouts, payload.workout_context)
 
-    # 4. Two-block system prompt: block 0 cached, block 1 dynamic.
+    # 4. Select the requested coach voice (fall back to "apex"), then build the
+    #    system prompt. The static coaching instructions and the persona voice
+    #    are each prompt-cached; the per-request user context stays dynamic.
+    #    Keeping the big knowledge block separate from the persona lets it stay
+    #    cached across every personality.
+    personality = payload.personality or "apex"
+    persona_prompt = PERSONALITY_PROMPTS.get(personality, PERSONALITY_PROMPTS["apex"])
     system_blocks = [
         {
             "type": "text",
             "text": COACH_SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        },
+        {
+            "type": "text",
+            "text": persona_prompt,
             "cache_control": {"type": "ephemeral"},
         },
         {
@@ -331,122 +296,19 @@ async def coach_chat(
     )
 
 
-@router.post("/chat/stream")
+@router.post("/chat/stream", deprecated=True)
 async def coach_chat_stream(
-    payload: CoachStreamRequest,
+    payload: CoachChatRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
-    """Personality-aware SSE chat.
+    """Deprecated alias for ``POST /api/coach/chat``.
 
-    Mirrors /chat but selects the system prompt from PERSONALITY_PROMPTS and
-    conveys prior turns as a JSON "RECENT HISTORY" block in the system context
-    (the current message is the only entry in ``messages``). Uses the Anthropic
-    async streaming helper so we emit token text as it arrives.
+    The two coach endpoints were merged: /chat now streams over SSE and accepts
+    the ``personality`` field, so this route simply delegates to it. Kept so any
+    client still posting to /chat/stream keeps working; drop it once none do.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI coach is not configured (missing ANTHROPIC_API_KEY).",
-        )
-
-    message_text = (payload.message or "").strip()
-    if not message_text:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Message must not be empty.",
-        )
-
-    # Last 10 prior coach turns (oldest first) for the RECENT HISTORY block.
-    result = await db.execute(
-        select(CoachMessage)
-        .where(CoachMessage.user_id == current_user.id)
-        .order_by(CoachMessage.created_at.desc())
-        .limit(10)
-    )
-    recent_rows = list(reversed(result.scalars().all()))
-    recent_messages = [{"role": m.role, "content": m.content} for m in recent_rows]
-
-    # Last 10 workouts + stats → JSON-serializable user context.
-    wk_result = await db.execute(
-        select(WorkoutHistory)
-        .where(WorkoutHistory.user_id == current_user.id)
-        .order_by(WorkoutHistory.created_at.desc())
-        .limit(10)
-    )
-    workouts = wk_result.scalars().all()
-    stats = (
-        await db.execute(
-            select(UserStats)
-            .where(UserStats.user_id == current_user.id)
-            .order_by(UserStats.updated_at.desc())
-        )
-    ).scalars().first()
-    user_context = _build_user_context_dict(stats, workouts, payload.workout_context)
-
-    personality = payload.personality or "apex"
-    system_prompt = PERSONALITY_PROMPTS.get(personality, PERSONALITY_PROMPTS["apex"])
-
-    # The current turn is the only conversation message; history lives in block 1.
-    messages = [{"role": "user", "content": message_text}]
-
-    client = AsyncAnthropic(api_key=api_key)
-    user_id = current_user.id
-
-    async def generate():
-        full_text = ""
-        try:
-            async with client.messages.stream(
-                model=COACH_MODEL,
-                max_tokens=1000,
-                system=[
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"USER CONTEXT:\n{json.dumps(user_context, default=str)}"
-                            f"\n\nRECENT HISTORY:\n"
-                            f"{json.dumps(recent_messages, default=str)}"
-                        ),
-                    },
-                ],
-                messages=messages,
-            ) as stream:
-                async for text in stream.text_stream:
-                    full_text += text
-                    yield f"data: {json.dumps({'type': 'text', 'content': text})}\n\n"
-        except Exception as err:  # noqa: BLE001 — surface to client, never 500 mid-stream
-            yield f"data: {json.dumps({'type': 'error', 'content': str(err)})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-        # Persist the turn after streaming completes (best-effort, non-fatal).
-        try:
-            db.add(CoachMessage(user_id=user_id, role="user", content=message_text))
-            if full_text.strip():
-                db.add(
-                    CoachMessage(
-                        user_id=user_id, role="assistant", content=full_text
-                    )
-                )
-            await db.commit()
-        except Exception:  # noqa: BLE001
-            await db.rollback()
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # CRITICAL for Railway/nginx — no buffering
-        },
-    )
+    return await coach_chat(payload, current_user, db)
 
 
 @router.get("/history", response_model=List[CoachMessageResponse])

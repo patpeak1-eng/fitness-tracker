@@ -129,7 +129,7 @@ export const getGoogleAuthUrl = () => {
 };
 
 // Coach
-export const sendCoachMessage = async (message, workoutContext = null, personality = null) => {
+export const sendCoachMessage = async (message, workoutContext = null, personality = 'apex') => {
   const res = await apiFetch('/api/coach/chat', {
     method: 'POST',
     body: JSON.stringify({ message, workout_context: workoutContext, personality })
