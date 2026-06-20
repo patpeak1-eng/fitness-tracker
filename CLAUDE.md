@@ -48,3 +48,29 @@ These rules prevent the history tangle experienced in Session 5:
 ## SKILL_CAPTURE_RULE
 After any session producing a reusable pattern, document it in
 docs/skills/ as a markdown file: Purpose, When to Use, Method, Gotchas.
+
+## AVAILABLE TOOLS (Claude Code MCP)
+Claude Code terminals have access to chrome-devtools MCP tools
+for browser verification without needing the Railway dashboard.
+
+### Deploy Verification via chrome-devtools:
+Instead of asking the human to check Railway, terminals can:
+1. chrome-devtools:list_pages — find open browser tabs
+2. chrome-devtools:navigate_page — go to the Railway dashboard URL or live app
+3. chrome-devtools:take_screenshot — capture current state
+4. chrome-devtools:get_page_text — read page content
+
+### Railway dashboard URL:
+https://railway.com/project/877335d0-ecc2-4460-9800-291ffcb3f660
+
+### Live app URLs to verify after deploy:
+Frontend: https://fitness-tracker-production-54a4.up.railway.app
+Backend health: https://astonishing-laughter-production-de7d.up.railway.app/openapi.json
+PWA service worker: https://fitness-tracker-production-54a4.up.railway.app/sw.js
+
+### When to use chrome-devtools:
+- After any push, navigate to Railway dashboard and screenshot deploy status
+- After backend push, fetch /openapi.json to confirm new schema fields
+- After frontend push, fetch /sw.js to confirm PWA service worker deployed
+- Use take_screenshot to capture green/red deploy status for the report
+- Do NOT ask the human to check Railway — check it yourself first
