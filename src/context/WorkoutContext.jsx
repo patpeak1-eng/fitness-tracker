@@ -1113,6 +1113,7 @@ export const WorkoutProvider = ({ children }) => {
 
         const completedWorkout = {
             ...activeWorkout,
+            units: units, // unit active at completion → drives displayWeight() in history/analytics
             endTime: new Date().toISOString(),
             status: 'completed',
             recommendations: uniqueRecs // NEW: Save to history
