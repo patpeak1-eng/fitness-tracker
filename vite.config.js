@@ -82,5 +82,15 @@ export default defineConfig({
   ],
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Keep the heavy charting lib in its own chunk so it only loads on
+          // the routes that use it (Analytics, Profile) rather than at startup.
+          recharts: ['recharts'],
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
   },
 })
