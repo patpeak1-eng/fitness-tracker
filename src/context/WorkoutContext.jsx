@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import StorageService from '../services/StorageService';
 import ActiveWorkoutService from "../services/ActiveWorkoutService";
 import * as ApiService from '../services/ApiService';
@@ -165,7 +165,7 @@ const getExerciseById = (id, masterList) => {
     return found;
 };
 
-export const WorkoutProvider = ({ children }) => {
+export const WorkoutProvider = ({ children, timerApiRef }) => {
     // Shared Data
     const [exercises, setExercises] = useState(DEFAULT_EXERCISES);
     const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
@@ -209,9 +209,6 @@ export const WorkoutProvider = ({ children }) => {
     const [theme, setTheme] = useState('dark');
     const [units, setUnits] = useState('metric');
     const [soundEnabled, setSoundEnabled] = useState(true);
-    // Timer Defaults
-    const [defaultRestTime, setDefaultRestTime] = useState(45); // Default 45s
-    const [defaultWorkTime, setDefaultWorkTime] = useState(45); // Default 45s
     const [userStats, setUserStats] = useState({
         age: '',
         height: '',
@@ -224,14 +221,6 @@ export const WorkoutProvider = ({ children }) => {
         boneDensity: ''
     });
     const [weightHistory, setWeightHistory] = useState([]);
-
-    // Global Rest Timer State (Ephemeral, scoped to session effectively)
-    const [restTimer, setRestTimer] = useState({ timeLeft: 0, isActive: false, duration: 45 }); // Init with default
-    // Work Timer (for guided exercises)
-    const [workTimer, setWorkTimer] = useState({ timeLeft: 0, isActive: false, duration: 45 }); // Init with default
-
-    // Exercise Preferences (Persisted)
-    const [exercisePrefs, setExercisePrefs] = useState({});
 
     // Smart Progression Settings
     const [smartProgressionEnabled, setSmartProgressionEnabled] = useState(false); // Master Toggle
@@ -394,16 +383,8 @@ export const WorkoutProvider = ({ children }) => {
         setUnits(ps.units);
         setSoundEnabled(ps.soundEnabled);
 
-        setDefaultRestTime(ps.defaultRestTime);
-        setDefaultWorkTime(ps.defaultWorkTime);
-
-        // Update current timers to match defaults if not running (reset duration)
-        setRestTimer(prev => ({ ...prev, duration: ps.defaultRestTime }));
-        setWorkTimer(prev => ({ ...prev, duration: ps.defaultWorkTime }));
-
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
-        setExercisePrefs(ps.exercisePrefs);
 
         // Load Templates Scoped to User
         const userTemplates = StorageService.loadCustomTemplates(uid);
@@ -609,18 +590,6 @@ export const WorkoutProvider = ({ children }) => {
         }
     }, [soundEnabled, currentProfile]);
 
-    // Persist Timer Defaults
-    const timersMountRef = useRef(true);
-    useEffect(() => {
-        if (timersMountRef.current) { timersMountRef.current = false; return; }
-        if (currentProfile) {
-            StorageService.saveDefaultTimers(currentProfile.id, defaultRestTime, defaultWorkTime);
-
-            // Note: We don't automatically update active timer durations here to avoid jumping mid-timer
-            // But we could if it's not active. For now, let's leave it to initialization.
-        }
-    }, [defaultRestTime, defaultWorkTime, currentProfile]);
-
     // Persist Stats
     const statsMountRef = useRef(true);
     useEffect(() => {
@@ -638,15 +607,6 @@ export const WorkoutProvider = ({ children }) => {
             StorageService.saveWeightHistory(currentProfile.id, weightHistory);
         }
     }, [weightHistory, currentProfile]);
-
-    // Persist Exercise Preferences
-    const prefsMountRef = useRef(true);
-    useEffect(() => {
-        if (prefsMountRef.current) { prefsMountRef.current = false; return; }
-        if (currentProfile) {
-            StorageService.saveExercisePrefs(currentProfile.id, exercisePrefs);
-        }
-    }, [exercisePrefs, currentProfile]);
 
     // Persist Progression Settings
     const progressionMountRef = useRef(true);
@@ -738,144 +698,6 @@ export const WorkoutProvider = ({ children }) => {
         setProfiles(updatedProfiles);
         setCurrentProfile(updatedProfile);
         StorageService.saveProfiles(updatedProfiles);
-    };
-
-
-    // --- 5. AUDIO UTILS ---
-    // --- 5. AUDIO UTILS ---
-    const playBeep = (type = 'success') => {
-        if (!soundEnabled) return;
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-            const ctx = new AudioContext();
-
-            // Helper to play a single note with smooth envelope
-            const playNote = (freq, startTime, duration = 0.5, vol = 0.1) => {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, startTime);
-
-                // ADSR Envelope
-                gain.gain.setValueAtTime(0, startTime);
-                gain.gain.linearRampToValueAtTime(vol, startTime + 0.05);
-                gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-
-                osc.start(startTime);
-                osc.stop(startTime + duration);
-            };
-
-            const now = ctx.currentTime;
-
-            if (type === 'rest') {
-                // REST ENDED -> "Get Ready" Sound
-                // Rising Perfect Fifth (A5 -> E6), crisp and energetic
-                playNote(880.00, now, 0.4, 0.2); // A5
-                playNote(1318.51, now + 0.15, 0.8, 0.2); // E6
-            } else {
-                // WORK COMPLETED / SUCCESS -> Major Triad Chime
-                playNote(1046.50, now, 0.6, 0.2);       // C6
-                playNote(1318.51, now + 0.05, 0.6, 0.2); // E6
-                playNote(1567.98, now + 0.1, 0.8, 0.2);  // G6
-            }
-
-        } catch (e) {
-            console.error('Audio play failed', e);
-        }
-    };
-
-    // --- 6. TIMER LOGIC ---
-    useEffect(() => {
-        let interval;
-        if (restTimer.isActive && restTimer.timeLeft > 0) {
-            interval = setInterval(() => {
-                setRestTimer(prev => {
-                    const nextTime = prev.timeLeft - 1;
-                    if (nextTime === 0) {
-                        playBeep('rest'); // Distinct sound for Rest
-                        return { timeLeft: 0, isActive: false };
-                    }
-                    return { ...prev, timeLeft: nextTime };
-                });
-            }, 1000);
-        }
-        return () => clearInterval(interval);
-    }, [restTimer.isActive, restTimer.timeLeft, soundEnabled]);
-
-    const startRestTimer = (seconds) => {
-        const duration = seconds || defaultRestTime; // Use stored default
-        setRestTimer({ timeLeft: duration, isActive: true, duration: duration });
-    };
-
-    const addTimeRest = (seconds) => {
-        setRestTimer(prev => {
-            const newTime = Math.max(0, prev.timeLeft + seconds);
-            const newDuration = Math.max(0, prev.duration + seconds); // Also update duration context
-            return { ...prev, timeLeft: newTime, duration: newDuration };
-        });
-    };
-
-    const skipRest = () => {
-        setRestTimer({ timeLeft: 0, isActive: false, duration: defaultRestTime }); // Reset to default
-    };
-
-    const toggleRestTimer = () => {
-        setRestTimer(prev => ({ ...prev, isActive: !prev.isActive }));
-    };
-
-    const toggleWorkTimer = () => {
-        setWorkTimer(prev => ({ ...prev, isActive: !prev.isActive }));
-    };
-
-    // --- WORK TIMER LOGIC ---
-    useEffect(() => {
-        let interval;
-        if (workTimer.isActive && workTimer.timeLeft > 0) {
-            interval = setInterval(() => {
-                setWorkTimer(prev => {
-                    const nextTime = prev.timeLeft - 1;
-                    if (nextTime === 0) {
-                        playBeep('success'); // Distinct sound for Work
-                        // Auto-transition could happen here, but usually better to wait for user confirmation
-                        // or auto-trigger rest? For now, just beep.
-                        return { ...prev, timeLeft: 0, isActive: false };
-                    }
-                    return { ...prev, timeLeft: nextTime };
-                });
-            }, 1000);
-        }
-        return () => clearInterval(interval);
-    }, [workTimer.isActive, workTimer.timeLeft, soundEnabled]);
-
-    const startWorkTimer = (seconds) => {
-        const duration = seconds || ((workTimer.duration > 0 && workTimer.duration !== 45) ? workTimer.duration : defaultWorkTime);
-        // Optimization: if workTimer.duration is already set (and distinct), keep it? 
-        // Logic: seconds priority -> existing duration -> default
-        // Actually, user might want to reset to default. 
-        // Let's use: seconds -> defaultWorkTime
-        const actualDuration = seconds || defaultWorkTime;
-        setWorkTimer({ timeLeft: actualDuration, isActive: true, duration: actualDuration });
-    };
-
-    const addTimeWork = (seconds) => {
-        setWorkTimer(prev => {
-            const newTime = Math.max(0, prev.timeLeft + seconds);
-            const newDuration = Math.max(0, prev.duration + seconds);
-            return { ...prev, timeLeft: newTime, duration: newDuration };
-        });
-    };
-
-    const stopWorkTimer = () => {
-        setWorkTimer(prev => ({ ...prev, isActive: false }));
-    };
-
-    const resetWorkTimer = () => {
-        setWorkTimer(prev => ({ ...prev, timeLeft: prev.duration, isActive: false }));
     };
 
 
@@ -1120,8 +942,8 @@ export const WorkoutProvider = ({ children }) => {
         };
         setHistory(prev => [completedWorkout, ...prev]);
         setActiveWorkout(null);
-        skipRest();        // Stop rest timer
-        resetWorkTimer();  // Stop/Reset work timer
+        timerApiRef.current?.skipRest();        // Stop rest timer
+        timerApiRef.current?.resetWorkTimer();  // Stop/Reset work timer
 
         // Push the completed workout to the backend for cloud users (non-fatal).
         if (currentProfile?.email && ApiService.isAvailable()) {
@@ -1148,8 +970,8 @@ export const WorkoutProvider = ({ children }) => {
 
     const cancelWorkout = () => {
         setActiveWorkout(null);
-        skipRest();        // Stop rest timer
-        resetWorkTimer();  // Stop/Reset work timer
+        timerApiRef.current?.skipRest();        // Stop rest timer
+        timerApiRef.current?.resetWorkTimer();  // Stop/Reset work timer
     };
 
     const addExerciseToWorkout = (exerciseId) => {
@@ -1365,12 +1187,12 @@ export const WorkoutProvider = ({ children }) => {
         // IF finishing a set (marking complete), start appropriate timer logic
         if (!currentStatus) {
             // Stop work timer if running
-            stopWorkTimer();
+            timerApiRef.current?.stopWorkTimer();
             // Start rest timer
-            startRestTimer(defaultRestTime); // Explicitly use default
+            timerApiRef.current?.startRestTimer(); // Explicitly use default
         } else {
             // Un-completing logic? Maybe stop rest timer
-            skipRest();
+            timerApiRef.current?.skipRest();
         }
     };
 
@@ -1496,16 +1318,6 @@ export const WorkoutProvider = ({ children }) => {
                 console.warn('[CloudSync] Weight push failed (non-fatal):', err.message);
             }
         }
-    };
-
-    const updateTimerPref = (exerciseId, type, duration) => {
-        setExercisePrefs(prev => ({
-            ...prev,
-            [exerciseId]: {
-                ...prev[exerciseId],
-                [type]: duration
-            }
-        }));
     };
 
     const updateWorkoutNotes = (notes) => {
@@ -1848,7 +1660,11 @@ export const WorkoutProvider = ({ children }) => {
     // Derived: cloud sync is active when an auth token exists AND an API URL is configured.
     const isCloudSynced = !!(StorageService.loadAuthToken() && import.meta.env.VITE_API_URL);
 
-    const value = {
+    // Memoized so timer ticks (now in TimerContext) and unrelated parent
+    // re-renders don't hand consumers a brand-new value object every render.
+    // Setter/context fns are intentionally omitted from the deps below — see the
+    // eslint-disable on the dependency array.
+    const value = useMemo(() => ({
         activeWorkout,
         prepValidation,
         exercises,
@@ -1865,16 +1681,6 @@ export const WorkoutProvider = ({ children }) => {
         setUnits,
         soundEnabled,
         setSoundEnabled,
-        restTimer,
-        startRestTimer,
-        toggleRestTimer, // NEW
-        skipRest, // Added export
-        addTimeRest,
-        addTimeWork,
-        startWorkTimer,
-        stopWorkTimer,
-        toggleWorkTimer, // NEW
-        resetWorkTimer,
         startWorkout,
         startWorkoutFromTemplate,
         finishWorkout,
@@ -1917,13 +1723,6 @@ export const WorkoutProvider = ({ children }) => {
         currentSetIndex,
         setCurrentSetIndex,
         startGuidedSession,
-        workTimer,
-        exercisePrefs,
-        updateTimerPref,
-        defaultRestTime,
-        setDefaultRestTime,
-        defaultWorkTime,
-        setDefaultWorkTime,
 
         // Smart Progression Exports
         smartProgressionEnabled,
@@ -1934,7 +1733,16 @@ export const WorkoutProvider = ({ children }) => {
         setProgressionType,
         progressionIncrement,
         setProgressionIncrement
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [
+        activeWorkout, exercises, templates, history,
+        profiles, currentProfile, theme, units,
+        soundEnabled, userStats, weightHistory,
+        assessments, currentExerciseIndex, currentSetIndex,
+        smartProgressionEnabled, progressionMode,
+        progressionType, progressionIncrement,
+        authChecked,
+    ]);
 
     return (
         <WorkoutContext.Provider value={value}>

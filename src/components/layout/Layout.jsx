@@ -3,10 +3,12 @@ import { Outlet } from 'react-router-dom';
 import RestTimerOverlay from '../workout/RestTimerOverlay';
 import BottomNavigation from './BottomNavigation';
 import { useWorkout } from '../../context/WorkoutContext';
+import { useTimer } from '../../context/TimerContext';
 import './Layout.css';
 
 const Layout = () => {
-    const { restTimer, addTimeRest, skipRest, activeWorkout } = useWorkout();
+    const { activeWorkout } = useWorkout();
+    const { restTimer, addTimeRest, skipRest } = useTimer();
 
     // Hide global overlay if we are in Guided Mode (active status)
     const isGuidedMode = activeWorkout?.status === 'active';

@@ -1,8 +1,9 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { WorkoutProvider, useWorkout } from './context/WorkoutContext';
+import { TimerProvider } from './context/TimerContext';
 
 // Route pages are lazy-loaded so each compiles to its own chunk, keeping the
 // initial JS payload small. Chart-heavy pages (Analytics, Profile) pull in
@@ -23,8 +24,8 @@ const HelpView = lazy(() => import('./pages/HelpView'));
 const CoachView = lazy(() => import('./pages/CoachView'));
 
 // Inner component to check profile status
-const AppRoutes = () => {
-    const { currentProfile, authChecked } = useWorkout();
+const AppRoutes = ({ timerApiRef }) => {
+    const { currentProfile, soundEnabled, authChecked } = useWorkout();
 
     if (!authChecked) {
         return (
@@ -41,6 +42,7 @@ const AppRoutes = () => {
     // Always render these routes regardless of auth state, so the Google OAuth
     // callback (/auth/callback) and /login work even when no profile exists yet.
     return (
+        <TimerProvider currentProfile={currentProfile} soundEnabled={soundEnabled} apiRef={timerApiRef}>
         <Suspense fallback={<div className="loading-screen" />}>
             <Routes>
                 <Route path="/login" element={<Login />} />
@@ -61,15 +63,20 @@ const AppRoutes = () => {
                 </Route>
             </Routes>
         </Suspense>
+        </TimerProvider>
     );
 };
 
 function App() {
+    // Shared bridge so WorkoutContext can reach TimerContext's imperative actions
+    // (Option A — WorkoutProvider can't useTimer() because TimerProvider is nested
+    // inside it). TimerProvider fills the ref; WorkoutProvider's handlers read it.
+    const timerApiRef = useRef(null);
     return (
         <BrowserRouter>
             <ErrorBoundary>
-                <WorkoutProvider>
-                    <AppRoutes />
+                <WorkoutProvider timerApiRef={timerApiRef}>
+                    <AppRoutes timerApiRef={timerApiRef} />
                 </WorkoutProvider>
             </ErrorBoundary>
         </BrowserRouter>

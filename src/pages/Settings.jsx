@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Moon, Sun, Ruler, Check, Volume2, VolumeX, Users, LogOut, ChevronLeft } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
+import { useTimer } from '../context/TimerContext';
 import { useNavigate } from 'react-router-dom';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
@@ -46,14 +47,17 @@ const Settings = () => {
         theme, setTheme,
         units, setUnits,
         soundEnabled, setSoundEnabled,
-        defaultRestTime, setDefaultRestTime,
-        defaultWorkTime, setDefaultWorkTime,
         currentProfile, switchProfile,
         smartProgressionEnabled, setSmartProgressionEnabled,
         progressionMode, setProgressionMode,
         progressionType, setProgressionType,
         progressionIncrement, setProgressionIncrement
     } = useWorkout();
+
+    const {
+        defaultRestTime, setDefaultRestTime,
+        defaultWorkTime, setDefaultWorkTime,
+    } = useTimer();
 
     // Backend connection status. VITE_API_URL is baked in at build time, so a
     // truthy value means this build was pointed at the deployed backend.

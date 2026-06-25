@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Pause, Square, SkipForward, SkipBack, CheckCircle2, RotateCcw, Minus, Plus, X, ChevronLeft, ChevronRight, StickyNote, Info, Trophy } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
+import { useTimer } from '../../context/TimerContext';
 import Modal from '../common/Modal';
 
 import WorkoutNotesModal from './WorkoutNotesModal';
@@ -18,9 +19,14 @@ const GuidedWorkoutView = () => {
         setCurrentSetIndex,
         finishWorkout,
         cancelWorkout,
+        updateSet,
+        toggleSetComplete,
+        units // Grab units context
+    } = useWorkout();
+
+    const {
         exercisePrefs,
         updateTimerPref,
-        updateSet,
         // Timer controls
         restTimer,
         startRestTimer,
@@ -33,9 +39,7 @@ const GuidedWorkoutView = () => {
         toggleWorkTimer,
         resetWorkTimer,
         addTimeWork,
-        toggleSetComplete,
-        units // Grab units context
-    } = useWorkout();
+    } = useTimer();
 
     const navigate = useNavigate();
 
