@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import StorageService from '../services/StorageService';
 import ActiveWorkoutService from "../services/ActiveWorkoutService";
 import * as ApiService from '../services/ApiService';
@@ -201,6 +201,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     });
     const [authChecked, setAuthChecked] = useState(false);
+
+    // Single gate for best-effort backend settings sync: authenticated, on a real
+    // (non-default) profile, with an API configured. useCallback so it's a stable
+    // reference for the persist-effect deps and the TimerProvider prop.
+    const canSyncToBackend = useCallback(() =>
+        !!(authChecked &&
+           currentProfile &&
+           currentProfile.id !== 'user_default' &&
+           ApiService.isAvailable()),
+    [authChecked, currentProfile]);
 
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
@@ -559,6 +569,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
     // Persist Theme
     const themeMountRef = useRef(true);
+    const themeSyncedProfileRef = useRef(null);
     useEffect(() => {
         // Apply theme to the DOM on every run (incl. mount) so the current/default
         // theme is always reflected visually.
@@ -566,29 +577,64 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // Skip the persist write on initial mount: refreshProfileData loads the
         // stored theme right after mount, and writing here first would clobber the
         // saved value with the default before the load completes.
-        if (themeMountRef.current) { themeMountRef.current = false; return; }
+        if (themeMountRef.current) {
+            themeMountRef.current = false;
+            themeSyncedProfileRef.current = currentProfile?.id ?? null;
+            return;
+        }
         if (currentProfile) {
             StorageService.saveTheme(currentProfile.id, theme);
+            // Best-effort backend sync — only on genuine user edits (same profile),
+            // not the login/profile-switch restore run, which fires this effect with
+            // the pre-restore value and would clobber the backend.
+            const sameProfile = themeSyncedProfileRef.current === currentProfile.id;
+            themeSyncedProfileRef.current = currentProfile.id;
+            if (sameProfile && canSyncToBackend()) {
+                ApiService.saveProfile({ theme })
+                    .catch(err => console.error('[settings-sync] theme:', err));
+            }
         }
-    }, [theme, currentProfile]);
+    }, [theme, currentProfile, canSyncToBackend]);
 
     // Persist Units
     const unitsMountRef = useRef(true);
+    const unitsSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (unitsMountRef.current) { unitsMountRef.current = false; return; }
+        if (unitsMountRef.current) {
+            unitsMountRef.current = false;
+            unitsSyncedProfileRef.current = currentProfile?.id ?? null;
+            return;
+        }
         if (currentProfile) {
             StorageService.saveUnits(currentProfile.id, units);
+            const sameProfile = unitsSyncedProfileRef.current === currentProfile.id;
+            unitsSyncedProfileRef.current = currentProfile.id;
+            if (sameProfile && canSyncToBackend()) {
+                ApiService.saveProfile({ units })
+                    .catch(err => console.error('[settings-sync] units:', err));
+            }
         }
-    }, [units, currentProfile]);
+    }, [units, currentProfile, canSyncToBackend]);
 
     // Persist Sound
     const soundMountRef = useRef(true);
+    const soundSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (soundMountRef.current) { soundMountRef.current = false; return; }
+        if (soundMountRef.current) {
+            soundMountRef.current = false;
+            soundSyncedProfileRef.current = currentProfile?.id ?? null;
+            return;
+        }
         if (currentProfile) {
             StorageService.saveSound(currentProfile.id, soundEnabled);
+            const sameProfile = soundSyncedProfileRef.current === currentProfile.id;
+            soundSyncedProfileRef.current = currentProfile.id;
+            if (sameProfile && canSyncToBackend()) {
+                ApiService.saveProfile({ sound_enabled: soundEnabled })
+                    .catch(err => console.error('[settings-sync] sound_enabled:', err));
+            }
         }
-    }, [soundEnabled, currentProfile]);
+    }, [soundEnabled, currentProfile, canSyncToBackend]);
 
     // Persist Stats
     const statsMountRef = useRef(true);
@@ -1675,6 +1721,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         currentProfile,
         setCurrentProfile,
         authChecked,
+        canSyncToBackend,
         theme,
         setTheme,
         units,

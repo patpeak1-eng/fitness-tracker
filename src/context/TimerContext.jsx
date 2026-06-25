@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import StorageService from '../services/StorageService';
+import * as ApiService from '../services/ApiService';
 
 // Timer state lives here, split out of WorkoutContext (H4). The rest/work
 // countdowns tick every second; keeping that state in its own provider means a
@@ -11,7 +12,7 @@ import StorageService from '../services/StorageService';
 // because TimerProvider is rendered as its descendant).
 export const TimerContext = createContext();
 
-export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef }) => {
+export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, canSyncToBackend }) => {
     const [restTimer, setRestTimer] = useState({ timeLeft: 0, isActive: false, duration: 45 });
     const [workTimer, setWorkTimer] = useState({ timeLeft: 0, isActive: false, duration: 45 });
     const [defaultRestTime, setDefaultRestTime] = useState(45);
@@ -169,12 +170,26 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef }
     // --- Persist timer defaults (skip first mount so initial defaults don't
     // clobber stored values before the load effect runs). ---
     const timersMountRef = useRef(true);
+    const timersSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (timersMountRef.current) { timersMountRef.current = false; return; }
+        if (timersMountRef.current) {
+            timersMountRef.current = false;
+            timersSyncedProfileRef.current = currentProfile?.id ?? null;
+            return;
+        }
         if (currentProfile) {
             StorageService.saveDefaultTimers(currentProfile.id, defaultRestTime, defaultWorkTime);
+            // Best-effort backend sync — only on genuine user edits (same profile),
+            // not the login/profile-switch restore run. canSyncToBackend comes from
+            // WorkoutContext via prop (one-way dep: TimerContext can't import it).
+            const sameProfile = timersSyncedProfileRef.current === currentProfile.id;
+            timersSyncedProfileRef.current = currentProfile.id;
+            if (sameProfile && canSyncToBackend?.()) {
+                ApiService.saveProfile({ default_rest_time: defaultRestTime, default_work_time: defaultWorkTime })
+                    .catch(err => console.error('[settings-sync] timers:', err));
+            }
         }
-    }, [defaultRestTime, defaultWorkTime, currentProfile]);
+    }, [defaultRestTime, defaultWorkTime, currentProfile, canSyncToBackend]);
 
     // --- Persist exercise preferences ---
     const prefsMountRef = useRef(true);

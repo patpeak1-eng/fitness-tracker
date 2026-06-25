@@ -25,7 +25,7 @@ const CoachView = lazy(() => import('./pages/CoachView'));
 
 // Inner component to check profile status
 const AppRoutes = ({ timerApiRef }) => {
-    const { currentProfile, soundEnabled, authChecked } = useWorkout();
+    const { currentProfile, soundEnabled, authChecked, canSyncToBackend } = useWorkout();
 
     if (!authChecked) {
         return (
@@ -42,7 +42,7 @@ const AppRoutes = ({ timerApiRef }) => {
     // Always render these routes regardless of auth state, so the Google OAuth
     // callback (/auth/callback) and /login work even when no profile exists yet.
     return (
-        <TimerProvider currentProfile={currentProfile} soundEnabled={soundEnabled} apiRef={timerApiRef}>
+        <TimerProvider currentProfile={currentProfile} soundEnabled={soundEnabled} apiRef={timerApiRef} canSyncToBackend={canSyncToBackend}>
         <Suspense fallback={<div className="loading-screen" />}>
             <Routes>
                 <Route path="/login" element={<Login />} />
