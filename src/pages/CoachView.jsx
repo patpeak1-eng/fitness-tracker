@@ -4,9 +4,9 @@ import BackButton from '../components/common/BackButton';
 import { useWorkout } from '../context/WorkoutContext';
 import { sendCoachMessage, getCoachHistory, synthesizeVoice } from '../services/ApiService';
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
+import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
 import './CoachView.css';
 
-const DEFAULT_PERSONALITY = 'apex';
 const FLUSH_WORD_COUNT = 8;
 const VOICE_MIME = 'audio/mpeg';
 

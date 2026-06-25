@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import StorageService from '../services/StorageService';
 import { VOICE_IDS } from '../constants/voiceIds';
+import { COACH_PERSONALITIES } from '../constants/coachPersonalities';
 import './Settings.css';
 
 // ElevenLabs voice options for the AI coach (id -> display name).
@@ -17,10 +18,10 @@ const COACH_VOICES = [
     { id: VOICE_IDS.NATE, name: 'Nate' },
 ];
 
-const COACH_PERSONALITIES = [
-    { id: 'apex', label: 'Apex', desc: 'Direct & data-driven' },
-    { id: 'hype', label: 'Hype', desc: 'High energy & motivating' },
-    { id: 'zen', label: 'Zen', desc: 'Calm & technical' },
+const COACH_PERSONALITY_OPTIONS = [
+    { id: COACH_PERSONALITIES.APEX, label: 'Apex', desc: 'Direct & data-driven' },
+    { id: COACH_PERSONALITIES.HYPE, label: 'Hype', desc: 'High energy & motivating' },
+    { id: COACH_PERSONALITIES.ZEN,  label: 'Zen', desc: 'Calm & technical' },
 ];
 
 // On/off switch matching the smart-progression master toggle style.
@@ -368,7 +369,7 @@ const Settings = () => {
                         <Card>
                             <span className="setting-label">Personality</span>
                             <div className="unit-toggle coach-personality">
-                                {COACH_PERSONALITIES.map((p) => (
+                                {COACH_PERSONALITY_OPTIONS.map((p) => (
                                     <button
                                         key={p.id}
                                         className={`unit-btn ${coachPersonality === p.id ? 'active' : ''}`}
@@ -379,7 +380,7 @@ const Settings = () => {
                                 ))}
                             </div>
                             <p className="setting-desc coach-personality-desc">
-                                {COACH_PERSONALITIES.find((p) => p.id === coachPersonality)?.desc}
+                                {COACH_PERSONALITY_OPTIONS.find((p) => p.id === coachPersonality)?.desc}
                             </p>
                         </Card>
 

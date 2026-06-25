@@ -1,5 +1,6 @@
 import { isAvailable, saveWorkout, saveActiveWorkout, clearActiveWorkout } from './ApiService';
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
+import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
 
 const LEGACY_PREFIX = 'fitness_';
 const USER_SEGMENT = '_user_';
@@ -177,7 +178,7 @@ const StorageService = {
     },
 
     loadCoachPersonality() {
-        return readRaw('coach_personality', 'apex', { global: true });
+        return readRaw('coach_personality', DEFAULT_PERSONALITY, { global: true });
     },
     saveCoachPersonality(personality) {
         writeRaw('coach_personality', personality, { global: true });

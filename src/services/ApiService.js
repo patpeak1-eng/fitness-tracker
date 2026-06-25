@@ -1,4 +1,5 @@
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
+import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
 
 const API_URL = import.meta.env.VITE_API_URL || null;
 
@@ -173,7 +174,7 @@ export const getGoogleAuthUrl = () => {
 };
 
 // Coach
-export const sendCoachMessage = async (message, workoutContext = null, personality = 'apex') => {
+export const sendCoachMessage = async (message, workoutContext = null, personality = DEFAULT_PERSONALITY) => {
   const res = await apiFetch('/api/coach/chat', {
     method: 'POST',
     body: JSON.stringify({ message, workout_context: workoutContext, personality })
