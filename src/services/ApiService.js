@@ -57,8 +57,8 @@ export const getMe = () =>
 export const getHistory = () =>
   apiFetch('/api/workouts').then(r => r.json());
 
-export const saveWorkout = (workout) =>
-  apiFetch('/api/workouts', {
+export const saveWorkout = async (workout) => {
+  const r = await apiFetch('/api/workouts', {
     method: 'POST',
     // Map the camelCase local shape to the backend's snake_case WorkoutCreate.
     // Without this, start_time/end_time arrive as unknown fields and persist as
@@ -73,53 +73,95 @@ export const saveWorkout = (workout) =>
       exercises: workout.exercises ?? null,
       recommendations: workout.recommendations ?? null
     })
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/workouts — ${text}`);
+  }
+  return r.json();
+};
 
 export const getActiveWorkout = () =>
   apiFetch('/api/workouts/active').then(r => r.json());
 
-export const saveActiveWorkout = (workout) =>
-  apiFetch('/api/workouts/active', {
+export const saveActiveWorkout = async (workout) => {
+  const r = await apiFetch('/api/workouts/active', {
     method: 'PUT',
     body: JSON.stringify({ workout_data: workout })
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/workouts/active — ${text}`);
+  }
+  return r.json();
+};
 
-export const clearActiveWorkout = () =>
-  apiFetch('/api/workouts/active', {
+export const clearActiveWorkout = async () => {
+  const r = await apiFetch('/api/workouts/active', {
     method: 'DELETE'
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/workouts/active — ${text}`);
+  }
+  // 204 No Content on success — nothing to parse.
+};
 
 export const getProfile = () =>
   apiFetch('/api/profile').then(r => r.json());
 
-export const saveProfile = (profile) =>
-  apiFetch('/api/profile', {
+export const saveProfile = async (profile) => {
+  const r = await apiFetch('/api/profile', {
     method: 'PUT',
     body: JSON.stringify(profile)
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/profile — ${text}`);
+  }
+  return r.json();
+};
 
 export const getWeightHistory = () =>
   apiFetch('/api/weight').then(r => r.json());
 
-export const addWeightEntry = (weight, recordedAt) =>
-  apiFetch('/api/weight', {
+export const addWeightEntry = async (weight, recordedAt) => {
+  const r = await apiFetch('/api/weight', {
     method: 'POST',
     body: JSON.stringify({ weight, recorded_at: recordedAt })
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/weight — ${text}`);
+  }
+  return r.json();
+};
 
 export const getCustomTemplates = () =>
   apiFetch('/api/templates').then(r => r.json());
 
-export const saveCustomTemplate = (template) =>
-  apiFetch('/api/templates', {
+export const saveCustomTemplate = async (template) => {
+  const r = await apiFetch('/api/templates', {
     method: 'POST',
     body: JSON.stringify({ name: template.name, template_data: template })
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/templates — ${text}`);
+  }
+  return r.json();
+};
 
-export const deleteCustomTemplate = (id) =>
-  apiFetch(`/api/templates/${id}`, {
+export const deleteCustomTemplate = async (id) => {
+  const r = await apiFetch(`/api/templates/${id}`, {
     method: 'DELETE'
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`[ApiService] HTTP ${r.status} — /api/templates/${id} — ${text}`);
+  }
+  // 204 No Content on success — nothing to parse.
+};
 
 export { isAvailable };
 
