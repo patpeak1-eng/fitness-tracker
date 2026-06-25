@@ -1,6 +1,7 @@
 import { isAvailable, saveWorkout, saveActiveWorkout, clearActiveWorkout } from './ApiService';
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
 import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 const LEGACY_PREFIX = 'fitness_';
 const USER_SEGMENT = '_user_';
@@ -168,41 +169,41 @@ const StorageService = {
     },
 
     // --- AI Coach settings (device-level, not profile-scoped for now) ---
-    // Stored under bare keys (coach_*) so they match what the coach feature
-    // reads directly. Booleans are persisted as the strings "true"/"false".
+    // Keys come from STORAGE_KEYS (single source of truth for coach_*).
+    // Booleans are persisted as the strings "true"/"false".
     loadCoachEnabled() {
-        return readRaw('coach_enabled', 'true', { global: true }) !== 'false';
+        return readRaw(STORAGE_KEYS.COACH_ENABLED, 'true', { global: true }) !== 'false';
     },
     saveCoachEnabled(enabled) {
-        writeRaw('coach_enabled', !!enabled, { global: true });
+        writeRaw(STORAGE_KEYS.COACH_ENABLED, !!enabled, { global: true });
     },
 
     loadCoachPersonality() {
-        return readRaw('coach_personality', DEFAULT_PERSONALITY, { global: true });
+        return readRaw(STORAGE_KEYS.COACH_PERSONALITY, DEFAULT_PERSONALITY, { global: true });
     },
     saveCoachPersonality(personality) {
-        writeRaw('coach_personality', personality, { global: true });
+        writeRaw(STORAGE_KEYS.COACH_PERSONALITY, personality, { global: true });
     },
 
     loadCoachVoiceId() {
-        return readRaw('coach_voice_id', DEFAULT_VOICE_ID, { global: true });
+        return readRaw(STORAGE_KEYS.COACH_VOICE_ID, DEFAULT_VOICE_ID, { global: true });
     },
     saveCoachVoiceId(voiceId) {
-        writeRaw('coach_voice_id', voiceId, { global: true });
+        writeRaw(STORAGE_KEYS.COACH_VOICE_ID, voiceId, { global: true });
     },
 
     loadCoachVoiceInput() {
-        return readRaw('coach_voice_input', 'false', { global: true }) === 'true';
+        return readRaw(STORAGE_KEYS.COACH_VOICE_INPUT, 'false', { global: true }) === 'true';
     },
     saveCoachVoiceInput(enabled) {
-        writeRaw('coach_voice_input', !!enabled, { global: true });
+        writeRaw(STORAGE_KEYS.COACH_VOICE_INPUT, !!enabled, { global: true });
     },
 
     loadCoachAutoplay() {
-        return readRaw('coach_autoplay', 'true', { global: true }) !== 'false';
+        return readRaw(STORAGE_KEYS.COACH_AUTOPLAY, 'true', { global: true }) !== 'false';
     },
     saveCoachAutoplay(enabled) {
-        writeRaw('coach_autoplay', !!enabled, { global: true });
+        writeRaw(STORAGE_KEYS.COACH_AUTOPLAY, !!enabled, { global: true });
     },
 
     migrateLegacyData(uid) {

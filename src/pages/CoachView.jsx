@@ -3,8 +3,7 @@ import { Volume2, VolumeX, Send, Sparkles, Mic, Square } from 'lucide-react';
 import BackButton from '../components/common/BackButton';
 import { useWorkout } from '../context/WorkoutContext';
 import { sendCoachMessage, getCoachHistory, synthesizeVoice } from '../services/ApiService';
-import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
-import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
+import StorageService from '../services/StorageService';
 import './CoachView.css';
 
 const FLUSH_WORD_COUNT = 8;
@@ -51,14 +50,13 @@ const CoachView = () => {
 
     // AI Coach can be turned off in Settings → AI Coach. Read once on mount; the
     // view gates to a short notice below when it's disabled.
-    const coachEnabled = localStorage.getItem('coach_enabled') !== 'false';
+    const coachEnabled = StorageService.loadCoachEnabled();
 
     const [messages, setMessages] = useState([]); // [{ role, content, streaming?, error? }]
     const [input, setInput] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
     const [voiceEnabled, setVoiceEnabled] = useState(
-        localStorage.getItem('coach_autoplay') !== 'false'
-        && localStorage.getItem('coach_enabled') !== 'false'
+        StorageService.loadCoachAutoplay() && StorageService.loadCoachEnabled()
     );
     const [speakingIndex, setSpeakingIndex] = useState(null);
     const [isSpeaking, setIsSpeaking] = useState(false); // drives the Stop button
@@ -267,7 +265,7 @@ const CoachView = () => {
         streamDoneRef.current = false;
         initMSE();
 
-        const voiceId = localStorage.getItem('coach_voice_id') || DEFAULT_VOICE_ID;
+        const voiceId = StorageService.loadCoachVoiceId();
         let url = base.replace(/^http/, 'ws') + '/api/voice/stream?voice_id=' + encodeURIComponent(voiceId);
         // A browser WS handshake can't carry the Authorization header, so pass the
         // token as a query param for email/password users; OAuth users authenticate
@@ -379,7 +377,7 @@ const CoachView = () => {
         });
 
         let assistantText = '';
-        const personality = localStorage.getItem('coach_personality') || DEFAULT_PERSONALITY;
+        const personality = StorageService.loadCoachPersonality();
 
         try {
             const res = await sendCoachMessage(trimmed, activeWorkout || null, personality);
