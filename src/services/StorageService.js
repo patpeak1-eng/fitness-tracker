@@ -1,4 +1,5 @@
 import { isAvailable, saveWorkout, saveActiveWorkout, clearActiveWorkout } from './ApiService';
+import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
 
 const LEGACY_PREFIX = 'fitness_';
 const USER_SEGMENT = '_user_';
@@ -183,7 +184,7 @@ const StorageService = {
     },
 
     loadCoachVoiceId() {
-        return readRaw('coach_voice_id', 'FxZjRiAEBESrb7srpme7', { global: true });
+        return readRaw('coach_voice_id', DEFAULT_VOICE_ID, { global: true });
     },
     saveCoachVoiceId(voiceId) {
         writeRaw('coach_voice_id', voiceId, { global: true });

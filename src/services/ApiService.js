@@ -1,3 +1,5 @@
+import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
+
 const API_URL = import.meta.env.VITE_API_URL || null;
 
 const getToken = () => localStorage.getItem('fitness_auth_token');
@@ -183,7 +185,7 @@ export const sendCoachMessage = async (message, workoutContext = null, personali
 export const getCoachHistory = () =>
   apiFetch('/api/coach/history').then(r => r.json());
 
-export const synthesizeVoice = (text, voiceId = 'FxZjRiAEBESrb7srpme7') =>
+export const synthesizeVoice = (text, voiceId = DEFAULT_VOICE_ID) =>
   apiFetch('/api/voice/coach-synthesize', {
     method: 'POST',
     body: JSON.stringify({ text, voice_id: voiceId })

@@ -3,9 +3,9 @@ import { Volume2, VolumeX, Send, Sparkles, Mic, Square } from 'lucide-react';
 import BackButton from '../components/common/BackButton';
 import { useWorkout } from '../context/WorkoutContext';
 import { sendCoachMessage, getCoachHistory, synthesizeVoice } from '../services/ApiService';
+import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
 import './CoachView.css';
 
-const DEFAULT_VOICE_ID = 'FxZjRiAEBESrb7srpme7';
 const DEFAULT_PERSONALITY = 'apex';
 const FLUSH_WORD_COUNT = 8;
 const VOICE_MIME = 'audio/mpeg';

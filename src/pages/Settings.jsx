@@ -6,14 +6,15 @@ import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import StorageService from '../services/StorageService';
+import { VOICE_IDS } from '../constants/voiceIds';
 import './Settings.css';
 
 // ElevenLabs voice options for the AI coach (id -> display name).
 const COACH_VOICES = [
-    { id: 'FxZjRiAEBESrb7srpme7', name: 'Jarvis' },
-    { id: 'JSWO6cw2AyFE324d5kEr', name: 'Scarlet Jo' },
-    { id: 'u8GDilEiJPUbRk87Lcqs', name: 'Dan' },
-    { id: '7S3KNdLDL7aRgBVRQb1z', name: 'Nate' },
+    { id: VOICE_IDS.JARVIS, name: 'Jarvis' },
+    { id: VOICE_IDS.SCARLETT, name: 'Scarlet Jo' },
+    { id: VOICE_IDS.DAN, name: 'Dan' },
+    { id: VOICE_IDS.NATE, name: 'Nate' },
 ];
 
 const COACH_PERSONALITIES = [
