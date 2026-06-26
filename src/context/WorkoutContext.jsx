@@ -212,6 +212,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
            ApiService.isAvailable()),
     [authChecked, currentProfile]);
 
+    // Latest-value ref so the persist effects can call the guard WITHOUT listing
+    // it as a dependency — otherwise the auth-resolved flip of canSyncToBackend
+    // would re-run every persist effect and fire a redundant sync on page load.
+    const canSyncRef = useRef(canSyncToBackend);
+    canSyncRef.current = canSyncToBackend;
+
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
     const [history, setHistory] = useState([]);
@@ -589,12 +595,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             // the pre-restore value and would clobber the backend.
             const sameProfile = themeSyncedProfileRef.current === currentProfile.id;
             themeSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncToBackend()) {
+            if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ theme })
                     .catch(err => console.error('[settings-sync] theme:', err));
             }
         }
-    }, [theme, currentProfile, canSyncToBackend]);
+    }, [theme, currentProfile]);
 
     // Persist Units
     const unitsMountRef = useRef(true);
@@ -609,12 +615,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             StorageService.saveUnits(currentProfile.id, units);
             const sameProfile = unitsSyncedProfileRef.current === currentProfile.id;
             unitsSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncToBackend()) {
+            if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ units })
                     .catch(err => console.error('[settings-sync] units:', err));
             }
         }
-    }, [units, currentProfile, canSyncToBackend]);
+    }, [units, currentProfile]);
 
     // Persist Sound
     const soundMountRef = useRef(true);
@@ -629,12 +635,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             StorageService.saveSound(currentProfile.id, soundEnabled);
             const sameProfile = soundSyncedProfileRef.current === currentProfile.id;
             soundSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncToBackend()) {
+            if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ sound_enabled: soundEnabled })
                     .catch(err => console.error('[settings-sync] sound_enabled:', err));
             }
         }
-    }, [soundEnabled, currentProfile, canSyncToBackend]);
+    }, [soundEnabled, currentProfile]);
 
     // Persist Stats
     const statsMountRef = useRef(true);

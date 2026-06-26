@@ -19,6 +19,12 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
     const [defaultWorkTime, setDefaultWorkTime] = useState(45);
     const [exercisePrefs, setExercisePrefs] = useState({});
 
+    // Latest-value ref for the sync guard so the persist effect can call it
+    // without listing the prop as a dependency (avoids a redundant sync when
+    // canSyncToBackend flips on auth-resolve).
+    const canSyncRef = useRef(canSyncToBackend);
+    canSyncRef.current = canSyncToBackend;
+
     // Load this profile's timer prefs (the timer slice of WorkoutContext's
     // former profile-load routine). Runs on mount and on profile switch.
     useEffect(() => {
@@ -184,12 +190,12 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
             // WorkoutContext via prop (one-way dep: TimerContext can't import it).
             const sameProfile = timersSyncedProfileRef.current === currentProfile.id;
             timersSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncToBackend?.()) {
+            if (sameProfile && canSyncRef.current?.()) {
                 ApiService.saveProfile({ default_rest_time: defaultRestTime, default_work_time: defaultWorkTime })
                     .catch(err => console.error('[settings-sync] timers:', err));
             }
         }
-    }, [defaultRestTime, defaultWorkTime, currentProfile, canSyncToBackend]);
+    }, [defaultRestTime, defaultWorkTime, currentProfile]);
 
     // --- Persist exercise preferences ---
     const prefsMountRef = useRef(true);
