@@ -47,6 +47,8 @@ const Settings = () => {
         theme, setTheme,
         units, setUnits,
         soundEnabled, setSoundEnabled,
+        coachPersonality, setCoachPersonality,
+        coachVoiceId, setCoachVoiceId,
         currentProfile, switchProfile,
         smartProgressionEnabled, setSmartProgressionEnabled,
         progressionMode, setProgressionMode,
@@ -65,14 +67,12 @@ const Settings = () => {
 
     // --- AI Coach settings (device-level, persisted immediately via StorageService) ---
     const [coachEnabled, setCoachEnabled] = useState(StorageService.loadCoachEnabled());
-    const [coachPersonality, setCoachPersonality] = useState(StorageService.loadCoachPersonality());
-    const [coachVoiceId, setCoachVoiceId] = useState(StorageService.loadCoachVoiceId());
     const [coachVoiceInput, setCoachVoiceInput] = useState(StorageService.loadCoachVoiceInput());
     const [coachAutoplay, setCoachAutoplay] = useState(StorageService.loadCoachAutoplay());
 
     const handleCoachEnabled = (val) => { setCoachEnabled(val); StorageService.saveCoachEnabled(val); };
-    const handleCoachPersonality = (val) => { setCoachPersonality(val); StorageService.saveCoachPersonality(val); };
-    const handleCoachVoiceId = (val) => { setCoachVoiceId(val); StorageService.saveCoachVoiceId(val); };
+    const handleCoachPersonality = (val) => { setCoachPersonality(val); };
+    const handleCoachVoiceId = (val) => { setCoachVoiceId(val); };
     const handleCoachVoiceInput = (val) => { setCoachVoiceInput(val); StorageService.saveCoachVoiceInput(val); };
     const handleCoachAutoplay = (val) => { setCoachAutoplay(val); StorageService.saveCoachAutoplay(val); };
 

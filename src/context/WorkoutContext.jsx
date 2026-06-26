@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, useMemo,
 import StorageService from '../services/StorageService';
 import ActiveWorkoutService from "../services/ActiveWorkoutService";
 import * as ApiService from '../services/ApiService';
+import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
+import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
 
 
 export const WorkoutContext = createContext();
@@ -225,6 +227,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [theme, setTheme] = useState('dark');
     const [units, setUnits] = useState('metric');
     const [soundEnabled, setSoundEnabled] = useState(true);
+    const [coachPersonality, setCoachPersonality] = useState(DEFAULT_PERSONALITY);
+    const [coachVoiceId, setCoachVoiceId] = useState(DEFAULT_VOICE_ID);
     const [userStats, setUserStats] = useState({
         age: '',
         height: '',
@@ -452,6 +456,19 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         StorageService.saveUserStats(profile.id, backendStats);
                     }
 
+                    // Coach prefs — backend wins on login (same pattern as stats)
+                    if (profileData?.user) {
+                        const u = profileData.user;
+                        if (u.coach_personality) {
+                            setCoachPersonality(u.coach_personality);
+                            StorageService.saveCoachPersonality(u.coach_personality);
+                        }
+                        if (u.coach_voice_id) {
+                            setCoachVoiceId(u.coach_voice_id);
+                            StorageService.saveCoachVoiceId(u.coach_voice_id);
+                        }
+                    }
+
                     // Workout history — union merge by a normalized name+startTime
                     // fingerprint. Dedup by id is unreliable: the backend assigns its
                     // own UUID on push, so the same workout returns with an id absent
@@ -641,6 +658,46 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             }
         }
     }, [soundEnabled, currentProfile]);
+
+    // Persist Coach Personality
+    const coachPersonalityMountRef = useRef(true);
+    const coachPersonalitySyncedProfileRef = useRef(null);
+    useEffect(() => {
+        if (coachPersonalityMountRef.current) {
+            coachPersonalityMountRef.current = false;
+            coachPersonalitySyncedProfileRef.current = currentProfile?.id ?? null;
+            return;
+        }
+        if (currentProfile) {
+            StorageService.saveCoachPersonality(coachPersonality);
+            const sameProfile = coachPersonalitySyncedProfileRef.current === currentProfile.id;
+            coachPersonalitySyncedProfileRef.current = currentProfile.id;
+            if (sameProfile && canSyncRef.current()) {
+                ApiService.saveProfile({ coach_personality: coachPersonality })
+                    .catch(err => console.error('[settings-sync] coach_personality:', err));
+            }
+        }
+    }, [coachPersonality, currentProfile]);
+
+    // Persist Coach Voice ID
+    const coachVoiceIdMountRef = useRef(true);
+    const coachVoiceIdSyncedProfileRef = useRef(null);
+    useEffect(() => {
+        if (coachVoiceIdMountRef.current) {
+            coachVoiceIdMountRef.current = false;
+            coachVoiceIdSyncedProfileRef.current = currentProfile?.id ?? null;
+            return;
+        }
+        if (currentProfile) {
+            StorageService.saveCoachVoiceId(coachVoiceId);
+            const sameProfile = coachVoiceIdSyncedProfileRef.current === currentProfile.id;
+            coachVoiceIdSyncedProfileRef.current = currentProfile.id;
+            if (sameProfile && canSyncRef.current()) {
+                ApiService.saveProfile({ coach_voice_id: coachVoiceId })
+                    .catch(err => console.error('[settings-sync] coach_voice_id:', err));
+            }
+        }
+    }, [coachVoiceId, currentProfile]);
 
     // Persist Stats
     const statsMountRef = useRef(true);
@@ -1734,6 +1791,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setUnits,
         soundEnabled,
         setSoundEnabled,
+        coachPersonality,
+        setCoachPersonality,
+        coachVoiceId,
+        setCoachVoiceId,
         startWorkout,
         startWorkoutFromTemplate,
         finishWorkout,
@@ -1790,7 +1851,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     }), [
         activeWorkout, exercises, templates, history,
         profiles, currentProfile, theme, units,
-        soundEnabled, userStats, weightHistory,
+        soundEnabled, coachPersonality, coachVoiceId, userStats, weightHistory,
         assessments, currentExerciseIndex, currentSetIndex,
         smartProgressionEnabled, progressionMode,
         progressionType, progressionIncrement,
