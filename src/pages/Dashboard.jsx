@@ -18,6 +18,28 @@ const Dashboard = () => {
         return d >= startOfWeek;
     }).length;
 
+    const calculateStreak = () => {
+        if (!history || history.length === 0) return 0;
+        const completedDates = new Set(
+            history
+                .filter(w => w.completed || w.status === 'completed')
+                .map(w => new Date(w.startTime).toDateString())
+        );
+        let streak = 0;
+        const today = new Date();
+        for (let i = 0; i < 365; i++) {
+            const d = new Date(today);
+            d.setDate(today.getDate() - i);
+            if (completedDates.has(d.toDateString())) {
+                streak++;
+            } else {
+                break;
+            }
+        }
+        return streak;
+    };
+    const currentStreak = calculateStreak();
+
     // Simple Goal: 4 workouts/week
     const weeklyGoal = 4;
     const progressPercent = Math.min(100, Math.round((thisWeekCount / weeklyGoal) * 100));
@@ -81,6 +103,17 @@ const Dashboard = () => {
                     </div>
                 </Card>
 
+                {/* 1b. STREAK CARD */}
+                <Card className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Current Streak</p>
+                        <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                            {currentStreak} {currentStreak === 1 ? 'day' : 'days'}
+                        </p>
+                    </div>
+                    <Flame size={32} style={{ color: currentStreak > 0 ? 'var(--primary)' : 'var(--text-secondary)' }} />
+                </Card>
+
                 {/* 2. ACTIVE WORKOUT BANNER (If Active) */}
                 {activeWorkout && (
                     <Card className="hero-card action-btn" onClick={() => navigate('/track')}
@@ -135,9 +168,18 @@ const Dashboard = () => {
                         </div>
                     </Card>
                 ) : (
-                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                        No history yet. Let's get moving!
-                    </div>
+                    <Card className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                            No workouts yet. Take the fitness assessment to get a personalised program.
+                        </p>
+                        <button
+                            className="primary-btn"
+                            onClick={() => navigate('/assessment')}
+                            style={{ width: '100%' }}
+                        >
+                            Start Assessment
+                        </button>
+                    </Card>
                 )}
 
             </section>

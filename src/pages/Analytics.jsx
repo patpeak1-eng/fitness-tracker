@@ -52,9 +52,9 @@ const Analytics = () => {
                     const weight = set.weight || 0;
                     const reps = set.reps || 0;
 
-                    // Strength: simple max weight for now (could do 1RM calc later)
-                    if (weight > maxWeight) {
-                        maxWeight = weight;
+                    const e1rm = reps > 1 ? Math.round(weight * (1 + reps / 30) * 10) / 10 : weight;
+                    if (e1rm > maxWeight) {
+                        maxWeight = e1rm;
                         bestSet = set;
                     }
 
@@ -70,6 +70,7 @@ const Analytics = () => {
                         date: new Date(workout.endTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
                         fullDate: new Date(workout.endTime).toLocaleDateString(),
                         weight: displayWeight(maxWeight, workoutUnit, units),
+                        // maxWeight now holds e1RM
                         volume: displayWeight(totalVolume, workoutUnit, units),
                         reps: bestSet ? bestSet.reps : 0,
                         originalDate: new Date(workout.endTime) // For sorting
@@ -126,7 +127,7 @@ const Analytics = () => {
                     lineHeight: '1.5'
                 }}>
                     <div style={{ marginBottom: '10px' }}>
-                        <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>📈 Best Lift (Strength)</strong>
+                        <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>📈 Est. 1RM (Epley)</strong>
                         Tracks the heaviest weight you lifted in a single set during the workout. Aim to increase this over time for strength gains.
                     </div>
                     <div>
@@ -178,7 +179,7 @@ const Analytics = () => {
                     {/* Main Chart */}
                     <div className="chart-container-card">
                         <div className="chart-header">
-                            <h3>{metric === 'strength' ? 'Max Strength History' : 'Volume Load History'}</h3>
+                            <h3>{metric === 'strength' ? 'Estimated 1RM History' : 'Volume Load History'}</h3>
                         </div>
 
                         <div className="chart-wrapper">
