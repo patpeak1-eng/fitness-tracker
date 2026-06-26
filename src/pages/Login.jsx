@@ -67,12 +67,9 @@ const Login = () => {
                     color: '#bfff00',
                     avatar: cleanName.charAt(0).toUpperCase()
                 }, result.access_token);
-            } else {
-                setError((result && (result.detail || result.message)) || 'Registration failed. Please try again.');
-                setLoading(false);
             }
         } catch (err) {
-            setError('Could not reach the server. Check your connection and try again.');
+            setError(err.message || 'Could not reach the server. Check your connection and try again.');
             setLoading(false);
         }
     };
@@ -92,12 +89,9 @@ const Login = () => {
                     color: '#bfff00',
                     avatar: cleanName.charAt(0).toUpperCase()
                 }, result.access_token);
-            } else {
-                setError('Invalid email or password');
-                setLoading(false);
             }
         } catch (err) {
-            setError('Could not reach the server. Check your connection and try again.');
+            setError(err.message || 'Could not reach the server. Check your connection and try again.');
             setLoading(false);
         }
     };

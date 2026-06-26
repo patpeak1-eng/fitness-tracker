@@ -33,19 +33,31 @@ const apiFetch = (path, options = {}) => {
 const isAvailable = () => !!API_URL;
 
 // Auth
-export const register = (email, password, name) =>
-  fetch(`${API_URL}/api/auth/register`, {
+export const register = async (email, password, name) => {
+  const r = await fetch(`${API_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, name })
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.detail || `Registration failed (${r.status})`);
+  }
+  return r.json();
+};
 
-export const login = (email, password) =>
-  fetch(`${API_URL}/api/auth/login`, {
+export const login = async (email, password) => {
+  const r = await fetch(`${API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
-  }).then(r => r.json());
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.detail || `Login failed (${r.status})`);
+  }
+  return r.json();
+};
 
 export const getMe = () =>
   fetch(`${API_URL}/api/auth/me`, {
