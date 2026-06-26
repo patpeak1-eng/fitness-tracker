@@ -1,5 +1,6 @@
 """Authentication routes: register, login, Google OAuth, session (/me), logout."""
 import os
+import secrets
 from uuid import UUID
 
 import httpx
@@ -136,6 +137,8 @@ async def google_login() -> RedirectResponse:
             detail="Google OAuth is not configured",
         )
 
+    state = secrets.token_hex(32)
+
     google_auth_url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
         f"?client_id={client_id}"
@@ -143,14 +146,27 @@ async def google_login() -> RedirectResponse:
         "&response_type=code"
         "&scope=openid%20email%20profile"
         "&access_type=offline"
+        f"&state={state}"
     )
-    return RedirectResponse(url=google_auth_url)
+
+    response = RedirectResponse(url=google_auth_url)
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        max_age=600,        # 10 minutes — more than enough for a login flow
+        samesite="lax",     # same-origin redirect chain, lax is correct here
+        secure=True,
+    )
+    return response
 
 
 @router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: str | None = None,
     error: str | None = None,
+    state: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
     """Handle Google's OAuth callback: exchange the code for the user's profile,
@@ -159,6 +175,11 @@ async def google_callback(
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    # CSRF check — state must match the cookie set in google_login
+    cookie_state = request.cookies.get("oauth_state")
+    if not state or not cookie_state or state != cookie_state:
+        return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
     # Google redirects here with ?error=... and no code when the user cancels
     # or denies consent; handle it gracefully instead of returning a 422.
@@ -244,6 +265,7 @@ async def google_callback(
         samesite="none",
         secure=True,
     )
+    response.delete_cookie(key="oauth_state", samesite="lax", secure=True)
     return response
 
 
