@@ -34,6 +34,8 @@ class User(Base):
     sound_enabled = Column(Boolean, server_default=text("true"))
     default_rest_time = Column(Integer, server_default=text("45"))
     default_work_time = Column(Integer, server_default=text("45"))
+    coach_personality = Column(String(50), server_default="apex")
+    coach_voice_id = Column(String(100), server_default="FxZjRiAEBESrb7srpme7")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     stats = relationship(
