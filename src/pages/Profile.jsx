@@ -76,7 +76,7 @@ const Profile = () => {
         StorageService.clearAuthToken();
         StorageService.setLoggedOut();
         StorageService.saveProfiles([]);
-        localStorage.removeItem('fitness_current_profile_id');
+        StorageService.remove(StorageService.KEY.currentProfileId, { global: true });
         window.location.href = '/login';
     };
 

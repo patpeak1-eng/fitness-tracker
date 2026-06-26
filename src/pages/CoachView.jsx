@@ -270,7 +270,7 @@ const CoachView = () => {
         // A browser WS handshake can't carry the Authorization header, so pass the
         // token as a query param for email/password users; OAuth users authenticate
         // via the session cookie sent with the handshake.
-        const token = localStorage.getItem('fitness_auth_token');
+        const token = StorageService.loadAuthToken();
         if (token) url += '&token=' + encodeURIComponent(token);
 
         let ws;
