@@ -69,7 +69,7 @@ const templateDuration = (template) => {
 
 const matchesDuration = (minutes, selected) => {
     switch (selected) {
-        case 'Under 30 min': return minutes < 30;
+        case 'Under 30 min': return minutes <= 30;
         case '30–45 min': return minutes >= 30 && minutes <= 45;
         case '45–60 min': return minutes > 45 && minutes <= 60;
         case '60+ min': return minutes > 60;
@@ -339,7 +339,9 @@ const TrackWorkout = () => {
 
     // 2. WORKOUT PREP & REVIEW (The "Preparation" Phase)
     // Check local state OR persisted status from context
-    const isGuidedMode = activeWorkout.status === 'active';
+    // 'paused' stays in the guided view so the pause overlay + Resume render there
+    // (rather than dropping back to the prep screen).
+    const isGuidedMode = activeWorkout.status === 'active' || activeWorkout.status === 'paused';
 
     if (!isGuidedMode) {
         return (

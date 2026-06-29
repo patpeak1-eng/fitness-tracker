@@ -1454,10 +1454,33 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
         _setCurrentExerciseIndex(0);
         _setCurrentSetIndex(0);
-        // Do not auto-start work timer yet, let user click "Start" on the first set? 
+        // Do not auto-start work timer yet, let user click "Start" on the first set?
         // Or if user wants total automation:
         // startWorkTimer();
         return true;
+    };
+
+    // Freeze the session in place (first-responder use case). Stops both timers
+    // and flags the workout as paused; localStorage persistence already runs on
+    // every activeWorkout change, so a paused session survives reloads.
+    const pauseWorkout = () => {
+        if (!activeWorkout) return;
+        timerApiRef.current?.stopWorkTimer();
+        timerApiRef.current?.skipRest();
+        setActiveWorkout(prev => prev ? ({
+            ...prev,
+            status: 'paused',
+            pausedAt: new Date().toISOString()
+        }) : prev);
+    };
+
+    const resumeWorkout = () => {
+        if (!activeWorkout) return;
+        setActiveWorkout(prev => prev ? ({
+            ...prev,
+            status: 'active',
+            pausedAt: null
+        }) : prev);
     };
 
     const addSet = (exerciseInstanceId) => {
@@ -1928,6 +1951,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         startWorkoutFromTemplate,
         finishWorkout,
         cancelWorkout,
+        pauseWorkout,
+        resumeWorkout,
         addExerciseToWorkout,
         removeExerciseFromWorkout,
         addSet,

@@ -119,10 +119,16 @@ const Dashboard = () => {
                     <Card className="hero-card action-btn" onClick={() => navigate('/track')}
                         style={{ cursor: 'pointer', textAlign: 'center', padding: '20px', border: '1px solid var(--primary)', background: 'rgba(204,255,0,0.05)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                            <div className="pulse-text-lime" style={{ fontWeight: 'bold' }}>● LIVE SESSION</div>
+                            {activeWorkout.status === 'paused' ? (
+                                <div style={{ fontWeight: 'bold', color: '#facc15' }}>● PAUSED</div>
+                            ) : (
+                                <div className="pulse-text-lime" style={{ fontWeight: 'bold' }}>● LIVE SESSION</div>
+                            )}
                         </div>
                         <h3 style={{ margin: '10px 0', fontSize: '1.4rem' }}>{activeWorkout.name}</h3>
-                        <button className="primary-btn" style={{ width: '100%' }}>Resume</button>
+                        <button className="primary-btn" style={{ width: '100%' }}>
+                            {activeWorkout.status === 'paused' ? 'Resume Paused Workout' : 'Resume'}
+                        </button>
                     </Card>
                 )}
 
