@@ -273,12 +273,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
     // Load custom templates on mount and merge
     // MOVED TO refreshProfileData for profile scoping
-    // useEffect(() => {
-    //     const customTemplates = StorageService.loadCustomTemplates();
-    //     if (customTemplates.length > 0) {
-    //         setTemplates(prev => [...prev, ...customTemplates]);
-    //     }
-    // }, []);
 
     // Profile State
     const [profiles, setProfiles] = useState([]);
@@ -345,7 +339,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [progressionIncrement, setProgressionIncrement] = useState(5); // Value (e.g., 5lbs or 2.5%)
 
     // Guided Mode State
-    // Guided Mode State
     const [currentExerciseIndex, _setCurrentExerciseIndex] = useState(0);
     const [currentSetIndex, _setCurrentSetIndex] = useState(0);
 
@@ -367,7 +360,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
 
     // --- 1. INITIALIZATION & MIGRATION ---
-    // --- 1. INITIALIZATION & MIGRATION ---
     const refreshGlobalState = () => {
         const profilesData = StorageService.getOrCreateProfiles();
 
@@ -385,13 +377,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     };
 
     useEffect(() => {
-        // --- EMERGENCY WIPE ---
-        // Ensure all legacy/corrupt data is gone
-        // if (typeof window !== 'undefined') {
-        //     console.warn("PERFORMING FULL FACTORY RESET");
-        //     StorageService.importSnapshot({});
-        // }
-
         refreshGlobalState();
 
 
@@ -441,7 +426,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         return () => clearTimeout(authTimeout);
     }, []); // Run once on mount
 
-    // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
     // --- 2. LOAD USER DATA WHEN PROFILE CHANGES ---
     // Tracks the profile whose load is currently active, so an in-flight cloud
     // pull can detect a profile switch and avoid cross-writing the wrong state.
@@ -1010,7 +994,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             }
 
             if (!template) {
-                console.error("DEBUG: Template not found for:", templateIdOrObj);
                 return;
             }
 
@@ -1033,7 +1016,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 try {
                     lastStats = getLastExerciseStats(fullExercise.id);
                 } catch (e) {
-                    console.error("DEBUG: getLastExerciseStats failed for", fullExercise.id, e);
                 }
 
                 const smartWeight = Number(lastStats?.weight) || 0;
@@ -1706,7 +1688,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // --- 10. HISTORY LOOKUP (Previous Stats) ---
 
 
-    // --- 9. ASSESSMENT IMPORTER ---
     // --- 9. ASSESSMENT IMPORTER ---
     const importProgram = (programDataInput) => {
         try {

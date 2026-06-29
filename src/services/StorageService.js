@@ -114,10 +114,6 @@ const migrateLegacyProfileKey = (baseKey, uid) => {
 const StorageService = {
     KEY,
 
-    makeProfileKey(baseKey, uid) {
-        return scopedKey(baseKey, uid);
-    },
-
     startupCleanup(profiles = []) {
         localStorage.removeItem(KEY.activeWorkout);
 
@@ -126,22 +122,6 @@ const StorageService = {
             if (!uid) return;
             PROFILE_SCOPED_BASE_KEYS.forEach(baseKey => migrateLegacyProfileKey(baseKey, uid));
         });
-    },
-
-    readString(baseKey, fallback = null, opts = {}) {
-        return readRaw(baseKey, fallback, opts);
-    },
-
-    writeString(baseKey, value, opts = {}) {
-        writeRaw(baseKey, value, opts);
-    },
-
-    readJSON(baseKey, fallback, opts = {}) {
-        return readJSON(baseKey, fallback, opts);
-    },
-
-    writeJSON(baseKey, value, opts = {}) {
-        writeJSON(baseKey, value, opts);
     },
 
     remove(baseKey, opts = {}) {

@@ -270,7 +270,6 @@ const GuidedWorkoutView = () => {
     };
 
     const isCardio = currentExerciseInstance.exercise.category === 'Cardio';
-    const isYoga = currentExerciseInstance.exercise.category === 'Yoga';
 
     const formatTime = (seconds) => {
         const m = Math.floor(seconds / 60);
