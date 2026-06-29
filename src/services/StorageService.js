@@ -26,7 +26,9 @@ const KEY = {
     progType: 'fitness_prog_type',
     progInc: 'fitness_prog_inc',
     customTemplates: 'fitness_custom_templates',
-    customExercises: 'fitness_custom_exercises'
+    customExercises: 'fitness_custom_exercises',
+    equipmentProfile: 'fitness_equipment_profile',
+    customEquipment: 'fitness_custom_equipment'
 };
 
 const PROFILE_SCOPED_BASE_KEYS = [
@@ -46,7 +48,9 @@ const PROFILE_SCOPED_BASE_KEYS = [
     KEY.progType,
     KEY.progInc,
     KEY.customTemplates,
-    KEY.customExercises
+    KEY.customExercises,
+    KEY.equipmentProfile,
+    KEY.customEquipment
 ];
 
 const safeParse = (raw, fallback) => {
@@ -299,7 +303,9 @@ const StorageService = {
             smartProgressionEnabled: readRaw(KEY.smartProg, 'false', { uid }) === 'true',
             progressionMode: readRaw(KEY.progMode, 'linear', { uid }),
             progressionType: readRaw(KEY.progType, 'fixed', { uid }),
-            progressionIncrement: Number(readRaw(KEY.progInc, '5', { uid }))
+            progressionIncrement: Number(readRaw(KEY.progInc, '5', { uid })),
+            equipmentProfileId: readRaw(KEY.equipmentProfile, 'full_gym', { uid }),
+            customEquipmentItems: readJSON(KEY.customEquipment, [], { uid })
         };
     },
 
@@ -311,6 +317,8 @@ const StorageService = {
     saveAssessments(uid, assessments) { writeJSON(KEY.assessments, assessments, { uid }); },
     saveTheme(uid, theme) { writeRaw(KEY.theme, theme, { uid }); },
     saveUnits(uid, units) { writeRaw(KEY.units, units, { uid }); },
+    saveEquipmentProfile(uid, profileId) { writeRaw(KEY.equipmentProfile, profileId, { uid }); },
+    saveCustomEquipment(uid, items) { writeJSON(KEY.customEquipment, items, { uid }); },
     saveSound(uid, soundEnabled) { writeRaw(KEY.sound, soundEnabled, { uid }); },
     saveDefaultTimers(uid, rest, work) {
         writeRaw(KEY.defaultRest, rest, { uid });

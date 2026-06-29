@@ -66,14 +66,14 @@ const DEFAULT_EXERCISES = [
     { "id": "wt_hammer_curl", "name": "Hammer Curl", "category": "Weights", "primary_muscle": "Arms", "equipment": "Dumbbells", "instructions": "Hold dumbbells with palms facing each other and curl to target the brachialis and forearm." },
     { "id": "wt_preacher_curl", "name": "Preacher Curl", "category": "Weights", "primary_muscle": "Arms", "equipment": "Machine/Barbell", "instructions": "Use a preacher bench to isolate the biceps, ensuring a full range of motion at the bottom." },
     { "id": "wt_tricep_pushdown", "name": "Tricep Pushdown", "category": "Weights", "primary_muscle": "Arms", "equipment": "Cable", "instructions": "Extend arms downward using a cable attachment, keeping elbows pinned to your ribs." },
-    { "id": "wt_overhead_ext", "name": "Overhead Tricep Extension", "category": "Weights", "primary_muscle": "Arms", "equipment": "Dumbbell/Cable", "instructions": "Hold weight behind your head and extend arms fully upward to target the long head of the tricep." },
+    { "id": "wt_overhead_ext", "name": "Overhead Tricep Extension", "category": "Weights", "primary_muscle": "Arms", "equipment": "Dumbbells/Cable", "instructions": "Hold weight behind your head and extend arms fully upward to target the long head of the tricep." },
     { "id": "wt_skull_crusher", "name": "Skull Crusher", "category": "Weights", "primary_muscle": "Arms", "equipment": "Barbell", "instructions": "Lying down, lower the bar toward your forehead by bending only at the elbows, then extend." },
     { "id": "wt_squat", "name": "Weighted Squat", "category": "Weights", "primary_muscle": "Legs", "equipment": "Barbell", "instructions": "Lower hips back and down until thighs are at least parallel to the floor, then drive up through heels." },
     { "id": "wt_lunge", "name": "Weighted Lunge", "category": "Weights", "primary_muscle": "Legs", "equipment": "Dumbbells", "instructions": "Step forward and lower your back knee toward the ground, keeping your front knee aligned with your ankle." },
     { "id": "wt_leg_press", "name": "Leg Press", "category": "Weights", "primary_muscle": "Legs", "equipment": "Machine", "instructions": "Press the platform away using your legs, avoiding locking your knees at the top." },
     { "id": "wt_leg_ext", "name": "Leg Extension", "category": "Weights", "primary_muscle": "Legs", "equipment": "Machine", "instructions": "Sit and extend legs fully to isolate the quadriceps; lower the weight under control." },
     { "id": "wt_leg_curl", "name": "Leg Curl", "category": "Weights", "primary_muscle": "Legs", "equipment": "Machine", "instructions": "Curl your legs toward your glutes to isolate the hamstrings; avoid arching your lower back." },
-    { "id": "wt_calf_raise", "name": "Calf Raise", "category": "Weights", "primary_muscle": "Legs", "equipment": "Machine/Dumbbell", "instructions": "Raise your heels as high as possible, hold the squeeze, and lower slowly for a full stretch." },
+    { "id": "wt_calf_raise", "name": "Calf Raise", "category": "Weights", "primary_muscle": "Legs", "equipment": "Machine/Dumbbells", "instructions": "Raise your heels as high as possible, hold the squeeze, and lower slowly for a full stretch." },
     { "id": "wt_romanian_deadlift", "name": "Romanian Deadlift", "category": "Weights", "primary_muscle": "Legs", "equipment": "Barbell", "instructions": "Hinge at the hips with a slight knee bend; lower the bar until you feel a stretch in your hamstrings." },
     { "id": "cal_pushup", "name": "Classic Push-up", "category": "Calisthenics", "isBodyweight": true, "primary_muscle": "Chest", "equipment": "None", "instructions": "Maintain a straight plank position and lower your chest to the floor before pushing back up." },
     { "id": "cal_incline_pushup", "name": "Incline Push-up", "category": "Calisthenics", "isBodyweight": true, "primary_muscle": "Chest", "equipment": "Bench/Elevated Surface", "instructions": "Place hands on an elevated surface; this version emphasizes the lower chest and is easier than flat pushups." },
@@ -118,44 +118,131 @@ const DEFAULT_EXERCISES = [
     { "id": "yoga_triangle", "name": "Triangle Pose", "category": "Yoga", "primary_muscle": "Legs", "isDurationBased": true, "instructions": "With legs wide, reach one hand toward your foot while extending the other hand toward the ceiling." }
 ];
 
+const DEFAULT_EQUIPMENT_PROFILES = [
+    {
+        id: 'full_gym',
+        name: 'Full Gym',
+        description: 'Full commercial gym access',
+        equipment: [
+            'Barbell', 'Dumbbells', 'Cable', 'Machine',
+            'Pull-up Bar', 'Bench/Elevated Surface',
+            'Parallel Bars/Bench', 'Low Bar', 'Wall',
+            'None'
+        ]
+    },
+    {
+        id: 'home_gym',
+        name: 'Home Gym',
+        description: 'Dumbbells, bench, and pull-up bar',
+        equipment: [
+            'Dumbbells', 'Bench/Elevated Surface',
+            'Pull-up Bar', 'Low Bar', 'Wall', 'None'
+        ]
+    },
+    {
+        id: 'fire_station',
+        name: 'Fire Station',
+        description: 'Dumbbells and pull-up bar only',
+        equipment: [
+            'Dumbbells', 'Pull-up Bar',
+            'Bench/Elevated Surface', 'Wall', 'None'
+        ]
+    },
+    {
+        id: 'bodyweight_only',
+        name: 'Bodyweight Only',
+        description: 'No equipment needed',
+        equipment: [
+            'None', 'Wall'
+        ]
+    },
+    {
+        id: 'custom',
+        name: 'Custom',
+        description: 'Your own equipment selection',
+        equipment: [] // user-defined, populated in settings
+    }
+];
+
 const DEFAULT_TEMPLATES = [
     {
         id: 'powerhouse',
         name: 'The Powerhouse',
         exercises: ['wt_deadlift', 'wt_flat_bench', 'wt_squat', 'wt_ohp', 'wt_lat_pulldown', 'cal_plank'],
-        sets: 3
+        sets: 3,
+        equipmentTier: 'full_gym'
     },
     {
         id: 'upper_blast',
         name: 'Upper Body Blast',
         exercises: ['wt_flat_bench', 'wt_lat_pulldown', 'wt_ohp', 'wt_bent_over_row', 'wt_tricep_pushdown', 'wt_bicep_curl'],
-        sets: 3
+        sets: 3,
+        equipmentTier: 'full_gym'
     },
     {
         id: 'leg_foundation',
         name: 'Leg Foundation',
         exercises: ['wt_squat', 'wt_leg_press', 'wt_romanian_deadlift', 'wt_leg_ext', 'wt_calf_raise'],
-        sets: 3
+        sets: 3,
+        equipmentTier: 'full_gym'
     },
     {
         id: 'pectoral_pump',
         name: 'The Pectoral Pump',
         exercises: ['wt_flat_bench', 'wt_incline_bench', 'wt_decline_bench', 'wt_chest_fly', 'wt_cable_crossover'],
-        sets: 3
+        sets: 3,
+        equipmentTier: 'full_gym'
     },
     {
         id: 'core_flow',
         name: 'Core & Flow',
         exercises: ['cal_plank', 'yoga_down_dog', 'yoga_warrior2', 'yoga_pigeon', 'yoga_boat', 'yoga_child'],
-        sets: 3
+        sets: 3,
+        equipmentTier: 'bodyweight_only'
     },
     {
         id: 'cardio_run_template',
         name: 'Running',
         exercises: ['cardio_run'],
-        sets: 1
+        sets: 1,
+        equipmentTier: 'bodyweight_only'
     }
 ];
+
+const getActiveEquipmentList = (
+    profileId,
+    profiles,
+    customItems,
+    sessionOverride
+) => {
+    if (sessionOverride !== null) return sessionOverride;
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return null; // null = no filter, show all
+    if (profileId === 'custom') return customItems;
+    return profile.equipment;
+};
+
+const isExerciseCompatible = (exercise, equipmentList) => {
+    if (!equipmentList) return true; // no filter active
+    if (!exercise.equipment) return true; // no equipment field
+
+    // The equipment field overloads "/" as both an OR-separator
+    // (e.g. "Barbell/Dumbbells") and as part of literal single names
+    // (e.g. "Bench/Elevated Surface", "Parallel Bars/Bench"). Match the
+    // full literal string first so multi-word names resolve correctly,
+    // then fall back to the slash-split for genuine OR-lists.
+    if (equipmentList.includes(exercise.equipment)) return true;
+
+    const exerciseEquipment = exercise.equipment
+        .split('/')
+        .map(e => e.trim());
+
+    // Compatible if ANY of the exercise equipment options
+    // are in the active list
+    return exerciseEquipment.some(eq =>
+        equipmentList.includes(eq)
+    );
+};
 
 // Safety lookup function to prevent "undefined" crashes
 const getExerciseById = (id, masterList) => {
@@ -227,6 +314,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [theme, setTheme] = useState('dark');
     const [units, setUnits] = useState('metric');
     const [soundEnabled, setSoundEnabled] = useState(true);
+    const [activeEquipmentProfileId, setActiveEquipmentProfileId] = useState('full_gym');
+    const [customEquipmentItems, setCustomEquipmentItems] = useState([]);
+    const [sessionEquipmentOverride, setSessionEquipmentOverride] = useState(null); // null = use saved profile, array = temp override
     const [coachPersonality, setCoachPersonality] = useState(DEFAULT_PERSONALITY);
     const [coachVoiceId, setCoachVoiceId] = useState(DEFAULT_VOICE_ID);
     const [userStats, setUserStats] = useState({
@@ -402,6 +492,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setTheme(ps.theme);
         setUnits(ps.units);
         setSoundEnabled(ps.soundEnabled);
+
+        setActiveEquipmentProfileId(ps.equipmentProfileId || 'full_gym');
+        setCustomEquipmentItems(ps.customEquipmentItems || []);
 
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
@@ -730,6 +823,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             });
         }
     }, [smartProgressionEnabled, progressionMode, progressionType, progressionIncrement, currentProfile]);
+
+    // Persist Active Equipment Profile
+    const equipmentProfileMountRef = useRef(true);
+    useEffect(() => {
+        if (equipmentProfileMountRef.current) { equipmentProfileMountRef.current = false; return; }
+        if (currentProfile) {
+            StorageService.saveEquipmentProfile(currentProfile.id, activeEquipmentProfileId);
+        }
+    }, [activeEquipmentProfileId, currentProfile]);
+
+    // Persist Custom Equipment Items
+    const customEquipmentMountRef = useRef(true);
+    useEffect(() => {
+        if (customEquipmentMountRef.current) { customEquipmentMountRef.current = false; return; }
+        if (currentProfile) {
+            StorageService.saveCustomEquipment(currentProfile.id, customEquipmentItems);
+        }
+    }, [customEquipmentItems, currentProfile]);
 
 
 
@@ -1773,6 +1884,18 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // re-renders don't hand consumers a brand-new value object every render.
     // Setter/context fns are intentionally omitted from the deps below — see the
     // eslint-disable on the dependency array.
+    const getCompatibleExercises = () => {
+        const equipmentList = getActiveEquipmentList(
+            activeEquipmentProfileId,
+            DEFAULT_EQUIPMENT_PROFILES,
+            customEquipmentItems,
+            sessionEquipmentOverride
+        );
+        return exercises.filter(ex =>
+            isExerciseCompatible(ex, equipmentList)
+        );
+    };
+
     const value = useMemo(() => ({
         activeWorkout,
         prepValidation,
@@ -1846,7 +1969,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         progressionType,
         setProgressionType,
         progressionIncrement,
-        setProgressionIncrement
+        setProgressionIncrement,
+
+        // Equipment Profile System
+        equipmentProfiles: DEFAULT_EQUIPMENT_PROFILES,
+        activeEquipmentProfileId,
+        setActiveEquipmentProfileId,
+        customEquipmentItems,
+        setCustomEquipmentItems,
+        sessionEquipmentOverride,
+        setSessionEquipmentOverride,
+        getCompatibleExercises
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }), [
         activeWorkout, exercises, templates, history,
@@ -1856,6 +1989,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         smartProgressionEnabled, progressionMode,
         progressionType, progressionIncrement,
         authChecked,
+        activeEquipmentProfileId, customEquipmentItems, sessionEquipmentOverride,
     ]);
 
     return (
