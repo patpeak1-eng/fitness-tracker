@@ -85,14 +85,12 @@ The prompt cannot reclassify what the code actually is.
 Example: a prompt labeled LOW that touches auth.py is HIGH — full stop.
 
 ## SESSION_BUDGET_RULE
-Each session operates within a token budget shared across Claude Chat +
-all Claude Code terminals simultaneously (resets every ~5 hours).
-Context estimate required in every completion report (LOW/MEDIUM/HIGH).
-Thresholds:
-  Under 70% — proceed normally
-  70-80%    — complete current task only, flag in report, no new tasks
-  Over 80%  — hard stop, notify coordinator, open fresh terminal
-Never start a major task above 70% session usage.
+The session bar % at claude.ai/settings/usage → "Current session"
+is the ONLY authoritative usage signal. Terminal internal token
+math is informational only — do NOT use it to mandate restarts
+or stop work mid-task. Recommend a fresh terminal when context
+feels long or task is complete. Require one only when the
+coordinator instructs it or the session bar exceeds 80%.
 
 ## CONTEXT_EFFICIENCY_RULE
 Minimize token burn on every operation:
