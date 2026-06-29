@@ -170,42 +170,48 @@ const DEFAULT_TEMPLATES = [
         name: 'The Powerhouse',
         exercises: ['wt_deadlift', 'wt_flat_bench', 'wt_squat', 'wt_ohp', 'wt_lat_pulldown', 'cal_plank'],
         sets: 3,
-        equipmentTier: 'full_gym'
+        equipmentTier: 'full_gym',
+        estimatedDuration: 55
     },
     {
         id: 'upper_blast',
         name: 'Upper Body Blast',
         exercises: ['wt_flat_bench', 'wt_lat_pulldown', 'wt_ohp', 'wt_bent_over_row', 'wt_tricep_pushdown', 'wt_bicep_curl'],
         sets: 3,
-        equipmentTier: 'full_gym'
+        equipmentTier: 'full_gym',
+        estimatedDuration: 45
     },
     {
         id: 'leg_foundation',
         name: 'Leg Foundation',
         exercises: ['wt_squat', 'wt_leg_press', 'wt_romanian_deadlift', 'wt_leg_ext', 'wt_calf_raise'],
         sets: 3,
-        equipmentTier: 'full_gym'
+        equipmentTier: 'full_gym',
+        estimatedDuration: 40
     },
     {
         id: 'pectoral_pump',
         name: 'The Pectoral Pump',
         exercises: ['wt_flat_bench', 'wt_incline_bench', 'wt_decline_bench', 'wt_chest_fly', 'wt_cable_crossover'],
         sets: 3,
-        equipmentTier: 'full_gym'
+        equipmentTier: 'full_gym',
+        estimatedDuration: 45
     },
     {
         id: 'core_flow',
         name: 'Core & Flow',
         exercises: ['cal_plank', 'yoga_down_dog', 'yoga_warrior2', 'yoga_pigeon', 'yoga_boat', 'yoga_child'],
         sets: 3,
-        equipmentTier: 'bodyweight_only'
+        equipmentTier: 'bodyweight_only',
+        estimatedDuration: 30
     },
     {
         id: 'cardio_run_template',
         name: 'Running',
         exercises: ['cardio_run'],
         sets: 1,
-        equipmentTier: 'bodyweight_only'
+        equipmentTier: 'bodyweight_only',
+        estimatedDuration: 30
     }
 ];
 
