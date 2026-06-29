@@ -670,7 +670,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     }, [history, currentProfile]);
 
     // Persist Active Workout
+    const activeWorkoutMountRef = useRef(true);
     useEffect(() => {
+        // Skip the persist write on initial mount: refreshProfileData restores the
+        // saved active workout right after mount, and writing here first would
+        // clobber the saved value with the pre-restore null before the load
+        // completes. (Mirrors the theme/units/sound persist guards.)
+        if (activeWorkoutMountRef.current) {
+            activeWorkoutMountRef.current = false;
+            return;
+        }
         if (currentProfile) {
             StorageService.saveActiveWorkout(currentProfile.id, activeWorkout || null);
         }
