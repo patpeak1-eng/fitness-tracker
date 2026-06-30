@@ -131,6 +131,82 @@
     justify-content: center;
 }
 
+.active-set-list {
+    width: min(100%, 420px);
+    margin: 0 auto 22px;
+    padding: 10px;
+    border: var(--border-glass);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.active-set-header,
+.active-set-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 1fr 38px;
+    align-items: center;
+    column-gap: 10px;
+}
+
+.active-set-header {
+    padding: 0 12px 8px;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.active-set-row {
+    min-height: 44px;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-left: 2px solid transparent;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--text-primary);
+}
+
+.active-set-row.current {
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.active-set-row.completed {
+    background: rgba(52, 199, 89, 0.10);
+    border-left: 2px solid rgba(52, 199, 89, 0.6);
+}
+
+.active-set-number,
+.active-set-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+.active-set-row.completed .active-set-number,
+.active-set-row.completed .active-set-value {
+    color: rgba(52, 199, 89, 0.9);
+}
+
+.active-set-check {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.active-set-row.completed .active-set-check {
+    border-color: rgba(52, 199, 89, 0.85);
+    background: rgba(52, 199, 89, 0.9);
+    color: #06120a;
+}
+
 /* TIMER CIRCLE - NEON CENTERPIECE */
 .timer-container-row {
     display: flex;

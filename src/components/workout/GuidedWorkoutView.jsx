@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, Square, SkipForward, SkipBack, CheckCircle2, RotateCcw, Minus, Plus, X, ChevronLeft, ChevronRight, StickyNote, Info, Trophy } from 'lucide-react';
+import { Play, Pause, Square, SkipForward, SkipBack, CheckCircle2, RotateCcw, Minus, Plus, X, ChevronLeft, ChevronRight, StickyNote, Info, Trophy, Check } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import { useTimer } from '../../context/TimerContext';
 import Modal from '../common/Modal';
@@ -408,6 +408,33 @@ const GuidedWorkoutView = () => {
                             <span style={{ color: 'var(--accent)' }}>{currentSet.targetReps || '8'}</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>REPS</span>
                         </button>
+                    </div>
+
+                    <div className="active-set-list" aria-label="Set log">
+                        <div className="active-set-header">
+                            <span>Set</span>
+                            <span>{units === 'imperial' ? 'LBS' : 'KGS'}</span>
+                            <span>Reps</span>
+                            <span></span>
+                        </div>
+                        {currentExerciseInstance.sets.map((set, index) => (
+                            <div
+                                key={set.id}
+                                className={`active-set-row ${set.completed ? 'completed' : ''} ${index === currentSetIndex ? 'current' : ''}`}
+                            >
+                                <span className="active-set-number">{index + 1}</span>
+                                <span className="active-set-value">{set.weight > 0 ? set.weight : 'BW'}</span>
+                                <span className="active-set-value">{set.reps || set.targetReps || '--'}</span>
+                                <button
+                                    type="button"
+                                    className="active-set-check"
+                                    aria-label={`${set.completed ? 'Mark set incomplete' : 'Mark set complete'} ${index + 1}`}
+                                    onClick={() => toggleSetComplete(currentExerciseInstance.id, set.id, set.completed)}
+                                >
+                                    {set.completed && <Check size={18} strokeWidth={3} />}
+                                </button>
+                            </div>
+                        ))}
                     </div>
 
                     {/* TIMER CIRCLE */}
