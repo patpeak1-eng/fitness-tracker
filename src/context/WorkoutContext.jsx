@@ -291,13 +291,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     });
     const [authChecked, setAuthChecked] = useState(false);
 
-    // Single gate for best-effort backend settings sync: authenticated, on a real
-    // (non-default) profile, with an API configured. useCallback so it's a stable
-    // reference for the persist-effect deps and the TimerProvider prop.
+    // Single gate for best-effort backend settings sync: backend-authenticated,
+    // with an API configured. currentProfile.email is populated only for cloud/
+    // OAuth users — local profiles created via createProfile have a non-default
+    // id but no email, so gating on email (not id !== 'user_default') prevents
+    // doomed 401 syncs for unauthenticated local profiles. useCallback so it's a
+    // stable reference for the persist-effect deps and the TimerProvider prop.
     const canSyncToBackend = useCallback(() =>
         !!(authChecked &&
            currentProfile &&
-           currentProfile.id !== 'user_default' &&
+           currentProfile.email &&
            ApiService.isAvailable()),
     [authChecked, currentProfile]);
 
@@ -706,7 +709,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             themeSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ theme })
-                    .catch(err => console.error('[settings-sync] theme:', err));
+                    .catch(err => console.warn('[settings-sync] theme:', err));
             }
         }
     }, [theme, currentProfile]);
@@ -726,7 +729,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             unitsSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ units })
-                    .catch(err => console.error('[settings-sync] units:', err));
+                    .catch(err => console.warn('[settings-sync] units:', err));
             }
         }
     }, [units, currentProfile]);
@@ -746,7 +749,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             soundSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ sound_enabled: soundEnabled })
-                    .catch(err => console.error('[settings-sync] sound_enabled:', err));
+                    .catch(err => console.warn('[settings-sync] sound_enabled:', err));
             }
         }
     }, [soundEnabled, currentProfile]);
@@ -766,7 +769,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             coachPersonalitySyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ coach_personality: coachPersonality })
-                    .catch(err => console.error('[settings-sync] coach_personality:', err));
+                    .catch(err => console.warn('[settings-sync] coach_personality:', err));
             }
         }
     }, [coachPersonality, currentProfile]);
@@ -786,7 +789,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             coachVoiceIdSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ coach_voice_id: coachVoiceId })
-                    .catch(err => console.error('[settings-sync] coach_voice_id:', err));
+                    .catch(err => console.warn('[settings-sync] coach_voice_id:', err));
             }
         }
     }, [coachVoiceId, currentProfile]);
