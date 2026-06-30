@@ -2,9 +2,9 @@
 
 :root {
   /* --- MIDNIGHT & LIME PALETTE (Phase H) --- */
-  --bg-app: #0a0a0a;
+  --bg-app: #0e0e18;
   /* Deep Charcoal */
-  --bg-card: rgba(255, 255, 255, 0.05);
+  --bg-card: #16162a;
   /* Premium Glass Base */
   --primary: #ccff00;
   /* Vibrant Lime */
@@ -26,13 +26,14 @@
   --bg-primary: var(--bg-app);
   --surface-light: var(--bg-card);
   --primary-light: var(--primary);
-  --border-color: rgba(255, 255, 255, 0.1);
+  --border-color: rgba(255, 255, 255, 0.07);
   /* Surface & border tokens referenced across pages — defined once here */
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface-card: rgba(255, 255, 255, 0.04);
-  --card-bg: rgba(255, 255, 255, 0.03);
+  --surface: #1e1e2e;
+  --surface-card: #16162a;
+  --card-bg: #16162a;
+  --input-bg: #28283c;
   /* --border is a COLOR, not a shorthand: all usages are `1px solid var(--border)` */
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.07);
 
   /* --- SPACING & LAYOUT --- */
   --nav-height: 80px;
@@ -46,7 +47,7 @@
 
   /* --- GLASSMORPHISM (Premium) --- */
   --glass-blur: blur(12px);
-  --border-glass: 1px solid rgba(255, 255, 255, 0.1);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.07);
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(204, 255, 0, 0.15);
 
@@ -106,7 +107,7 @@ input,
 select,
 textarea {
   font-family: inherit;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--input-bg);
   border: var(--border-glass);
   color: var(--text-primary);
   border-radius: 12px;
