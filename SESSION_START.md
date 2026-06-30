@@ -29,14 +29,30 @@ Railway:   peak-ops-q (877335d0-ecc2-4460-9800-291ffcb3f660)
   + conditional Bearer header
 - bcrypt==4.0.1 pinned — never upgrade
 
-## Open Issues (Priority Order)
-P0 - client_id dedup: backend migration adds client_id to workout_history,
-     frontend sends client_id on saveWorkout, StorageService writes backend
-     UUID back locally. Eliminates workout duplication on re-login.
-P1 - Shared tree cleanup: C:\dev\fitness-tracker on feat/backend with dirty
-     WIP — stash with label, checkout main, rebase at session start.
-P2 - Weight push: wiring POST /api/weight with recorded_at preserved.
-P3 - Two throwaway prod users (smoke+ts@example.com x2) in DB.
+## Session 10 Final State
+Session 10 final SHA on main: 96f7d7b
+Completed in S10:
+- Dead code cleanup — chore 39a4e3f (40 deletions across 3 files)
+- ExerciseIllustration component — feat 714c195 (wired to 3 surfaces:
+  exercise library, pre-set detail, rest timer)
+- All 73 exercise illustrations recompressed as JPEG quality=85
+  (~78KB avg, public/illustrations/) — 96f7d7b
+
+## Session 11 Priorities
+P1 - SESSION_START.md update (this document) — reflect S10 final state
+     and the S11 plan.
+P2 - UI design research sprint: second pass on visual design language
+     (colors, typography, layout, card design, spacing). Use the same
+     multi-platform research method as the S9 feature research; synthesize
+     into a design brief BEFORE any terminal work.
+P3 - Settings sync to backend — FRONTEND WIRING ONLY, no new migration.
+     /api/preferences does NOT exist. Preference fields already live on
+     PUT /api/profile: theme, units, sound_enabled, default_rest_time,
+     default_work_time, coach_personality, coach_voice_id (confirmed in
+     backend/app/models.py + ProfileUpdate schema). Wire the WorkoutContext
+     persist useEffects to PUT /api/profile on change.
+P4 - Profile switch active workout race condition (low priority) — useRef
+     guard scoped to profile-change transitions.
 
 ## Terminal Workflow (Mission Control / Direct-to-Main)
 Every terminal prompt must start with:
