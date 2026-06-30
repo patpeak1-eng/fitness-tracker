@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Plus, Search, Filter } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
+import ExerciseIllustration from '../common/ExerciseIllustration';
 import './ExerciseSelector.css';
 
 const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio', 'Functional'];
@@ -123,6 +124,13 @@ const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
                                     >
                                         <div className="exercise-info">
                                             <span className="exercise-name">{exercise.name}</span>
+                                            {exercise.illustration && (
+                                                <ExerciseIllustration
+                                                    exerciseId={exercise.id}
+                                                    illustration={exercise.illustration}
+                                                    size="thumbnail"
+                                                />
+                                            )}
                                             <span className="exercise-meta">
                                                 {exercise.primary_muscle} • {exercise.subMuscle || exercise.category}
                                             </span>

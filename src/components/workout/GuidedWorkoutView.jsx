@@ -4,6 +4,7 @@ import { Play, Pause, Square, SkipForward, SkipBack, CheckCircle2, RotateCcw, Mi
 import { useWorkout } from '../../context/WorkoutContext';
 import { useTimer } from '../../context/TimerContext';
 import Modal from '../common/Modal';
+import ExerciseIllustration from '../common/ExerciseIllustration';
 
 import WorkoutNotesModal from './WorkoutNotesModal';
 import ExerciseMedia from './ExerciseMedia';
@@ -348,6 +349,13 @@ const GuidedWorkoutView = () => {
                     <div className="exercise-card">
                         <span className="label-small">Current Exercise</span>
                         <h1 className="exercise-title-split">{currentExerciseInstance.exercise.name}</h1>
+                        {currentExerciseInstance.exercise.illustration && (
+                            <ExerciseIllustration
+                                exerciseId={currentExerciseInstance.exercise.id}
+                                illustration={currentExerciseInstance.exercise.illustration}
+                                size="full"
+                            />
+                        )}
 
                         <button className="view-instructions-btn" onClick={() => setInfoModalOpen(true)}>
                             <Info size={18} /> Description
@@ -443,6 +451,14 @@ const GuidedWorkoutView = () => {
                             <Plus size={24} />
                         </button>
                     </div>
+
+                    {isResting && nextExerciseInstance?.exercise?.illustration && (
+                        <ExerciseIllustration
+                            exerciseId={nextExerciseInstance.exercise.id}
+                            illustration={nextExerciseInstance.exercise.illustration}
+                            size="rest"
+                        />
+                    )}
 
                     {/* MAIN ACTION BUTTON */}
                     <div className="action-buttons-container" style={{ maxWidth: '400px' }}>

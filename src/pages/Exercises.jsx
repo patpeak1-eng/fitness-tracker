@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import BackButton from '../components/common/BackButton';
+import ExerciseIllustration from '../components/common/ExerciseIllustration';
 import './Exercises.css';
 
 const CATEGORIES = ['All', 'Weights', 'Calisthenics', 'Cardio', 'Yoga'];
@@ -69,6 +70,13 @@ const Exercises = () => {
                             <div className="ex-card-main">
                                 <div className="ex-card-info">
                                     <h3 className="ex-name">{ex.name}</h3>
+                                    {ex.illustration && (
+                                        <ExerciseIllustration
+                                            exerciseId={ex.id}
+                                            illustration={ex.illustration}
+                                            size="thumbnail"
+                                        />
+                                    )}
                                     <div className="ex-meta">
                                         {ex.primary_muscle && <span className="ex-muscle">{ex.primary_muscle}</span>}
                                         {ex.equipment && <span className="ex-equip">{ex.equipment}</span>}
