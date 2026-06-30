@@ -136,6 +136,7 @@
 .active-timer {
     font-family: 'Inter', monospace;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     color: var(--primary);
     font-weight: 600;
     text-shadow: 0 0 10px rgba(191, 255, 0, 0.3);
@@ -354,6 +355,8 @@
     font-size: 4.5rem;
     color: var(--primary);
     font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     text-shadow: 0 0 30px rgba(204, 255, 0, 0.4);
     line-height: 1;
 }

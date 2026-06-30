@@ -69,6 +69,7 @@
     font-size: 4.5rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     line-height: 1;
     letter-spacing: -2px;
     /* idle state */
@@ -115,6 +116,7 @@
     font-size: 0.9rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     transition: all 0.2s ease;
 }
 
@@ -156,6 +158,7 @@
     font-size: 1.5rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     background: rgba(0, 0, 0, 0.3);
     border: var(--border-glass);
     color: var(--text-primary);

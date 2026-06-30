@@ -65,6 +65,17 @@
     text-align: center;
 }
 
+.sets-header,
+.set-row .col-set,
+.col-weight input,
+.col-reps input,
+.col-dist input,
+.col-time input,
+.col-time-yoga input {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
 .header-cardio {
     grid-template-columns: 40px 1fr 1fr 1fr 1fr 80px;
     /* Set, GoalDist, GoalTime, ActualDist, ActualTime, Actions */

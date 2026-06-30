@@ -110,6 +110,12 @@
     transition: all 0.2s;
 }
 
+.detail-pill,
+.nav-indicator {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
 .detail-pill.clickable:hover {
     background: rgba(255, 255, 255, 0.15);
     border-color: var(--primary);
@@ -223,6 +229,7 @@
     font-size: 5rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     line-height: 1;
     margin: 10px 0;
     letter-spacing: -2px;

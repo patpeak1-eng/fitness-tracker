@@ -41,6 +41,8 @@
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
     line-height: 1;
 }
 
