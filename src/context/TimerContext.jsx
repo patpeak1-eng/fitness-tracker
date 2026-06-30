@@ -192,7 +192,7 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
             timersSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current?.()) {
                 ApiService.saveProfile({ default_rest_time: defaultRestTime, default_work_time: defaultWorkTime })
-                    .catch(err => console.error('[settings-sync] timers:', err));
+                    .catch(err => console.warn('[settings-sync] timers:', err));
             }
         }
     }, [defaultRestTime, defaultWorkTime, currentProfile]);
