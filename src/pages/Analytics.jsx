@@ -119,19 +119,19 @@ const Analytics = () => {
                 <div className="info-panel" style={{
                     margin: '0 20px 20px',
                     padding: '15px',
-                    background: 'rgba(99, 102, 241, 0.1)',
-                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '12px',
                     color: 'var(--text-secondary)',
                     fontSize: '0.9rem',
                     lineHeight: '1.5'
                 }}>
                     <div style={{ marginBottom: '10px' }}>
-                        <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>📈 Est. 1RM (Epley)</strong>
+                        <strong style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}><TrendingUp size={14} /> Est. 1RM (Epley)</strong>
                         Tracks the heaviest weight you lifted in a single set during the workout. Aim to increase this over time for strength gains.
                     </div>
                     <div>
-                        <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>📊 Max Volume</strong>
+                        <strong style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}><BarChart3 size={14} /> Max Volume</strong>
                         Tracks the total load (Sets × Reps × Weight) moved in the session. Increasing volume is key for building muscle endurance and size.
                     </div>
                 </div>

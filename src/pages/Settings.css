@@ -205,7 +205,7 @@
     position: absolute;
     cursor: pointer;
     inset: 0;
-    background-color: #444;
+    background-color: var(--input-bg);
     border-radius: 20px;
     transition: 0.4s;
 }
@@ -217,7 +217,7 @@
     width: 16px;
     left: 2px;
     bottom: 2px;
-    background-color: #fff;
+    background-color: var(--text-primary);
     border-radius: 50%;
     transition: 0.4s;
 }
@@ -227,7 +227,7 @@
 }
 
 .coach-switch input:checked + .coach-switch-slider::before {
-    background-color: #000;
+    background-color: var(--bg-app);
     transform: translateX(20px);
 }
 

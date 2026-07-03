@@ -78,8 +78,8 @@
 
 /* Fix for dark mode select dropdowns showing white background options */
 .form-group select option {
-    background-color: #1a1a1a;
-    color: #ffffff;
+    background-color: var(--input-bg);
+    color: var(--text-primary);
 }
 
 .form-group input:focus,
@@ -179,8 +179,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);

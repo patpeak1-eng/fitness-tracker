@@ -1385,6 +1385,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     };
 
     const toggleSetComplete = (exerciseInstanceId, setId, currentStatus) => {
+        if (!activeWorkout) return;
+
         let updates = { completed: !currentStatus };
 
         // PR CHECK (Phase E)
