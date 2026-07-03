@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Search, Filter } from 'lucide-react';
+import { X, Plus, Search, Filter, Check } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import ExerciseIllustration from '../common/ExerciseIllustration';
 import './ExerciseSelector.css';
@@ -8,12 +8,21 @@ const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio', '
 const MUSCLE_GROUPS = ['All', 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Abs', 'Full Body'];
 const EQUIPMENT = ['All', 'Dumbbells', 'Barbell', 'Cable', 'Machine', 'Pull-up Bar', 'None'];
 
-const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
+const ExerciseSelector = ({
+    exercises,
+    onSelect,
+    onClose,
+    activeCategory,
+    setActiveCategory,
+    activeEquipment,
+    setActiveEquipment,
+    activeMuscle,
+    setActiveMuscle,
+}) => {
     const { addCustomExercise } = useWorkout();
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeCategory, setActiveCategory] = useState('All');
-    const [activeMuscle, setActiveMuscle] = useState('All');
-    const [activeEquipment, setActiveEquipment] = useState('All');
+    // Multi-select: exercise IDs staged for adding this open cycle
+    const [selectedIds, setSelectedIds] = useState(() => new Set());
     const [showCustomForm, setShowCustomForm] = useState(false);
 
     // Custom Form State
@@ -69,6 +78,22 @@ const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
         setShowCustomForm(false);
         setCustomName('');
         setSearchTerm(customName); // Pre-fill search to find it immediately
+    };
+
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleConfirmSelection = () => {
+        if (selectedIds.size === 0) return;
+        // Preserve data order; add each staged exercise via the existing onSelect contract
+        exercises.filter(ex => selectedIds.has(ex.id)).forEach(ex => onSelect(ex));
+        onClose();
     };
 
     return (
@@ -142,32 +167,73 @@ const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
                             {filteredExercises.length === 0 ? (
                                 <div className="no-results">No exercises match these filters</div>
                             ) : (
-                                filteredExercises.map((exercise) => (
-                                    <div
-                                        key={exercise.id}
-                                        className="exercise-item"
-                                        onClick={() => onSelect(exercise)}
-                                    >
-                                        <div className="exercise-info">
-                                            <span className="exercise-name">{exercise.name}</span>
-                                            {exercise.illustration && (
-                                                <ExerciseIllustration
-                                                    exerciseId={exercise.id}
-                                                    illustration={exercise.illustration}
-                                                    size="thumbnail"
-                                                />
-                                            )}
-                                            <span className="exercise-meta">
-                                                {exercise.primary_muscle} • {exercise.subMuscle || exercise.category}
-                                            </span>
+                                filteredExercises.map((exercise) => {
+                                    const isSelected = selectedIds.has(exercise.id);
+                                    return (
+                                        <div
+                                            key={exercise.id}
+                                            className="exercise-item"
+                                            onClick={() => toggleSelect(exercise.id)}
+                                            style={isSelected ? {
+                                                borderLeft: '2px solid #bfff00',
+                                                background: 'rgba(191, 255, 0, 0.08)'
+                                            } : undefined}
+                                        >
+                                            <div className="exercise-info">
+                                                <span className="exercise-name">{exercise.name}</span>
+                                                {exercise.illustration && (
+                                                    <ExerciseIllustration
+                                                        exerciseId={exercise.id}
+                                                        illustration={exercise.illustration}
+                                                        size="thumbnail"
+                                                    />
+                                                )}
+                                                <span className="exercise-meta">
+                                                    {exercise.primary_muscle} • {exercise.subMuscle || exercise.category}
+                                                </span>
+                                            </div>
+                                            <button
+                                                className="add-btn"
+                                                aria-pressed={isSelected}
+                                                aria-label={isSelected ? `Deselect ${exercise.name}` : `Select ${exercise.name}`}
+                                                style={isSelected ? {
+                                                    background: '#bfff00',
+                                                    color: '#000',
+                                                    borderColor: '#bfff00'
+                                                } : undefined}
+                                            >
+                                                {isSelected ? <Check size={20} /> : <Plus size={20} />}
+                                            </button>
                                         </div>
-                                        <button className="add-btn">
-                                            <Plus size={20} />
-                                        </button>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
+
+                        {selectedIds.size > 0 && (
+                            <div style={{
+                                padding: '1rem 1.5rem',
+                                borderTop: '1px solid var(--border-color)',
+                                background: 'var(--bg-card)'
+                            }}>
+                                <button
+                                    onClick={handleConfirmSelection}
+                                    style={{
+                                        width: '100%',
+                                        padding: '14px',
+                                        background: '#bfff00',
+                                        color: '#000',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        fontSize: '1rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Add {selectedIds.size} exercise{selectedIds.size === 1 ? '' : 's'}
+                                </button>
+                            </div>
+                        )}
                     </>
                 ) : (
                     /* CUSTOM FORM */

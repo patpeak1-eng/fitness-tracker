@@ -11,6 +11,12 @@ const CreateTemplateModal = ({ onClose }) => {
     const [exercises, setExercises] = useState([]);
     const [showExerciseSelector, setShowExerciseSelector] = useState(false);
 
+    // Lifted here so filter selections survive the selector's unmount/remount
+    // across add cycles (selector is conditionally rendered below).
+    const [activeCategory, setActiveCategory] = useState('All');
+    const [activeEquipment, setActiveEquipment] = useState('All');
+    const [activeMuscle, setActiveMuscle] = useState('All');
+
     // Temp state for exercise selector
     const handleAddExercise = (exercise) => {
         // Default set structure
@@ -163,6 +169,12 @@ const CreateTemplateModal = ({ onClose }) => {
                         exercises={availableExercises}
                         onSelect={handleAddExercise}
                         onClose={() => setShowExerciseSelector(false)}
+                        activeCategory={activeCategory}
+                        setActiveCategory={setActiveCategory}
+                        activeEquipment={activeEquipment}
+                        setActiveEquipment={setActiveEquipment}
+                        activeMuscle={activeMuscle}
+                        setActiveMuscle={setActiveMuscle}
                     />
                 )}
             </div>
