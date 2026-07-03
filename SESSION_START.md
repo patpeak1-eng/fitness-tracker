@@ -1,6 +1,9 @@
 FITNESS TRACKER — SESSION START BRIEF
 Paste this into Claude Chat at the start of every session.
 
+Before any work: read docs/ARCHITECTURE.md (how the app is built)
+and MASTER_CONTEXT.md (how sessions operate).
+
 ## Tools Available to Claude Chat
 - Chrome extension connected (Claude in Chrome) — use for reading GitHub
   raw files, Railway dashboard, and backend /openapi.json before writing
@@ -29,30 +32,34 @@ Railway:   peak-ops-q (877335d0-ecc2-4460-9800-291ffcb3f660)
   + conditional Bearer header
 - bcrypt==4.0.1 pinned — never upgrade
 
-## Session 10 Final State
-Session 10 final SHA on main: 96f7d7b
-Completed in S10:
-- Dead code cleanup — chore 39a4e3f (40 deletions across 3 files)
-- ExerciseIllustration component — feat 714c195 (wired to 3 surfaces:
-  exercise library, pre-set detail, rest timer)
-- All 73 exercise illustrations recompressed as JPEG quality=85
-  (~78KB avg, public/illustrations/) — 96f7d7b
+## Session 11 Final State
+Session 11 final SHA on main: this docs close-out commit
+  (last code change: 81a1be3; run `git log --oneline -1` for the exact SHA)
+Completed in S11:
+- Design sprint D1-D5 (a860ac1 -> c0525f1): tabular-nums, dark surface
+  hierarchy, border-radius scale, set-logging table typography
+- Equipment filter in template builder exercise picker (3d83881)
+- Persistent filters + multi-select in template builder (81a1be3)
+- Auth gate tightened to email presence — canSyncToBackend (705df32)
+- TimerContext settings-sync catch downgraded to console.warn (17027a5)
+- Settings Sync verified already complete (all 7 fields wired to
+  PUT /api/profile) — no change needed
+- Full 3-track research sprint for Fable 5 (visual redesign spec,
+  nutrition technical architecture, feature audit) synthesized into
+  docs/FABLE5_SESSION12_BRIEF.md
 
-## Session 11 Priorities
-P1 - SESSION_START.md update (this document) — reflect S10 final state
-     and the S11 plan.
-P2 - UI design research sprint: second pass on visual design language
-     (colors, typography, layout, card design, spacing). Use the same
-     multi-platform research method as the S9 feature research; synthesize
-     into a design brief BEFORE any terminal work.
-P3 - Settings sync to backend — FRONTEND WIRING ONLY, no new migration.
-     /api/preferences does NOT exist. Preference fields already live on
-     PUT /api/profile: theme, units, sound_enabled, default_rest_time,
-     default_work_time, coach_personality, coach_voice_id (confirmed in
-     backend/app/models.py + ProfileUpdate schema). Wire the WorkoutContext
-     persist useEffects to PUT /api/profile on change.
-P4 - Profile switch active workout race condition (low priority) — useRef
-     guard scoped to profile-change transitions.
+## Session 12 Priorities
+P1 - Fable 5 execution — read docs/FABLE5_SESSION12_BRIEF.md in full
+     before any work.
+P2 - Audit pass (Brief Section 4) before any new feature work.
+P3 - Full visual redesign — screen composition rebuild, NOT incremental
+     CSS. Tokens (color/radius/typography) carry forward unchanged;
+     layout is fully open for redesign against the top-app structural
+     specs in the brief.
+P4 - Feature build — Equipment Profile, Fire Station pause, set-type
+     differentiation, nutrition tracking (see brief Section 3).
+P5 - docs/ARCHITECTURE.md must be updated in the same commit as any
+     architectural change — standing rule, not optional.
 
 ## Terminal Workflow (Mission Control / Direct-to-Main)
 Every terminal prompt must start with:
