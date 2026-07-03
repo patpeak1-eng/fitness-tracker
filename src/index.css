@@ -41,8 +41,8 @@
   --safe-area-bottom: env(safe-area-inset-bottom, 20px);
   /* Clears the floating bottom nav (~90px footprint) + breathing room */
   --nav-safe-padding: 120px;
-  --radius-md: 24px;
-  --radius-sm: 12px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
   /* Polish: Button Radius */
 
   /* --- GLASSMORPHISM (Premium) --- */
@@ -110,7 +110,7 @@ textarea {
   background: var(--input-bg);
   border: var(--border-glass);
   color: var(--text-primary);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 10px;
 }
 
@@ -152,8 +152,8 @@ textarea:focus {
   font-weight: 800;
   text-transform: uppercase;
   padding: 16px 32px;
-  border-radius: 50px;
-  /* Pill shape as per mockup */
+  border-radius: 10px;
+  /* Primary CTA radius */
   font-size: 1rem;
   letter-spacing: 1px;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);

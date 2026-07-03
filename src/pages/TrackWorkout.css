@@ -17,7 +17,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: var(--border-glass);
-    border-radius: 20px;
+    border-radius: 12px;
     box-shadow: var(--shadow-glass);
 }
 
@@ -42,7 +42,7 @@
 .secondary-btn-large {
     width: 100%;
     padding: 1rem;
-    border-radius: 12px;
+    border-radius: 10px;
     border: none;
     font-weight: 600;
     font-size: 1rem;
@@ -121,7 +121,7 @@
     font-weight: 800;
     background: var(--primary);
     padding: 4px 12px;
-    border-radius: 4px;
+    border-radius: 999px;
     font-size: 0.8rem;
     letter-spacing: 1px;
     display: inline-block;
@@ -147,7 +147,7 @@
     color: #000;
     border: none;
     padding: 0.6rem 1.2rem;
-    border-radius: 8px;
+    border-radius: 10px;
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 0 15px rgba(0, 255, 157, 0.2);
@@ -245,7 +245,7 @@
 .buffer-preview {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 1.5rem;
     width: 100%;
     max-width: 400px;
@@ -281,7 +281,7 @@
     font-weight: 900;
     font-size: 1.2rem;
     padding: 1.2rem 3rem;
-    border-radius: 100px;
+    border-radius: 10px;
     border: none;
     box-shadow: 0 0 25px rgba(204, 255, 0, 0.3);
     cursor: pointer;
@@ -392,7 +392,7 @@
     font-weight: 800;
     font-size: 1.1rem;
     padding: 16px 48px;
-    border-radius: 100px;
+    border-radius: 10px;
     border: none;
     cursor: pointer;
     box-shadow: 0 0 25px rgba(204, 255, 0, 0.3);
@@ -420,7 +420,7 @@
 .quick-start-card {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
+    border-radius: 12px;
     padding: 30px;
     text-align: center;
     cursor: pointer;
@@ -508,7 +508,7 @@
 .template-tile {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 16px;
     display: flex;
     flex-direction: column;
@@ -576,7 +576,7 @@
     border: 1px dashed var(--primary);
     color: var(--primary);
     padding: 16px;
-    border-radius: 16px;
+    border-radius: 10px;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -627,7 +627,7 @@
     text-align: left;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 14px;
     color: var(--text-primary);
     cursor: pointer;
@@ -693,7 +693,7 @@
 
 .filter-chip {
     padding: 7px 14px;
-    border-radius: 100px;
+    border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.04);
     color: var(--text-secondary);
@@ -728,7 +728,7 @@
     gap: 12px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 16px;
 }
 
@@ -778,7 +778,7 @@
 .muscle-pill {
     font-size: 0.7rem;
     padding: 3px 9px;
-    border-radius: 100px;
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
     color: var(--text-secondary);
     border: 1px solid rgba(255, 255, 255, 0.06);
@@ -797,7 +797,7 @@
     letter-spacing: 0.5px;
     padding: 12px 18px;
     border: none;
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
     box-shadow: 0 0 15px rgba(204, 255, 0, 0.2);
     transition: transform 0.15s ease, box-shadow 0.2s ease;
@@ -824,7 +824,7 @@
     line-height: 1.5;
     background: rgba(255, 255, 255, 0.02);
     border: 1px dashed rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
+    border-radius: 12px;
 }
 
 .build-own-card {
@@ -836,7 +836,7 @@
     background: rgba(204, 255, 0, 0.03);
     border: 1px dashed var(--primary);
     color: var(--text-primary);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 16px;
     cursor: pointer;
     transition: background 0.2s ease;

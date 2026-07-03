@@ -35,7 +35,7 @@
     padding: 12px 14px 12px 42px;
     background: var(--surface, var(--bg-card));
     border: var(--border-glass);
-    border-radius: 14px;
+    border-radius: 8px;
     color: var(--text-primary);
     font-size: 1rem;
 }
@@ -52,7 +52,7 @@
 .ex-tab {
     flex: 0 0 auto;
     padding: 8px 16px;
-    border-radius: 20px;
+    border-radius: 999px;
     background: var(--surface, var(--bg-card));
     border: var(--border-glass);
     color: var(--text-secondary);
@@ -89,7 +89,7 @@
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: var(--border-glass);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 16px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -154,7 +154,7 @@
     background: rgba(204, 255, 0, 0.1);
     border: 1px solid rgba(204, 255, 0, 0.2);
     padding: 4px 10px;
-    border-radius: 12px;
+    border-radius: 999px;
     white-space: nowrap;
 }
 
