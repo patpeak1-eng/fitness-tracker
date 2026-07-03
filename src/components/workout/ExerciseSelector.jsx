@@ -6,12 +6,14 @@ import './ExerciseSelector.css';
 
 const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio', 'Functional'];
 const MUSCLE_GROUPS = ['All', 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Abs', 'Full Body'];
+const EQUIPMENT = ['All', 'Dumbbells', 'Barbell', 'Cable', 'Machine', 'Pull-up Bar', 'None'];
 
 const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
     const { addCustomExercise } = useWorkout();
     const [searchTerm, setSearchTerm] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
     const [activeMuscle, setActiveMuscle] = useState('All');
+    const [activeEquipment, setActiveEquipment] = useState('All');
     const [showCustomForm, setShowCustomForm] = useState(false);
 
     // Custom Form State
@@ -32,9 +34,21 @@ const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
             // Map property name 'primary_muscle'
             const matchesMuscle = activeMuscle === 'All' || ex.primary_muscle === activeMuscle;
 
-            return matchesSearch && matchesCategory && matchesMuscle;
+            // Equipment: 'None' also covers missing/empty; others are case-insensitive contains
+            let matchesEquipment = true;
+            if (activeEquipment !== 'All') {
+                if (activeEquipment === 'None') {
+                    matchesEquipment = !ex.equipment || ex.equipment === 'None';
+                } else {
+                    matchesEquipment = (ex.equipment || '')
+                        .toLowerCase()
+                        .includes(activeEquipment.toLowerCase());
+                }
+            }
+
+            return matchesSearch && matchesCategory && matchesMuscle && matchesEquipment;
         });
-    }, [exercises, searchTerm, activeCategory, activeMuscle]);
+    }, [exercises, searchTerm, activeCategory, activeMuscle, activeEquipment]);
 
     const handleCreateCustom = (e) => {
         e.preventDefault();
@@ -94,6 +108,18 @@ const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
                             </div>
 
                             <div className="filter-chips-row secondary">
+                                {EQUIPMENT.map(equip => (
+                                    <button
+                                        key={equip}
+                                        className={`filter-chip-sm ${activeEquipment === equip ? 'active' : ''}`}
+                                        onClick={() => setActiveEquipment(equip)}
+                                    >
+                                        {equip}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="filter-chips-row secondary">
                                 {MUSCLE_GROUPS.map(muscle => (
                                     <button
                                         key={muscle}
@@ -114,7 +140,7 @@ const ExerciseSelector = ({ exercises, onSelect, onClose }) => {
                             </button>
 
                             {filteredExercises.length === 0 ? (
-                                <div className="no-results">No exercises found. Create one?</div>
+                                <div className="no-results">No exercises match these filters</div>
                             ) : (
                                 filteredExercises.map((exercise) => (
                                     <div
