@@ -58,10 +58,11 @@
     grid-template-columns: 40px 1fr 1fr 1fr 80px;
     gap: 10px;
     margin-bottom: 10px;
-    font-size: 0.8rem;
+    font-size: 11px;
     color: var(--text-secondary);
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 500;
+    letter-spacing: 0.06em;
     text-align: center;
 }
 
@@ -201,12 +202,18 @@
     border: 1px solid rgba(255, 255, 255, 0.05);
     background-color: rgba(0, 0, 0, 0.3);
     text-align: center;
-    font-size: 0.95rem;
+    font-size: 17px;
+    font-weight: 600;
     color: var(--text-primary);
     transition: all 0.2s;
     box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.set-row .col-set {
+    font-size: 17px;
+    font-weight: 600;
 }
 
 .col-weight input:focus,
