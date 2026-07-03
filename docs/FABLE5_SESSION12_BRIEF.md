@@ -38,7 +38,7 @@ Two independent visual research passes (ChatGPT, Gemini) both analyzed Hevy, Fit
 | Timer-first hierarchy in active workout (timer is largest visual element) | Both reports | Already implemented S11 D5 — verify timer digits are visually dominant |
 | Set-complete state uses color transition (not just an icon change) | Both reports | Already implemented S11 D2 — confirm consistency across all set-logging surfaces |
 | Bottom tab navigation, 5 items max, icon + optional label | Both reports | Verify current nav matches — audit item |
-| PR / milestone gets a distinct accent color, separate from primary CTA color | Both reports | **Gap** — check if current app has a PR visual treatment. If not, this is a small high-value addition. |
+| PR / milestone gets a distinct accent color, separate from primary CTA color | Both reports | **Gap is visual-treatment ONLY** (verified S12 audit): PR detection logic already exists — `checkPersonalRecord()` (`WorkoutContext.jsx:1375`) sets `isPR` on sets at completion (`:1416`). Build only the distinct accent rendering for `isPR` sets; do not rebuild detection. |
 | Nutrition dashboards use ring/radial progress for calories + macros, not bar charts | Both reports (MyFitnessPal specifically) | New for nutrition feature — see Section 2 |
 | Rest timer shown as a persistent floating element, not a modal | Both reports | Verify current implementation matches |
 
@@ -159,17 +159,19 @@ Cross-referenced against current app state (WorkoutContext.jsx, StorageService.j
 
 | # | Feature | Priority | Current State | Build Scope |
 |---|---|---|---|---|
-| 1 | Equipment Profile system (Full Gym/Home Gym/Fire Station/Bodyweight/Custom) | P0 | Locked S9, unbuilt | Full build — saved profiles, multi-select equipment checklist, one-tap session override |
+| 1 | Equipment Profile system (Full Gym/Home Gym/Fire Station/Bodyweight/Custom) | P0 | **CLOSED — already built** (verified S12 audit, live 2026-07-03): profile picker UI on /track (`TrackWorkout.jsx:170`), `DEFAULT_EQUIPMENT_PROFILES` + session override + compatibility filter (`WorkoutContext.jsx:121`, `:1931`), persisted per-profile (`StorageService.js:310`, `:323`) | None — remaining gap is cloud sync of the selection (local-only), tracked under S12 data-reliability findings |
 | 2 | Fire Station pause button | P0 | Unbuilt | Prominent pause/resume on active workout screen, tied to Fire Station profile |
 | 3 | Set-type differentiation (warm-up/working/AMRAP/drop) | P0 | **Not built** — all sets currently treated identically in volume calcs | New data model field on set objects + UI toggle + volume calc exclusion logic for warm-ups |
-| 4 | Template picker chip filters (Muscle Focus + Duration) | P1 | Locked S9, unbuilt | Add duration-based filtering alongside existing muscle filters |
+| 4 | Template picker chip filters (Muscle Focus + Duration) | P1 | **CLOSED — already built** (verified S12 audit, live 2026-07-03): Muscle Focus + Duration chips on /track (`TrackWorkout.jsx:21` `DURATION_CHIPS`, `:206` render; filtering verified in browser) | None |
 | 5 | RPE/RIR-based auto-progression | P1 | Partially built — `smartProgressionEnabled` exists but is fixed-increment only | Add RPE/RIR input field to set logging, use as progression signal instead of fixed % |
-| 6 | Plate calculator | P1 | Not built | New feature — user defines available plates, app calculates bar loading for target weight |
+| 6 | Plate calculator | P1 | **CLOSED — already built** (verified S12 audit): `PlateCalculator.jsx` exists and is wired into the active-workout screen (`TrackWorkout.jsx:6`, `:426`) | None — verify plate-set customization meets the original spec before building anything further |
 | 7 | Nutrition tracking — full build | P1 | Does not exist | Per Section 2 architecture — barcode, photo, manual, TDEE model, AI Coach logging assistant |
 | 8 | Workout streak calendar | P2 | Not built | Visual calendar, existing `history` data already supports this |
-| 9 | e1RM analytics | P2 | Not built | Epley formula (1RM = W × (1 + R/30)), chart against `history` |
-| 10 | Assessment CTA on empty dashboard | P2 | Not built | Small addition — surface assessment prompt when dashboard has no active workout |
+| 9 | e1RM analytics | P2 | **CLOSED — already built** (found during S12 reconciliation): Epley e1RM computed per set (`Analytics.jsx:55`), charted as "Estimated 1RM History" with info panel (`Analytics.jsx:182`) | None |
+| 10 | Assessment CTA on empty dashboard | P2 | **CLOSED — already built** (verified S12 audit, live 2026-07-03): empty-state prompt + "Start Assessment" button (`Dashboard.jsx:179-186`) | None |
 | 11 | Profile switch race condition fix | P3 | Known bug, documented | useRef guard, same pattern as existing mount guard |
+
+**Backlog reconciliation (S12 audit, 2026-07-03):** items 1, 4, 6, 9, 10 above were found already built and are closed with source evidence; the Section 1.2 PR row is confirmed a visual-treatment gap only. Remaining open build items: 2 (Fire Station pause), 3 (set-type differentiation), 5 (RPE/RIR), 7 (nutrition), 8 (streak calendar), 11 (profile-switch race).
 
 **Already built — do not duplicate (confirmed via research cross-reference):**
 - Muscle volume distribution (`getMuscleVolumeDistribution()` — matches P1 research recommendation, already done)
