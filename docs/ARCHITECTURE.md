@@ -32,8 +32,9 @@ Effects:   canvas-confetti 1.9.4
 Testing:   vitest 4.0.18 + jsdom
 Linting:   eslint 9.17.0 + eslint-plugin-react-hooks
 
-Backend:   FastAPI + PostgreSQL (Railway) — 📋 SESSION-NOTES, see Section 7
-Auth:      Google OAuth, HttpOnly cookie (SameSite=None; Secure) — 📋 SESSION-NOTES
+Backend:   FastAPI + PostgreSQL (Railway) — ✅ VERIFIED, see Section 7
+Auth:      Dual: Bearer JWT (email/password) OR HttpOnly session cookie
+           (Google OAuth) — ✅ VERIFIED, see Section 7
 Deploy:    Railway, GitHub webhook triggers build — no `railway up`, ever
 ```
 
@@ -76,13 +77,12 @@ Deploy:    Railway, GitHub webhook triggers build — no `railway up`, ever
                                                         ▼
                                     ┌────────────────────────────────┐
                                     │   BACKEND (FastAPI/Postgres)     │
-                                    │   📋 SESSION-NOTES — see Sec 7   │
+                                    │   ✅ VERIFIED — see Sec 7        │
                                     │                                  │
-                                    │  /api/profile (GET/PUT)          │
-                                    │  /api/coach/chat (SSE)           │
-                                    │  /api/voice/coach-synthesize     │
-                                    │  /api/templates (POST)           │
-                                    │  /health, /openapi.json          │
+                                    │  9 routers: auth, profile,       │
+                                    │  workouts, assessments, weight,  │
+                                    │  templates, exercises, coach,    │
+                                    │  voice + /health                 │
                                     └────────────────────────────────┘
 ```
 
@@ -185,16 +185,37 @@ Profile-scoped keys are namespaced as `{baseKey}_user_{uid}`. A **legacy migrati
 
 **Adding a new persisted field:** add its key to `KEY`, add it to `PROFILE_SCOPED_BASE_KEYS` if profile-scoped, add `save*`/`load*` helper methods following the existing naming convention, wire it into `loadProfileState(uid)`'s return object.
 
-### 4.5 ApiService.js 📋 SESSION-NOTES (confirmed via T1 discovery report, S11)
+### 4.5 ApiService.js ✅ VERIFIED (read directly from source, S12 audit)
+
+All authenticated calls go through a single `apiFetch` wrapper:
 
 ```
-saveProfile(profile) → PUT /api/profile
-  - credentials: include + conditional Bearer token
-  - throws on !response.ok
-  - accepts partial objects (all ProfileUpdate fields are Optional server-side)
+apiFetch(path, options)
+  - credentials: 'include' always (sends the HttpOnly session_token cookie)
+  - Authorization: Bearer <token> attached ONLY when
+    localStorage 'fitness_auth_token' exists — deliberately omitted otherwise,
+    because the backend prefers the header over the cookie and a
+    "Bearer null" header would shadow the cookie and break OAuth users
+  - rejects immediately if VITE_API_URL is not configured
+
+Exported calls (all via apiFetch unless noted):
+  register/login          → plain fetch, surface 4xx JSON detail to the UI
+  getMe                   → cookie-only fetch to /api/auth/me
+  getHistory/saveWorkout  → /api/workouts (saveWorkout maps camelCase → snake_case)
+  get/save/clearActiveWorkout → /api/workouts/active
+  getProfile/saveProfile  → /api/profile (partial objects OK — ProfileUpdate
+                            fields are all Optional server-side)
+  getWeightHistory/addWeightEntry → /api/weight
+  get/save/deleteCustomTemplate   → /api/templates
+  sendCoachMessage        → /api/coach/chat (returns raw Response for SSE —
+                            never call .json() on it)
+  getCoachHistory         → /api/coach/history
+  synthesizeVoice         → /api/voice/coach-synthesize
 ```
 
-Every backend call uses `credentials: include`. This is required for the HttpOnly cookie auth pattern to work. **Any new API call must follow this pattern** — do not build a fetch call without `credentials: include` or it will silently fail to authenticate.
+**Any new API call must go through `apiFetch`** — it encodes both auth
+transports. Do not hand-roll a fetch without `credentials: 'include'`, and do
+not send an Authorization header when there is no token.
 
 ### 4.6 Component Tree ⚠️ PROVISIONAL — Partial, Needs Full T1 Pass
 
@@ -340,46 +361,91 @@ StorageService.saveActiveWorkout(uid, workout)  ← localStorage write
 
 ---
 
-## 7. BACKEND ARCHITECTURE 📋 SESSION-NOTES — REQUIRES T1 VERIFICATION
+## 7. BACKEND ARCHITECTURE ✅ VERIFIED (read directly from backend source, S12 audit)
 
-**Everything in this section is compiled from session notes and prior discovery reports, not read directly from backend source files. Treat as a starting hypothesis, not ground truth, until a terminal with backend repo access confirms it.**
+**Verified against `backend/main.py`, every router in `backend/app/routers/`, and the live `/openapi.json` (2026-07-03). All nine routers are registered in `main.py`; none use `include_in_schema=False`. The live schema matches source exactly.**
 
-**Confirmed routes (via `/openapi.json` reads and T1 discovery reports across sessions):**
+**Complete route inventory (from source decorators):**
 
 ```
-GET  /health                    → {"status": "ok"}  (no SHA field — known gap)
-GET  /openapi.json              → full route schema
-GET  /api/profile                → ProfileResponse (UserResponse + UserStatsResponse)
-PUT  /api/profile                → accepts ProfileUpdate (all fields Optional)
-                                    theme, units, sound_enabled, default_rest_time,
-                                    default_work_time, coach_personality, coach_voice_id
-POST /api/coach/chat             → SSE streaming, AI Coach conversation
-POST /api/voice/coach-synthesize → ElevenLabs voice synthesis
-POST /api/templates              → mentioned in backlog notes, not confirmed live
+GET  /health                     → {"status": "ok"}  (no SHA field — known gap)
+
+/api/auth      (routers/auth.py)
+  POST /register                 → Token (201)
+  POST /login                    → Token
+  GET  /google                   → OAuth redirect
+  GET  /google/callback          → sets HttpOnly session_token cookie
+  GET  /me                       → session check (cookie or Bearer)
+  POST /logout                   → clears session cookie
+
+/api/profile   (routers/profile.py)
+  GET  ""                        → ProfileResponse (UserResponse + UserStatsResponse)
+  PUT  ""                        → ProfileUpdate (all fields Optional; generic
+                                    setattr loop — new synced fields need no
+                                    handler edit)
+
+/api/workouts  (routers/workouts.py)
+  GET  ""                        → WorkoutListResponse
+  POST ""                        → WorkoutResponse (201)
+  GET  /active                   → ActiveWorkoutResponse | null
+  PUT  /active                   → upsert active workout blob
+  DELETE /active                 → 204
+  DELETE /{id}                   → 204
+
+/api/assessments (routers/assessments.py)   GET "", POST ""
+/api/weight      (routers/weight.py)         GET "", POST "" (201)
+/api/templates   (routers/templates.py)      GET "", POST "" (201), DELETE /{id} (204)
+/api/exercises   (routers/exercises.py)      GET "", POST "" (201)
+
+/api/coach     (routers/coach.py)
+  POST /chat                     → SSE streaming AI Coach chat
+                                    (model claude-sonnet-4-6, prompt-cached
+                                    system blocks, rate-limited)
+  POST /chat/stream              → deprecated alias, delegates to /chat
+  GET  /history                  → last 20 CoachMessage rows
+
+/api/voice     (routers/voice.py)
+  POST /coach-synthesize         → ElevenLabs TTS, returns base64 MP3
+  WS   /stream                   → streaming TTS bridge to ElevenLabs
+                                    (WebSocket — never appears in openapi.json;
+                                    auths via session_token cookie or ?token=)
 ```
 
-**Database:** PostgreSQL on Railway. Migrations via Alembic, revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9).
+**Database:** PostgreSQL on Railway. Migrations via Alembic (5 revisions in `alembic/versions/`), revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9).
 
 **Known table:** `CoachMessage` — stores AI Coach conversation history, CASCADE delete tied to user.
 
-**Auth:** Google OAuth, HttpOnly cookie, `SameSite=None; Secure`. Frontend calls `/api/auth/me` on mount with `credentials: include` to check session state — 📋 session-notes, endpoint not directly confirmed against source.
+**Auth (✅ VERIFIED from `app/auth.py` `get_current_user`):** dual-transport, one dependency:
+- `Authorization: Bearer <JWT>` header — email/password users (JWT in localStorage). Takes **precedence** when present (`HTTPBearer(auto_error=False)`).
+- HttpOnly `session_token` cookie — Google OAuth users. Fallback when no Bearer header.
+- Both carry the same signed JWT (`sub` = user id); decode path is identical.
+- This is why openapi.json shows an HTTPBearer security scheme while the app also works cookie-only — **both documents were right; the patterns coexist by design.** Any new authenticated endpoint just takes `Depends(get_current_user)` and gets both transports for free.
+- WebSocket routes can't carry the header from a browser — `/api/voice/stream` mirrors the contract via cookie or `?token=` query param (`voice._authenticate_ws`).
+
+**Rate limiting:** `app/rate_limit.py` caps per-user coach and voice calls (cost guardrail on Anthropic/ElevenLabs spend).
 
 **Pinned dependency:** `bcrypt==4.0.1` — passlib incompatibility with bcrypt 5.0+, never upgrade.
 
-**First Fable 5 backend task should be:** read the actual FastAPI route files, confirm every route above against source, fill in any routes missing from this list, and update this section from 📋 SESSION-NOTES to ✅ VERIFIED.
-
 ---
 
-## 8. AI COACH INTEGRATION 📋 SESSION-NOTES — REQUIRES T1 VERIFICATION
+## 8. AI COACH INTEGRATION ✅ VERIFIED (read directly from source, S12 audit)
 
 ```
-Model:        claude-sonnet-4-6 (default, per session notes)
-Voice:        ElevenLabs, default voice "Jarvis" (FxZjRiAEBESrb7srpme7)
+Model:        claude-sonnet-4-6 (COACH_MODEL in routers/coach.py, max_tokens 1024)
+Personas:     apex (default) / hype / zen — persona prompt is system block 1,
+              static app-knowledge prompt is block 0, both prompt-cached;
+              per-request user context (stats + last 10 workouts + active
+              session) is block 2, uncached
+Voice:        ElevenLabs "Jarvis" (FxZjRiAEBESrb7srpme7), model eleven_flash_v2_5;
+              REST synth at POST /api/voice/coach-synthesize, streaming bridge
+              at WS /api/voice/stream
 Transport:    SSE streaming via POST /api/coach/chat
-Frontend:     ReadableStream fetch pattern (exact component not confirmed —
-              likely a dedicated CoachChat or similar component, not yet
-              located in available files)
-Storage:      CoachMessage table, PostgreSQL, CASCADE delete on user removal
+Frontend:     src/pages/CoachView.jsx; ApiService.sendCoachMessage returns the
+              raw Response for ReadableStream consumption
+Storage:      CoachMessage table, PostgreSQL, CASCADE delete on user removal;
+              chat replays last 10 turns, /history returns last 20
+Guardrails:   per-user rate limits on both coach and voice (app/rate_limit.py);
+              503 when ANTHROPIC_API_KEY / ELEVENLABS_API_KEY unset
 ```
 
 **For nutrition photo/voice logging integration (Fable 5 build target, see FABLE5_SESSION12_BRIEF.md Section 2.4):** this should be a **separate call path**, not routed through the existing Sonnet 4.6 coach conversation endpoint. Use Claude Haiku 4.5 for photo/voice parsing — different task complexity, different cost profile. Do not overload `/api/coach/chat` with structured-data-extraction traffic; that endpoint's SSE streaming pattern is built for conversational responses, not JSON extraction.
@@ -418,7 +484,7 @@ This is the token foundation referenced in Section 1 of FABLE5_SESSION12_BRIEF.m
 | Profile switch race condition | Open, P3 | `activeWorkout` persist effect can fire before incoming profile's workout is restored. Fix pattern: `useRef` guard, same approach as existing mount guard. |
 | Set-type differentiation | Not built | All sets (warm-up/working/AMRAP) treated identically in volume calcs. Flagged in Fable 5 brief as P0. |
 | Component tree documentation | Incomplete | Section 4.6 above needs full audit pass. |
-| Backend architecture | Unverified | Section 7 above is session-notes only, not source-verified. |
+| Backend architecture | Verified S12 | Section 7 read directly from backend source + live openapi.json, 2026-07-03. |
 | npm audit — workbox transitive deps | Open | Backlog item, not yet actioned. |
 | OAuth state/nonce/PKCE hardening | Open | Backlog item, not yet actioned. |
 
