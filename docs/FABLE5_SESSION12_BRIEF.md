@@ -208,7 +208,7 @@ Findings from this audit become Fable 5's first fix pass before any Section 3 fe
 2. VISUAL REDESIGN EXTENSION (Section 1.3 — Analytics + Profile/Settings screens)
    → Apply existing D1-D5 system to untouched screens
    → Add PR flag treatment, active-interval highlight bar
-   → Preview-gate each significant visual change per existing Codex/Fable workflow pattern
+   → Preview-gate each significant visual change per existing workflow pattern
 
 3. FEATURE BUILD — P0 items first (Section 3, items 1-3)
    → Equipment Profile system

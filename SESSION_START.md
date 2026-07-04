@@ -109,8 +109,10 @@ Every terminal prompt must start with:
 Every terminal prompt must end with:
   git push origin main
   Report SHA + files changed
-Codex review required before every commit (literal "Codex cleared,
-proceed with commit" from coordinator gates each commit).
+Inline self-review required before every commit (re-read full diff,
+check for data loss, null cases, logic errors, dead imports; rate
+findings P1/P2/P3). Literal "Cleared, proceed with commit" from
+coordinator gates each commit.
 WorkoutContext.jsx = one terminal at a time only.
 Never git add -A — always explicit pathspec.
 docs/ARCHITECTURE.md updated in the same commit as any architectural
