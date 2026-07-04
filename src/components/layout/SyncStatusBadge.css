@@ -1,0 +1,23 @@
+.sync-badge {
+    position: fixed;
+    bottom: 84px; /* clears the bottom navigation */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.sync-badge-expired {
+    color: var(--text-primary);
+    border-color: var(--primary);
+}

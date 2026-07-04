@@ -32,6 +32,14 @@ const apiFetch = (path, options = {}) => {
 // token, so this must NOT require getToken() or they could never sync.
 const isAvailable = () => !!API_URL;
 
+// HTTP failures carry the status code so callers (SyncQueue) can distinguish
+// an expired session (401 → re-login prompt) from a retryable failure.
+const httpError = (r, path, text) => {
+  const err = new Error(`[ApiService] HTTP ${r.status} — ${path} — ${text}`);
+  err.status = r.status;
+  return err;
+};
+
 // Auth
 export const register = async (email, password, name) => {
   const r = await fetch(`${API_URL}/api/auth/register`, {
@@ -91,7 +99,7 @@ export const saveWorkout = async (workout) => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/workouts — ${text}`);
+    throw httpError(r, '/api/workouts', text);
   }
   return r.json();
 };
@@ -106,7 +114,7 @@ export const saveActiveWorkout = async (workout) => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/workouts/active — ${text}`);
+    throw httpError(r, '/api/workouts/active', text);
   }
   return r.json();
 };
@@ -117,7 +125,7 @@ export const clearActiveWorkout = async () => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/workouts/active — ${text}`);
+    throw httpError(r, '/api/workouts/active', text);
   }
   // 204 No Content on success — nothing to parse.
 };
@@ -132,7 +140,7 @@ export const saveProfile = async (profile) => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/profile — ${text}`);
+    throw httpError(r, '/api/profile', text);
   }
   return r.json();
 };
@@ -147,7 +155,7 @@ export const addWeightEntry = async (weight, recordedAt) => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/weight — ${text}`);
+    throw httpError(r, '/api/weight', text);
   }
   return r.json();
 };
@@ -162,7 +170,7 @@ export const saveCustomTemplate = async (template) => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/templates — ${text}`);
+    throw httpError(r, '/api/templates', text);
   }
   return r.json();
 };
@@ -173,7 +181,7 @@ export const deleteCustomTemplate = async (id) => {
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw new Error(`[ApiService] HTTP ${r.status} — /api/templates/${id} — ${text}`);
+    throw httpError(r, `/api/templates/${id}`, text);
   }
   // 204 No Content on success — nothing to parse.
 };

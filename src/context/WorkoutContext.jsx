@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useMemo,
 import StorageService from '../services/StorageService';
 import ActiveWorkoutService from "../services/ActiveWorkoutService";
 import * as ApiService from '../services/ApiService';
+import SyncQueue from '../services/SyncQueue';
 import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
 
@@ -310,6 +311,30 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const canSyncRef = useRef(canSyncToBackend);
     canSyncRef.current = canSyncToBackend;
 
+    // Retry queue for failed cloud pushes. Executors are registered here (the
+    // one place with access to both ApiService and StorageService) and the
+    // queue's flush triggers (online / foreground / boot) are installed once.
+    useEffect(() => {
+        SyncQueue.registerExecutor('workout', op => ApiService.saveWorkout(op.payload));
+        SyncQueue.registerExecutor('weight', op =>
+            ApiService.addWeightEntry(op.payload.weight, op.payload.date));
+        SyncQueue.registerExecutor('profile_settings', op => ApiService.saveProfile(op.payload));
+        SyncQueue.registerExecutor('template', async op => {
+            const resp = await ApiService.saveCustomTemplate(op.payload);
+            // Same backendId write-back as the direct push path, so a replayed
+            // template can be deleted/deduped later.
+            if (resp?.id && op.uid) {
+                const stored = StorageService.loadCustomTemplates(op.uid);
+                const idx = stored.findIndex(t => t.id === op.payload.id);
+                if (idx !== -1) {
+                    stored[idx].backendId = resp.id;
+                    StorageService.saveCustomTemplates(op.uid, stored);
+                }
+            }
+        });
+        SyncQueue.init();
+    }, []);
+
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
     const [history, setHistory] = useState([]);
@@ -414,6 +439,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         StorageService.saveCurrentProfileId(cloudProfile.id);
                         StorageService.clearLoggedOut();
                     }
+                    // Session confirmed valid — clear any stale expiry banner
+                    // and replay pushes that failed while auth was down.
+                    SyncQueue.clearAuthExpired();
+                    SyncQueue.flush();
                 }
             } catch (e) {
                 // No cloud session — localStorage profile takes over.
@@ -552,6 +581,31 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         if (u.coach_voice_id) {
                             setCoachVoiceId(u.coach_voice_id);
                             StorageService.saveCoachVoiceId(u.coach_voice_id);
+                        }
+                        // App settings — backend wins on login (same pattern).
+                        // Fields are null until the user first syncs them, so
+                        // only apply values that actually exist server-side.
+                        if (u.theme) {
+                            setTheme(u.theme);
+                            StorageService.saveTheme(profile.id, u.theme);
+                        }
+                        if (u.units) {
+                            setUnits(u.units);
+                            StorageService.saveUnits(profile.id, u.units);
+                        }
+                        if (typeof u.sound_enabled === 'boolean') {
+                            setSoundEnabled(u.sound_enabled);
+                            StorageService.saveSound(profile.id, u.sound_enabled);
+                        }
+                        // Timers are pushed as a pair, so they arrive as a pair;
+                        // applying a lone value would clobber the other side.
+                        if (Number.isFinite(u.default_rest_time) && Number.isFinite(u.default_work_time)) {
+                            StorageService.saveDefaultTimers(
+                                profile.id, u.default_rest_time, u.default_work_time
+                            );
+                            timerApiRef.current?.setDefaultTimers?.(
+                                u.default_rest_time, u.default_work_time
+                            );
                         }
                     }
 
@@ -726,7 +780,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             themeSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ theme })
-                    .catch(err => console.warn('[settings-sync] theme:', err));
+                    .catch(err => {
+                        console.warn('[settings-sync] theme:', err);
+                        SyncQueue.enqueue({ type: 'profile_settings', key: 'theme', payload: { theme } });
+                    });
             }
         }
     }, [theme, currentProfile]);
@@ -746,7 +803,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             unitsSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ units })
-                    .catch(err => console.warn('[settings-sync] units:', err));
+                    .catch(err => {
+                        console.warn('[settings-sync] units:', err);
+                        SyncQueue.enqueue({ type: 'profile_settings', key: 'units', payload: { units } });
+                    });
             }
         }
     }, [units, currentProfile]);
@@ -766,7 +826,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             soundSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ sound_enabled: soundEnabled })
-                    .catch(err => console.warn('[settings-sync] sound_enabled:', err));
+                    .catch(err => {
+                        console.warn('[settings-sync] sound_enabled:', err);
+                        SyncQueue.enqueue({ type: 'profile_settings', key: 'sound_enabled', payload: { sound_enabled: soundEnabled } });
+                    });
             }
         }
     }, [soundEnabled, currentProfile]);
@@ -786,7 +849,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             coachPersonalitySyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ coach_personality: coachPersonality })
-                    .catch(err => console.warn('[settings-sync] coach_personality:', err));
+                    .catch(err => {
+                        console.warn('[settings-sync] coach_personality:', err);
+                        SyncQueue.enqueue({ type: 'profile_settings', key: 'coach_personality', payload: { coach_personality: coachPersonality } });
+                    });
             }
         }
     }, [coachPersonality, currentProfile]);
@@ -806,7 +872,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             coachVoiceIdSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current()) {
                 ApiService.saveProfile({ coach_voice_id: coachVoiceId })
-                    .catch(err => console.warn('[settings-sync] coach_voice_id:', err));
+                    .catch(err => {
+                        console.warn('[settings-sync] coach_voice_id:', err);
+                        SyncQueue.enqueue({ type: 'profile_settings', key: 'coach_voice_id', payload: { coach_voice_id: coachVoiceId } });
+                    });
             }
         }
     }, [coachVoiceId, currentProfile]);
@@ -1195,6 +1264,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 }
             } catch (err) {
                 console.warn('[CloudSync] Workout push failed (non-fatal):', err.message);
+                SyncQueue.enqueue({
+                    type: 'workout',
+                    key: completedWorkout.client_id || completedWorkout.id,
+                    payload: completedWorkout,
+                    uid: currentProfile.id
+                });
             }
         }
 
@@ -1578,6 +1653,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 await ApiService.addWeightEntry(parseFloat(weight), entry.date);
             } catch (err) {
                 console.warn('[CloudSync] Weight push failed (non-fatal):', err.message);
+                SyncQueue.enqueue({
+                    type: 'weight',
+                    key: entry.date,
+                    payload: { weight: entry.weight, date: entry.date },
+                    uid: currentProfile.id
+                });
             }
         }
     };
@@ -1640,6 +1721,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 }
             } catch (err) {
                 console.warn('[CloudSync] Template save failed (non-fatal):', err.message);
+                SyncQueue.enqueue({
+                    type: 'template',
+                    key: newTemplate.id,
+                    payload: newTemplate,
+                    uid: currentProfile.id
+                });
             }
         }
     };

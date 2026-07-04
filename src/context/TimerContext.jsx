@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import StorageService from '../services/StorageService';
 import * as ApiService from '../services/ApiService';
+import SyncQueue from '../services/SyncQueue';
 
 // Timer state lives here, split out of WorkoutContext (H4). The rest/work
 // countdowns tick every second; keeping that state in its own provider means a
@@ -192,7 +193,14 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
             timersSyncedProfileRef.current = currentProfile.id;
             if (sameProfile && canSyncRef.current?.()) {
                 ApiService.saveProfile({ default_rest_time: defaultRestTime, default_work_time: defaultWorkTime })
-                    .catch(err => console.warn('[settings-sync] timers:', err));
+                    .catch(err => {
+                        console.warn('[settings-sync] timers:', err);
+                        SyncQueue.enqueue({
+                            type: 'profile_settings',
+                            key: 'timers',
+                            payload: { default_rest_time: defaultRestTime, default_work_time: defaultWorkTime }
+                        });
+                    });
             }
         }
     }, [defaultRestTime, defaultWorkTime, currentProfile]);
@@ -212,7 +220,18 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
     // after this provider has mounted and filled the ref. ---
     useEffect(() => {
         if (apiRef) {
-            apiRef.current = { skipRest, resetWorkTimer, stopWorkTimer, startRestTimer };
+            apiRef.current = {
+                skipRest,
+                resetWorkTimer,
+                stopWorkTimer,
+                startRestTimer,
+                // Used by WorkoutContext's login pull to apply cloud timer
+                // defaults (backend wins on login, same as stats/coach prefs).
+                setDefaultTimers: (rest, work) => {
+                    if (Number.isFinite(rest)) setDefaultRestTime(rest);
+                    if (Number.isFinite(work)) setDefaultWorkTime(work);
+                }
+            };
         }
     });
 

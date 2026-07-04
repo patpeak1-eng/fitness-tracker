@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import RestTimerOverlay from '../workout/RestTimerOverlay';
 import BottomNavigation from './BottomNavigation';
+import SyncStatusBadge from './SyncStatusBadge';
 import { useWorkout } from '../../context/WorkoutContext';
 import { useTimer } from '../../context/TimerContext';
 import './Layout.css';
@@ -22,6 +23,7 @@ const Layout = () => {
             {/* Phase H: Bottom Navigation (Global, except in active guided mode might want to hide it? Or keep it?) 
                 Usually active workouts take over full screen. Let's hide it in guided mode. */}
             {!isGuidedMode && <BottomNavigation />}
+            {!isGuidedMode && <SyncStatusBadge />}
 
             {!isGuidedMode && (
                 <RestTimerOverlay
