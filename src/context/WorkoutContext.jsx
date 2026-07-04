@@ -349,6 +349,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
     const [history, setHistory] = useState([]);
+    // Profile id whose stored history has been rehydrated into state — gates
+    // the history persist effect so pre-restore runs can't wipe storage.
+    const [historyHydratedFor, setHistoryHydratedFor] = useState(null);
     const [assessments, setAssessments] = useState([]); // NEW: Assessment History
     const [theme, setTheme] = useState('dark');
     const [units, setUnits] = useState('metric');
@@ -488,6 +491,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         const ps = StorageService.loadProfileScopedState(uid);
 
         setHistory(ps.history);
+        // Same-batch flag: unlocks the history persist effect only for commits
+        // at or after this restore (see the hydration-gated effect below).
+        setHistoryHydratedFor(uid);
         setAssessments(ps.assessments);
 
         setSmartProgressionEnabled(ps.smartProgressionEnabled);
@@ -838,12 +844,20 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
     // --- 3. PERSISTENCE (Scoped to Current Profile) ---
 
-    // Persist History
+    // Persist History — hydration gate. Only write once this profile's stored
+    // history has actually been rehydrated into state (historyHydratedFor is
+    // set in the same batch as the setHistory restore in refreshProfileData).
+    // Any effect run before that commit — initial mount, profile switch,
+    // StrictMode replays — sees a stale/empty `history` and must not write it
+    // over the stored value. A plain mount guard is NOT enough: StrictMode
+    // replays the effect after the guard is consumed but before the restore
+    // commit, wiping storage right before the replayed restore re-reads it
+    // (verified live; the same hole exists behind the guard-only effects).
     useEffect(() => {
-        if (currentProfile) {
+        if (currentProfile && historyHydratedFor === currentProfile.id) {
             StorageService.saveHistory(currentProfile.id, history);
         }
-    }, [history, currentProfile]);
+    }, [history, currentProfile, historyHydratedFor]);
 
     // Persist Active Workout
     const activeWorkoutMountRef = useRef(true);
