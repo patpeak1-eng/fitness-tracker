@@ -117,7 +117,7 @@ const Dashboard = () => {
                 {/* 2. ACTIVE WORKOUT BANNER (If Active) */}
                 {activeWorkout && (
                     <Card className="hero-card action-btn" onClick={() => navigate('/track')}
-                        style={{ cursor: 'pointer', textAlign: 'center', padding: '20px', border: '1px solid var(--primary)', background: 'rgba(204,255,0,0.05)' }}>
+                        style={{ cursor: 'pointer', textAlign: 'center', padding: '20px', border: '1px solid var(--primary)', background: 'rgba(var(--primary-rgb),0.05)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                             {activeWorkout.status === 'paused' ? (
                                 <div style={{ fontWeight: 'bold', color: '#facc15' }}>● PAUSED</div>
@@ -143,7 +143,7 @@ const Dashboard = () => {
                     </div>
 
                     <div className="workout-type-card" onClick={() => navigate('/track')}>
-                        <div className="workout-icon-box" style={{ color: '#00f3ff', background: 'rgba(0, 243, 255, 0.1)' }}>
+                        <div className="workout-icon-box" style={{ color: 'var(--accent)', background: 'rgba(76, 141, 255, 0.1)' }}>
                             <Flame size={28} />
                         </div>
                         <span className="workout-type-label">HIIT</span>

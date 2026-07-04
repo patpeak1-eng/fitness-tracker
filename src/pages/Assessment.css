@@ -88,7 +88,7 @@
 }
 
 .select-card.selected {
-    background: rgba(191, 255, 0, 0.05);
+    background: rgba(var(--primary-rgb), 0.05);
     border-color: var(--primary);
 }
 
@@ -232,7 +232,7 @@
 
 .primary-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(191, 255, 0, 0.4);
+    box-shadow: 0 5px 15px rgba(var(--primary-rgb), 0.4);
 }
 
 .primary-btn:disabled {

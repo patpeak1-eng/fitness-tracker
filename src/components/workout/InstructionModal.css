@@ -46,7 +46,7 @@
     font-size: 2rem;
     line-height: 1.1;
     color: var(--primary);
-    text-shadow: 0 0 15px rgba(204, 255, 0, 0.3);
+    text-shadow: 0 0 15px rgba(var(--primary-rgb), 0.3);
 }
 
 .badge {

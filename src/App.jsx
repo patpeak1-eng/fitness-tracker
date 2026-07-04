@@ -32,7 +32,7 @@ const AppRoutes = ({ timerApiRef }) => {
             <div style={{
                 display: 'flex', alignItems: 'center',
                 justifyContent: 'center', height: '100vh',
-                background: '#000', color: '#bfff00'
+                background: '#0d0d0f', color: '#ff5c2a'
             }}>
                 Loading...
             </div>

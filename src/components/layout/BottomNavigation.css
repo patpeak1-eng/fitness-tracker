@@ -14,7 +14,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(204, 255, 0, 0.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(var(--primary-rgb), 0.05);
 
     border-radius: 24px;
     display: flex;
@@ -209,7 +209,7 @@
 
 .nav-more-item.active {
     color: var(--primary);
-    background: rgba(204, 255, 0, 0.08);
+    background: rgba(var(--primary-rgb), 0.08);
 }
 
 .nav-more-item svg {

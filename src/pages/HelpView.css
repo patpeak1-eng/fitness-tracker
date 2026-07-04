@@ -55,7 +55,7 @@
 }
 
 .highlight-cyan {
-    color: #00f3ff;
+    color: var(--accent);
     font-weight: bold;
 }
 

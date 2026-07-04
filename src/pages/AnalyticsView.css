@@ -101,8 +101,10 @@
 }
 
 .pr-ring-value {
+    font-family: var(--font-display);
+    font-stretch: 112.5%;
     font-size: 1.1rem;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-primary);
     font-feature-settings: "tnum";
 }

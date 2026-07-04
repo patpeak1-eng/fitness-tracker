@@ -1,39 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Self-hosted fonts (PWA + strict CSP: no font CDN). Both files are latin
+   variable fonts and are precached by the service worker (woff2 glob). */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/inter-var-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 700 800;
+  font-stretch: 112.5%;
+  font-display: swap;
+  src: url('/fonts/archivo-var-latin.woff2') format('woff2');
+}
 
 :root {
-  /* --- MIDNIGHT & LIME PALETTE (Phase H) --- */
-  --bg-app: #0e0e18;
-  /* Deep Charcoal */
-  --bg-card: #16162a;
-  /* Premium Glass Base */
-  --primary: #ccff00;
-  /* Vibrant Lime */
-  --primary-glow: rgba(204, 255, 0, 0.4);
-  --accent: #00f3ff;
-  /* Cyan for secondary accents */
-  --accent-glow: rgba(0, 243, 255, 0.4);
+  /* --- EMBER ON GRAPHITE (Design Tokens v2 — docs/DESIGN_TOKENS.md) ---
+     Var names are kept from the previous system so every screen picks up the
+     new values centrally; each token has ONE reserved purpose (see the doc). */
 
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-muted: #666666;
+  /* Neutrals — graphite scale (lightness steps, no blue cast) */
+  --bg-app: #0d0d0f;
+  --bg-card: #161618;
+  --surface: #1e1e21;
+  --input-bg: #28282c;
+  --border: rgba(255, 255, 255, 0.06);
 
-  --success: #ccff00;
-  /* Match primary */
-  --error: #ff3366;
-  --danger: #ff3366;
+  --text-primary: #f4f4f2;
+  --text-secondary: #9c9ca3;
+  --text-muted: #5f5f66;
+
+  /* Accent + semantics */
+  --primary: #ff5c2a;
+  /* RGB channels for alpha-composited tints: rgba(var(--primary-rgb), a) */
+  --primary-rgb: 255, 92, 42;
+  --primary-dim: rgba(255, 92, 42, 0.14);
+  --primary-glow: rgba(255, 92, 42, 0.35);
+  --success: #3dc96e;
+  --success-rgb: 61, 201, 110;
+  --pr-gold: #e9b84c;
+  --rest-blue: #4c8dff;
+  --error: #e5484d;
+  --danger: #e5484d;
+
+  /* Secondary accent alias (legacy usages) — maps to info/rest blue */
+  --accent: var(--rest-blue);
+  --accent-glow: rgba(76, 141, 255, 0.35);
 
   /* --- ALIASES (Legacy Support) --- */
   --bg-primary: var(--bg-app);
   --surface-light: var(--bg-card);
   --primary-light: var(--primary);
-  --border-color: rgba(255, 255, 255, 0.07);
-  /* Surface & border tokens referenced across pages — defined once here */
-  --surface: #1e1e2e;
-  --surface-card: #16162a;
-  --card-bg: #16162a;
-  --input-bg: #28283c;
-  /* --border is a COLOR, not a shorthand: all usages are `1px solid var(--border)` */
-  --border: rgba(255, 255, 255, 0.07);
+  --border-color: var(--border);
+  --surface-card: var(--bg-card);
+  --card-bg: var(--bg-card);
 
   /* --- SPACING & LAYOUT --- */
   --nav-height: 80px;
@@ -43,15 +66,18 @@
   --nav-safe-padding: 120px;
   --radius-md: 12px;
   --radius-sm: 8px;
-  /* Polish: Button Radius */
 
-  /* --- GLASSMORPHISM (Premium) --- */
+  /* --- LEGACY EFFECT TOKENS (kept as vars; values flattened) --- */
   --glass-blur: blur(12px);
-  --border-glass: 1px solid rgba(255, 255, 255, 0.07);
+  --border-glass: 1px solid var(--border);
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(204, 255, 0, 0.15);
+  --shadow-glow: 0 0 20px rgba(255, 92, 42, 0.12);
 
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  /* --- TYPOGRAPHY --- */
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Archivo', 'Inter', system-ui, sans-serif;
+
+  font-family: var(--font-body);
   line-height: 1.5;
   font-weight: 400;
 
@@ -69,13 +95,7 @@ body {
   padding: 0;
   min-height: 100vh;
   background-color: var(--bg-app);
-  /* "Midnight" Deep Charcoal */
   color: var(--text-primary);
-  /* Subtle mesh gradient for depth - matched to Mockup feel */
-  background-image:
-    radial-gradient(circle at 15% 50%, rgba(204, 255, 0, 0.08) 0%, transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(0, 243, 255, 0.08) 0%, transparent 25%);
-  background-attachment: fixed;
 }
 
 h1,
@@ -89,6 +109,19 @@ h6 {
   letter-spacing: -0.02em;
 }
 
+/* Display register: screen titles + hero numerals only (never rows/labels/buttons). */
+h1,
+.display-num {
+  font-family: var(--font-display);
+  font-stretch: 112.5%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.display-num {
+  font-feature-settings: "tnum";
+}
+
 button {
   font-family: inherit;
   cursor: pointer;
@@ -98,7 +131,6 @@ button {
   transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-/* Button Polish: Lift Effect */
 button:active {
   transform: scale(0.98);
 }
@@ -108,7 +140,7 @@ select,
 textarea {
   font-family: inherit;
   background: var(--input-bg);
-  border: var(--border-glass);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   border-radius: 8px;
   padding: 10px;
@@ -119,57 +151,44 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(204, 255, 0, 0.15);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
 }
 
 /* --- UTILITIES --- */
 .glass-panel {
   background: var(--bg-card);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--border-glass);
-  box-shadow: var(--shadow-glass);
   border-radius: var(--radius-md);
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, #fff 0%, var(--text-secondary) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-primary);
 }
 
 .neon-text {
   color: var(--primary);
-  text-shadow: 0 0 10px rgba(204, 255, 0, 0.4);
 }
 
 /* --- BUTTONS --- */
 .primary-btn {
   background: var(--primary);
-  color: #0a0a0a;
-  /* Dark text on lime */
+  color: var(--bg-app);
   font-weight: 800;
   text-transform: uppercase;
   padding: 16px 32px;
   border-radius: 10px;
-  /* Primary CTA radius */
   font-size: 1rem;
   letter-spacing: 1px;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  box-shadow: 0 0 20px rgba(204, 255, 0, 0.4);
-  /* Stronger Neon Glow */
   border: none;
 }
 
 .primary-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(204, 255, 0, 0.4);
+  transform: translateY(-2px);
 }
 
 .secondary-btn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--surface);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   font-weight: 600;
   padding: 14px 28px;
@@ -180,44 +199,32 @@ textarea:focus {
 
 .secondary-btn:hover {
   border-color: var(--primary);
-  background: rgba(204, 255, 0, 0.05);
-  /* Lime tint */
   color: var(--primary);
-  transform: translateY(-2px);
 }
 
 /* --- ACTIVE STATE ANIMATIONS --- */
+/* Kept for the active-workout screens; scale-only (flat system: no glow). */
 @keyframes pulse-lime {
-  0% {
-    text-shadow: 0 0 10px rgba(204, 255, 0, 0.2);
+
+  0%,
+  100% {
     transform: scale(1);
   }
 
   50% {
-    text-shadow: 0 0 20px rgba(204, 255, 0, 0.6);
     transform: scale(1.02);
-  }
-
-  100% {
-    text-shadow: 0 0 10px rgba(204, 255, 0, 0.2);
-    transform: scale(1);
   }
 }
 
 @keyframes pulse-cyan {
-  0% {
-    text-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+
+  0%,
+  100% {
     transform: scale(1);
   }
 
   50% {
-    text-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
     transform: scale(1.02);
-  }
-
-  100% {
-    text-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
-    transform: scale(1);
   }
 }
 
@@ -231,13 +238,22 @@ textarea:focus {
   color: var(--accent);
 }
 
-/* --- LIGHT MODE OPTIONAL (Dark mode preferred) --- */
+/* --- LIGHT MODE — graphite-inverse mapping (token-level parity).
+       Accents/semantics stay identical; neutrals invert to warm paper. --- */
 [data-theme='light'] {
-  --bg-app: #f4f6f8;
-  --bg-card: rgba(255, 255, 255, 0.7);
-  --primary: #ccff00;
-  /* Keep branding */
-  --text-primary: #0a0a0a;
-  --border-glass: 1px solid rgba(0, 0, 0, 0.05);
-  color: #0a0a0a;
+  --bg-app: #f6f5f3;
+  --bg-card: #ffffff;
+  --surface: #efeeec;
+  --input-bg: #e7e6e3;
+  --border: rgba(0, 0, 0, 0.08);
+
+  --text-primary: #1a1a1c;
+  --text-secondary: #55555c;
+  --text-muted: #8c8c93;
+
+  --border-glass: 1px solid var(--border);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  color-scheme: light;
+  color: var(--text-primary);
 }

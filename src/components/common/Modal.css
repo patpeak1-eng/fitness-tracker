@@ -35,7 +35,7 @@
     justify-content: space-between;
     padding: 16px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(to right, rgba(191, 255, 0, 0.05), transparent);
+    background: linear-gradient(to right, rgba(var(--primary-rgb), 0.05), transparent);
     flex-shrink: 0;
 }
 

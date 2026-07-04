@@ -175,8 +175,8 @@ const ExerciseSelector = ({
                                             className="exercise-item"
                                             onClick={() => toggleSelect(exercise.id)}
                                             style={isSelected ? {
-                                                borderLeft: '2px solid #bfff00',
-                                                background: 'rgba(191, 255, 0, 0.08)'
+                                                borderLeft: '2px solid var(--primary)',
+                                                background: 'rgba(var(--primary-rgb), 0.08)'
                                             } : undefined}
                                         >
                                             <div className="exercise-info">
@@ -197,9 +197,9 @@ const ExerciseSelector = ({
                                                 aria-pressed={isSelected}
                                                 aria-label={isSelected ? `Deselect ${exercise.name}` : `Select ${exercise.name}`}
                                                 style={isSelected ? {
-                                                    background: '#bfff00',
+                                                    background: 'var(--primary)',
                                                     color: '#000',
-                                                    borderColor: '#bfff00'
+                                                    borderColor: 'var(--primary)'
                                                 } : undefined}
                                             >
                                                 {isSelected ? <Check size={20} /> : <Plus size={20} />}
@@ -221,7 +221,7 @@ const ExerciseSelector = ({
                                     style={{
                                         width: '100%',
                                         padding: '14px',
-                                        background: '#bfff00',
+                                        background: 'var(--primary)',
                                         color: '#000',
                                         border: 'none',
                                         borderRadius: '10px',

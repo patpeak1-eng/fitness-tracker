@@ -15,7 +15,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-const ProgressChart = ({ type = 'bar', data, dataKey, color = '#bfff00', height = 250, unit = '' }) => {
+const ProgressChart = ({ type = 'bar', data, dataKey, color = 'var(--primary)', height = 250, unit = '' }) => {
     // Inject unit into payload for tooltip
     const chartData = data.map(item => ({ ...item, unit }));
 

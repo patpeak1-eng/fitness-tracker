@@ -38,30 +38,30 @@
 }
 
 .tp-display.running {
-    border-color: rgba(204, 255, 0, 0.3);
-    box-shadow: 0 0 50px rgba(204, 255, 0, 0.1);
+    border-color: rgba(var(--primary-rgb), 0.3);
+    box-shadow: 0 0 50px rgba(var(--primary-rgb), 0.1);
     animation: tp-pulse 2s infinite ease-in-out;
 }
 
 .tp-display.complete {
-    border-color: rgba(204, 255, 0, 0.5);
-    box-shadow: 0 0 60px rgba(204, 255, 0, 0.25);
+    border-color: rgba(var(--primary-rgb), 0.5);
+    box-shadow: 0 0 60px rgba(var(--primary-rgb), 0.25);
 }
 
 @keyframes tp-pulse {
     0% {
-        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
-        border-color: rgba(204, 255, 0, 0.3);
+        box-shadow: 0 0 30px rgba(var(--primary-rgb), 0.1);
+        border-color: rgba(var(--primary-rgb), 0.3);
     }
 
     50% {
-        box-shadow: 0 0 60px rgba(204, 255, 0, 0.4);
-        border-color: rgba(204, 255, 0, 0.6);
+        box-shadow: 0 0 60px rgba(var(--primary-rgb), 0.4);
+        border-color: rgba(var(--primary-rgb), 0.6);
     }
 
     100% {
-        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
-        border-color: rgba(204, 255, 0, 0.3);
+        box-shadow: 0 0 30px rgba(var(--primary-rgb), 0.1);
+        border-color: rgba(var(--primary-rgb), 0.3);
     }
 }
 

@@ -19,7 +19,7 @@ const HelpView = () => {
             <section className="help-section">
                 <div className="help-card">
                     <div className="help-feature">
-                        <div className="help-icon-wrapper" style={{ background: 'rgba(191, 255, 0, 0.1)', color: 'var(--primary)' }}>
+                        <div className="help-icon-wrapper" style={{ background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)' }}>
                             <Zap size={24} />
                         </div>
                         <div className="help-content">
@@ -38,7 +38,7 @@ const HelpView = () => {
             <section className="help-section">
                 <div className="help-card">
                     <div className="help-feature">
-                        <div className="help-icon-wrapper" style={{ background: 'rgba(0, 243, 255, 0.1)', color: '#00f3ff' }}>
+                        <div className="help-icon-wrapper" style={{ background: 'rgba(76, 141, 255, 0.1)', color: 'var(--accent)' }}>
                             <Lightbulb size={24} />
                         </div>
                         <div className="help-content">

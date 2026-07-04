@@ -324,7 +324,7 @@ const GuidedWorkoutView = () => {
                             border: 'none',
                             borderRadius: '100px',
                             cursor: 'pointer',
-                            boxShadow: '0 0 25px rgba(204, 255, 0, 0.3)'
+                            boxShadow: '0 0 25px rgba(var(--primary-rgb), 0.3)'
                         }}
                     >
                         <Play size={22} fill="currentColor" /> Resume Workout
@@ -422,7 +422,10 @@ const GuidedWorkoutView = () => {
                                 key={set.id}
                                 className={`active-set-row ${set.completed ? 'completed' : ''} ${index === currentSetIndex ? 'current' : ''}`}
                             >
-                                <span className="active-set-number">{index + 1}</span>
+                                <span className="active-set-number">
+                                    {index + 1}
+                                    {set.isPR && <Trophy size={12} className="set-pr-flag" aria-label="Personal record" />}
+                                </span>
                                 <span className="active-set-value">{set.weight > 0 ? set.weight : 'BW'}</span>
                                 <span className="active-set-value">{set.reps || set.targetReps || '--'}</span>
                                 <button

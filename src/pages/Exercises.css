@@ -151,8 +151,8 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--primary);
-    background: rgba(204, 255, 0, 0.1);
-    border: 1px solid rgba(204, 255, 0, 0.2);
+    background: rgba(var(--primary-rgb), 0.1);
+    border: 1px solid rgba(var(--primary-rgb), 0.2);
     padding: 4px 10px;
     border-radius: 999px;
     white-space: nowrap;

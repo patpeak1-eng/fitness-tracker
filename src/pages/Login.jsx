@@ -64,7 +64,7 @@ const Login = () => {
                 activateProfileAndGo({
                     id: result.user_id || 'cloud_' + Date.now(),
                     name: cleanName,
-                    color: '#bfff00',
+                    color: '#ff5c2a',
                     avatar: cleanName.charAt(0).toUpperCase(),
                     // Every cloud-sync gate keys on profile.email — without it
                     // an email/password account never syncs in either direction.
@@ -89,7 +89,7 @@ const Login = () => {
                 activateProfileAndGo({
                     id: result.user_id || 'cloud_' + Date.now(),
                     name: cleanName,
-                    color: '#bfff00',
+                    color: '#ff5c2a',
                     avatar: cleanName.charAt(0).toUpperCase(),
                     // Same email gate as register — see canSyncToBackend.
                     email: email.trim()
@@ -106,7 +106,7 @@ const Login = () => {
         StorageService.saveProfiles([{
             id: 'user_default',
             name: 'Main User',
-            color: '#bfff00',
+            color: '#ff5c2a',
             avatar: 'M'
         }]);
         StorageService.saveCurrentProfileId('user_default');

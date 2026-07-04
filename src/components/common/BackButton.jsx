@@ -21,7 +21,7 @@ const BackButton = ({ to = '/', label = 'Dashboard', onClick, style = {} }) => {
         <button
             onClick={handleClick}
             style={{
-                background: 'rgba(191, 255, 0, 0.1)',
+                background: 'rgba(var(--primary-rgb), 0.1)',
                 border: '1px solid var(--primary)',
                 color: 'var(--primary)',
                 cursor: 'pointer',

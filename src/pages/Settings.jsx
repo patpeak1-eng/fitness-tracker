@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Moon, Sun, Ruler, Check, Volume2, VolumeX, Users, LogOut, ChevronLeft } from 'lucide-react';
+import { Moon, Sun, Check, Volume2, VolumeX, LogOut } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import { useTimer } from '../context/TimerContext';
-import { useNavigate } from 'react-router-dom';
-import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import StorageService from '../services/StorageService';
@@ -25,7 +23,7 @@ const COACH_PERSONALITY_OPTIONS = [
     { id: COACH_PERSONALITIES.ZEN,  label: 'Zen', desc: 'Calm & technical' },
 ];
 
-// On/off switch matching the smart-progression master toggle style.
+// The single on/off switch used everywhere on this screen.
 const Toggle = ({ checked, onChange, label }) => (
     <label className="coach-switch">
         <input
@@ -38,11 +36,28 @@ const Toggle = ({ checked, onChange, label }) => (
     </label>
 );
 
-const Settings = () => {
-    const navigate = useNavigate();
-    const [showLogoutModal, setShowLogoutModal] = useState(false); // Modal State
+// Grouped-list building blocks: one flat card per group, rows divided by
+// hairlines (surface separation per D4, not one card per row).
+const Group = ({ title, children }) => (
+    <section className="settings-group-section">
+        {title && <h2 className="settings-group-title">{title}</h2>}
+        <div className="settings-group">{children}</div>
+    </section>
+);
 
-    // Theme & Unit State from Context
+const Row = ({ label, desc, children, stacked = false }) => (
+    <div className={`settings-row ${stacked ? 'stacked' : ''}`}>
+        <div className="setting-info">
+            <span className="setting-label">{label}</span>
+            {desc && <span className="setting-desc">{desc}</span>}
+        </div>
+        {children && <div className="setting-control">{children}</div>}
+    </div>
+);
+
+const Settings = () => {
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
+
     const {
         theme, setTheme,
         units, setUnits,
@@ -71,8 +86,6 @@ const Settings = () => {
     const [coachAutoplay, setCoachAutoplay] = useState(StorageService.loadCoachAutoplay());
 
     const handleCoachEnabled = (val) => { setCoachEnabled(val); StorageService.saveCoachEnabled(val); };
-    const handleCoachPersonality = (val) => { setCoachPersonality(val); };
-    const handleCoachVoiceId = (val) => { setCoachVoiceId(val); };
     const handleCoachVoiceInput = (val) => { setCoachVoiceInput(val); StorageService.saveCoachVoiceInput(val); };
     const handleCoachAutoplay = (val) => { setCoachAutoplay(val); StorageService.saveCoachAutoplay(val); };
 
@@ -103,71 +116,42 @@ const Settings = () => {
     };
 
     return (
-        <div className="page settings-page" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div className="page settings-page">
             <div className={`save-toast ${showSaved ? 'visible' : ''}`} role="status" aria-live="polite">
                 <Check size={16} /> Saved
             </div>
-            <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <header className="page-header settings-header">
                 <BackButton />
-                <h1 style={{ margin: 0 }}>Settings</h1>
+                <h1>Settings</h1>
             </header>
 
-            <section className="settings-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingRight: '0.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Account</h2>
-                    <button
-                        onClick={() => setShowLogoutModal(true)}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#ff4444',
-                            cursor: 'pointer',
-                            fontSize: '0.9rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontWeight: 500
-                        }}
-                    >
-                        Switch Profile <LogOut size={16} />
-                    </button>
-                </div>
-
-                <Card className="setting-row">
-                    <div className="setting-info" style={{ width: '100%' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                            <div className="profile-avatar-large" style={{ backgroundColor: currentProfile?.color, width: '48px', height: '48px', fontSize: '1.2rem' }}>
-                                {currentProfile?.avatar}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span className="setting-label" style={{ fontSize: '1.1rem' }}>{currentProfile?.name}</span>
-                                <span className="setting-desc">Current Profile</span>
-                            </div>
-                        </div>
+            <Group title="Account">
+                <div className="settings-row account-row">
+                    <div className="settings-avatar" style={{ backgroundColor: currentProfile?.color }}>
+                        {currentProfile?.avatar}
                     </div>
-                </Card>
-
-                <h2 style={{ marginTop: '20px' }}>Preferences</h2>
-
-                {/* Visuals & Units */}
-                <Card className="setting-row">
                     <div className="setting-info">
-                        <span className="setting-label">Theme Mode</span>
-                        <span className="setting-desc">{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+                        <span className="setting-label">{currentProfile?.name}</span>
+                        <span className="setting-desc">Current profile</span>
                     </div>
+                </div>
+                <button className="settings-row row-action danger" onClick={() => setShowLogoutModal(true)}>
+                    <span className="setting-label">Switch profile</span>
+                    <LogOut size={18} />
+                </button>
+            </Group>
+
+            <Group title="Preferences">
+                <Row label="Theme" desc={theme === 'dark' ? 'Dark mode' : 'Light mode'}>
                     <button
                         className="toggle-btn"
                         onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                        aria-label="Toggle theme"
                     >
                         {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
                     </button>
-                </Card>
-
-                <Card className="setting-row">
-                    <div className="setting-info">
-                        <span className="setting-label">Units</span>
-                        <span className="setting-desc">Measurement system</span>
-                    </div>
+                </Row>
+                <Row label="Units" desc="Measurement system">
                     <div className="unit-toggle">
                         <button
                             className={`unit-btn ${units === 'metric' ? 'active' : ''}`}
@@ -182,94 +166,56 @@ const Settings = () => {
                             lbs / mi
                         </button>
                     </div>
-                </Card>
+                </Row>
+            </Group>
 
-                {/* Timer Group */}
-                <h3 style={{ marginTop: '24px', marginBottom: '12px', color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Timer Settings</h3>
-
-                <Card className="setting-row">
-                    <div className="setting-info">
-                        <span className="setting-label">Timer Sounds</span>
-                        <span className="setting-desc">{soundEnabled ? 'Enabled' : 'Muted'}</span>
-                    </div>
+            <Group title="Timers">
+                <Row label="Timer sounds" desc={soundEnabled ? 'Enabled' : 'Muted'}>
                     <button
                         className="toggle-btn"
                         onClick={() => setSoundEnabled(!soundEnabled)}
+                        aria-label="Toggle timer sounds"
                     >
                         {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                     </button>
-                </Card>
-
-                <Card className="setting-row">
-                    <div className="setting-info">
-                        <span className="setting-label">Work Timer Default</span>
-                        <span className="setting-desc">Standard duration for work intervals</span>
-                    </div>
+                </Row>
+                <Row label="Work default" desc="Standard work interval">
                     <div className="timer-input-group">
                         <input
                             type="number"
                             value={defaultWorkTime}
                             onChange={(e) => setDefaultWorkTime(Number(e.target.value))}
                             className="timer-input-box"
+                            aria-label="Work timer default seconds"
                         />
-                        <span className="unit">sec</span>
+                        <span className="timer-unit">sec</span>
                     </div>
-                </Card>
-
-                <Card className="setting-row">
-                    <div className="setting-info">
-                        <span className="setting-label">Rest Timer Default</span>
-                        <span className="setting-desc">Standard duration for rest intervals</span>
-                    </div>
+                </Row>
+                <Row label="Rest default" desc="Standard rest interval">
                     <div className="timer-input-group">
                         <input
                             type="number"
                             value={defaultRestTime}
                             onChange={(e) => setDefaultRestTime(Number(e.target.value))}
                             className="timer-input-box"
+                            aria-label="Rest timer default seconds"
                         />
-                        <span className="unit">sec</span>
+                        <span className="timer-unit">sec</span>
                     </div>
-                </Card>
+                </Row>
+            </Group>
 
-                {/* Smart Progression Group */}
-                <div style={{ marginTop: '24px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-                        <h3 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Smart Progression</h3>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', opacity: 0.8 }}>- Customize how the app increases weight.</span>
-                    </div>
-                    {/* Master Toggle */}
-                    <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '40px', height: '20px' }}>
-                        <input
-                            type="checkbox"
-                            checked={smartProgressionEnabled}
-                            onChange={(e) => setSmartProgressionEnabled(e.target.checked)}
-                            style={{ opacity: 0, width: 0, height: 0 }}
-                        />
-                        <span style={{
-                            position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                            backgroundColor: smartProgressionEnabled ? 'var(--primary)' : '#444',
-                            transition: '.4s', borderRadius: '20px'
-                        }}>
-                            <span style={{
-                                position: 'absolute', content: '""', height: '16px', width: '16px', left: '2px', bottom: '2px',
-                                backgroundColor: smartProgressionEnabled ? '#000' : '#fff',
-                                transition: '.4s', borderRadius: '50%',
-                                transform: smartProgressionEnabled ? 'translateX(20px)' : 'none'
-                            }}></span>
-                        </span>
-                    </label>
-                </div>
-
-                <div className={`smart-progression-content ${smartProgressionEnabled ? 'open' : ''}`}>
-                    <Card>
-                        <div className="setting-row">
-                            <div className="setting-info">
-                                <span className="setting-label">Progression Logic</span>
-                                <span className="setting-desc">
-                                    When to increase weight
-                                </span>
-                            </div>
+            <Group title="Smart Progression">
+                <Row label="Auto-progression" desc="Recommend weight increases">
+                    <Toggle
+                        checked={smartProgressionEnabled}
+                        onChange={setSmartProgressionEnabled}
+                        label="Enable smart progression"
+                    />
+                </Row>
+                {smartProgressionEnabled && (
+                    <>
+                        <Row label="Logic" desc="When to increase weight">
                             <div className="unit-toggle">
                                 <button
                                     className={`unit-btn ${progressionMode === 'linear' ? 'active' : ''}`}
@@ -284,25 +230,13 @@ const Settings = () => {
                                     Double
                                 </button>
                             </div>
+                        </Row>
+                        <div className="settings-help">
+                            {progressionMode === 'linear'
+                                ? 'Linear: recommends an increase when you hit target reps on the last set. Aggressive progression.'
+                                : 'Double: recommends an increase only when you hit target reps on all sets. Steady, safe progression.'}
                         </div>
-                        <div className="setting-help-text">
-                            <p style={{ margin: '0 0 8px 0', opacity: progressionMode === 'linear' ? 1 : 0.6, transition: 'opacity 0.3s' }}>
-                                <strong style={{ color: progressionMode === 'linear' ? 'var(--primary)' : 'inherit' }}>LINEAR:</strong> Recommends an increase if you hit your target reps on the LAST set. Best for aggressive progression.
-                            </p>
-                            <p style={{ margin: 0, opacity: progressionMode === 'double' ? 1 : 0.6, transition: 'opacity 0.3s' }}>
-                                <strong style={{ color: progressionMode === 'double' ? 'var(--primary)' : 'inherit' }}>DOUBLE:</strong> Recommends an increase only if you hit your target reps on ALL sets. Best for steady, safe progression.
-                            </p>
-                        </div>
-                    </Card>
-
-                    <Card>
-                        <div className="setting-row">
-                            <div className="setting-info">
-                                <span className="setting-label">Increment Logic</span>
-                                <span className="setting-desc">
-                                    How to calculate increase
-                                </span>
-                            </div>
+                        <Row label="Increment" desc="How to calculate the increase">
                             <div className="unit-toggle">
                                 <button
                                     className={`unit-btn ${progressionType === 'fixed' ? 'active' : ''}`}
@@ -317,25 +251,8 @@ const Settings = () => {
                                     %
                                 </button>
                             </div>
-                        </div>
-                        <div className="setting-help-text">
-                            <p style={{ margin: '0 0 8px 0', opacity: progressionType === 'fixed' ? 1 : 0.6, transition: 'opacity 0.3s' }}>
-                                <strong style={{ color: progressionType === 'fixed' ? 'var(--primary)' : 'inherit' }}>FIXED:</strong> Increases weight by a specific amount (e.g., +5 lbs) every time.
-                            </p>
-                            <p style={{ margin: 0, opacity: progressionType === 'percentage' ? 1 : 0.6, transition: 'opacity 0.3s' }}>
-                                <strong style={{ color: progressionType === 'percentage' ? 'var(--primary)' : 'inherit' }}>PERCENTAGE:</strong> Increases weight by a percentage of your current lift (e.g., +2.5%). Good for micro-loading.
-                            </p>
-                        </div>
-                    </Card>
-
-                    <Card>
-                        <div className="setting-row">
-                            <div className="setting-info">
-                                <span className="setting-label">Increment Value</span>
-                                <span className="setting-desc">
-                                    Step size
-                                </span>
-                            </div>
+                        </Row>
+                        <Row label="Step size" desc="Amount added per progression">
                             <div className="timer-input-group">
                                 <input
                                     type="number"
@@ -343,88 +260,61 @@ const Settings = () => {
                                     value={progressionIncrement}
                                     onChange={(e) => setProgressionIncrement(Number(e.target.value))}
                                     className="timer-input-box"
+                                    aria-label="Progression step size"
                                 />
-                                <span className="unit">
+                                <span className="timer-unit">
                                     {progressionType === 'fixed' ? (units === 'metric' ? 'kg' : 'lbs') : '%'}
                                 </span>
                             </div>
-                        </div>
-                        <div className="setting-help-text">
-                            The exact amount added when a progression is triggered.
-                            {progressionType === 'percentage' && ` currently adds about ${Math.round(100 * (progressionIncrement / 100)) / 1} lbs to a 100 lb lift.`}
-                        </div>
-                    </Card>
-                </div>
-            </section>
+                        </Row>
+                    </>
+                )}
+            </Group>
 
-            <section className="settings-section">
-                <h2>AI Coach</h2>
-
-                <Card className="setting-row">
-                    <div className="setting-info">
-                        <span className="setting-label">Enable AI Coach</span>
-                        <span className="setting-desc">{coachEnabled ? 'Enabled' : 'Disabled'}</span>
-                    </div>
+            <Group title="AI Coach">
+                <Row label="Enable AI Coach" desc={coachEnabled ? 'Enabled' : 'Disabled'}>
                     <Toggle checked={coachEnabled} onChange={handleCoachEnabled} label="Enable AI Coach" />
-                </Card>
-
+                </Row>
                 {coachEnabled && (
                     <>
-                        <Card>
-                            <span className="setting-label">Personality</span>
+                        <Row
+                            label="Personality"
+                            desc={COACH_PERSONALITY_OPTIONS.find((p) => p.id === coachPersonality)?.desc}
+                            stacked
+                        >
                             <div className="unit-toggle coach-personality">
                                 {COACH_PERSONALITY_OPTIONS.map((p) => (
                                     <button
                                         key={p.id}
                                         className={`unit-btn ${coachPersonality === p.id ? 'active' : ''}`}
-                                        onClick={() => handleCoachPersonality(p.id)}
+                                        onClick={() => setCoachPersonality(p.id)}
                                     >
                                         {p.label}
                                     </button>
                                 ))}
                             </div>
-                            <p className="setting-desc coach-personality-desc">
-                                {COACH_PERSONALITY_OPTIONS.find((p) => p.id === coachPersonality)?.desc}
-                            </p>
-                        </Card>
-
-                        <Card>
-                            <span className="setting-label">Voice</span>
-                            <div className="coach-voice-list">
-                                {COACH_VOICES.map((v) => (
-                                    <button
-                                        key={v.id}
-                                        type="button"
-                                        className="coach-voice-option"
-                                        onClick={() => handleCoachVoiceId(v.id)}
-                                        aria-pressed={coachVoiceId === v.id}
-                                    >
-                                        <span>{v.name}</span>
-                                        {coachVoiceId === v.id && <Check size={16} color="var(--primary)" />}
-                                    </button>
-                                ))}
-                            </div>
-                        </Card>
-
-                        <Card className="coach-toggle-card">
-                            <div className="setting-row">
-                                <div className="setting-info">
-                                    <span className="setting-label">Voice Input (Mic)</span>
-                                    <span className="setting-desc">Speak your messages to the coach</span>
-                                </div>
-                                <Toggle checked={coachVoiceInput} onChange={handleCoachVoiceInput} label="Voice input" />
-                            </div>
-                            <div className="setting-row">
-                                <div className="setting-info">
-                                    <span className="setting-label">Auto-play Voice</span>
-                                    <span className="setting-desc">Speak the coach&apos;s replies aloud</span>
-                                </div>
-                                <Toggle checked={coachAutoplay} onChange={handleCoachAutoplay} label="Auto-play voice" />
-                            </div>
-                        </Card>
+                        </Row>
+                        {COACH_VOICES.map((v) => (
+                            <button
+                                key={v.id}
+                                type="button"
+                                className="settings-row row-action coach-voice-option"
+                                onClick={() => setCoachVoiceId(v.id)}
+                                aria-pressed={coachVoiceId === v.id}
+                            >
+                                <span className="setting-label">{v.name}</span>
+                                {coachVoiceId === v.id && <Check size={16} className="voice-check" />}
+                            </button>
+                        ))}
+                        <Row label="Voice input" desc="Speak your messages to the coach">
+                            <Toggle checked={coachVoiceInput} onChange={handleCoachVoiceInput} label="Voice input" />
+                        </Row>
+                        <Row label="Auto-play voice" desc="Speak the coach's replies aloud">
+                            <Toggle checked={coachAutoplay} onChange={handleCoachAutoplay} label="Auto-play voice" />
+                        </Row>
                     </>
                 )}
-            </section>
+            </Group>
 
             <div className="version-info">
                 <p>App: FitTrack v1.0</p>
@@ -443,11 +333,7 @@ const Settings = () => {
                 actions={
                     <>
                         <button className="secondary-btn" onClick={() => setShowLogoutModal(false)}>Cancel</button>
-                        <button
-                            className="primary-btn"
-                            style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }}
-                            onClick={handleSwitchProfile}
-                        >
+                        <button className="primary-btn danger-btn" onClick={handleSwitchProfile}>
                             Log Out
                         </button>
                     </>

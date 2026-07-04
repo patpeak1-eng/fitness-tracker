@@ -99,10 +99,10 @@ const WorkoutSummary = () => {
 
                 {/* PR SECTION */}
                 {prs.length > 0 && (
-                    <Card className="recs-card" style={{ borderColor: 'gold', background: 'rgba(255, 215, 0, 0.05)' }}>
+                    <Card className="recs-card" style={{ borderColor: 'var(--pr-gold)', background: 'rgba(233, 184, 76, 0.08)' }}>
                         <div className="card-header-row">
-                            <Trophy className="icon-highlight" color="gold" />
-                            <h3 style={{ color: 'gold' }}>New Personal Records!</h3>
+                            <Trophy className="icon-highlight" color="var(--pr-gold)" />
+                            <h3 style={{ color: 'var(--pr-gold)' }}>New Personal Records!</h3>
                         </div>
                         <div className="recs-list">
                             {prs.map((pr, idx) => (
@@ -110,7 +110,7 @@ const WorkoutSummary = () => {
                                     <div className="rec-info">
                                         <h4>{pr.exerciseName}</h4>
                                         <div className="rec-change">
-                                            <span className="new-val" style={{ color: 'gold' }}>
+                                            <span className="new-val" style={{ color: 'var(--pr-gold)' }}>
                                                 {pr.weight} {units === 'metric' ? 'kg' : 'lbs'} x {pr.reps} reps
                                             </span>
                                         </div>

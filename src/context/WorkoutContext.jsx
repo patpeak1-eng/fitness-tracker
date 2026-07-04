@@ -440,7 +440,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                     const cloudProfile = {
                         id: user.id,
                         name: user.name,
-                        color: user.color || '#bfff00',
+                        color: user.color || '#ff5c2a',
                         avatar: user.avatar ||
                             (user.name ? user.name[0].toUpperCase() : 'U'),
                         email: user.email

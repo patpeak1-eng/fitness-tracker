@@ -8,7 +8,7 @@ const ProfileSelector = () => {
     const [isCreating, setIsCreating] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [newByName, setNewName] = useState('');
-    const [selectedColor, setSelectedColor] = useState('#bfff00');
+    const [selectedColor, setSelectedColor] = useState('#ff5c2a');
 
     const handleCreate = () => {
         if (newByName.trim()) {
@@ -31,7 +31,7 @@ const ProfileSelector = () => {
         }
     };
 
-    const colors = ['#bfff00', '#bd00ff', '#00ff9d', '#ff3366', '#33ccff', '#ff9900'];
+    const colors = ['#ff5c2a', '#bd00ff', '#00ff9d', '#ff3366', '#33ccff', '#ff9900'];
 
     return (
         <div className="page profile-selector-page">

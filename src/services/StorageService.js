@@ -244,7 +244,7 @@ const StorageService = {
             const defaultProfile = {
                 id: 'user_default',
                 name: 'Main User',
-                color: '#bfff00',
+                color: '#ff5c2a',
                 avatar: 'M'
             };
             profiles = [defaultProfile];

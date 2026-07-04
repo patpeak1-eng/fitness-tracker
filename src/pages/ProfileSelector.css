@@ -91,9 +91,9 @@
 }
 
 .add-profile-card:hover .profile-avatar {
-    border-color: #bfff00;
-    background: rgba(191, 255, 0, 0.1);
-    box-shadow: 0 0 20px rgba(191, 255, 0, 0.2);
+    border-color: var(--primary);
+    background: rgba(var(--primary-rgb), 0.1);
+    box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.2);
 }
 
 .add-profile-card .profile-avatar svg {
@@ -101,7 +101,7 @@
 }
 
 .add-profile-card:hover .profile-avatar svg {
-    color: #bfff00;
+    color: var(--primary);
 }
 
 /* MODAL */

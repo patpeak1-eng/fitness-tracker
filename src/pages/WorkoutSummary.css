@@ -77,8 +77,8 @@
 /* RECOMMENDATIONS */
 .recs-card {
     text-align: left;
-    border: 1px solid rgba(191, 255, 0, 0.3) !important;
-    background: rgba(191, 255, 0, 0.05) !important;
+    border: 1px solid rgba(var(--primary-rgb), 0.3) !important;
+    background: rgba(var(--primary-rgb), 0.05) !important;
 }
 
 .card-header-row {
@@ -134,7 +134,7 @@
 
 .apply-btn:hover {
     transform: scale(1.05);
-    box-shadow: 0 0 10px rgba(191, 255, 0, 0.3);
+    box-shadow: 0 0 10px rgba(var(--primary-rgb), 0.3);
 }
 
 .apply-btn:disabled {

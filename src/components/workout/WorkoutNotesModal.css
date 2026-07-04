@@ -20,7 +20,7 @@
 
 .notes-textarea:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(191, 255, 0, 0.1);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1);
 }
 
 /* Modal specific tweaks if needed */
@@ -42,14 +42,14 @@
     font-weight: 700;
     border-radius: 12px;
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(191, 255, 0, 0.2);
+    box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.2);
     transition: transform 0.2s, box-shadow 0.2s;
     border: none;
 }
 
 .save-note-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(191, 255, 0, 0.4);
+    box-shadow: 0 6px 20px rgba(var(--primary-rgb), 0.4);
 }
 
 .save-note-btn:active {

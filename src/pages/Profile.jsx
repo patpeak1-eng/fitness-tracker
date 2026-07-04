@@ -7,7 +7,6 @@ import StorageService from '../services/StorageService';
 import * as ApiService from '../services/ApiService';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
-import Card from '../components/common/Card';
 import ProgressChart from '../components/analytics/ProgressChart';
 import './Profile.css';
 
@@ -30,19 +29,19 @@ const Profile = () => {
     const [bmi, setBmi] = useState(null);
     const [bmiCategory, setBmiCategory] = useState('');
 
-    // Save feedback state (Improvement 1 + 4)
+    // Save feedback state
     const [savedSection, setSavedSection] = useState(null); // 'personal' | 'measurements' | null
     const [autoSaved, setAutoSaved] = useState(false);
     const savedTimer = useRef(null);
     const autoSaveTimer = useRef(null);
 
-    // Profile name editing state (Improvement 2)
+    // Profile name editing state
     const [editingName, setEditingName] = useState(false);
     const [nameDraft, setNameDraft] = useState('');
     const [nameNote, setNameNote] = useState(null);
     const nameNoteTimer = useRef(null);
 
-    // Advanced (data tools) collapse state (Improvement 3)
+    // Advanced (data tools) collapse state
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     // Data Management State
@@ -50,9 +49,8 @@ const Profile = () => {
     const [confirmImport, setConfirmImport] = useState({ isOpen: false, file: null });
     const fileInputRef = useRef(null);
 
-    // --- Sync status (Improvement 3) ---
-    // Cloud sync is active for Google OAuth users (profile carries an email and
-    // the backend URL is configured). The auth itself rides on the session cookie.
+    // Cloud sync is active for account users (profile carries an email and the
+    // backend URL is configured).
     const isSynced = !!(currentProfile?.email && ApiService.isAvailable());
 
     const handleSignOut = async () => {
@@ -92,14 +90,12 @@ const Profile = () => {
         // and gives the user explicit confirmation.
         setUserStats(prev => ({ ...prev }));
 
-        // Show the local "Saved" confirmation immediately — persistence already
-        // happened; the best-effort cloud push below shouldn't delay the badge.
         setSavedSection(section);
         if (savedTimer.current) clearTimeout(savedTimer.current);
         savedTimer.current = setTimeout(() => setSavedSection(null), 2000);
 
-        // Push body stats to the backend for cloud (Google OAuth) users.
-        // Non-fatal: localStorage stays the source of truth on failure.
+        // Push body stats to the backend for cloud users. Non-fatal:
+        // localStorage stays the source of truth on failure.
         if (currentProfile?.email && ApiService.isAvailable()) {
             try {
                 await ApiService.saveProfile({
@@ -247,51 +243,85 @@ const Profile = () => {
 
     return (
         <div className="page profile-page">
-            <header className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '20px' }}>
+            <header className="page-header profile-header-row">
                 <BackButton />
                 <button
+                    className="help-toggle-btn"
                     onClick={() => navigate('/help')}
-                    style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}
                     title="Help Guide"
+                    aria-label="Open help guide"
                 >
-                    <HelpCircle size={24} />
+                    <HelpCircle size={22} />
                 </button>
             </header>
 
-            {/* PROFILE NAME (Improvement 2) */}
-            <div style={{ marginBottom: '20px' }}>
-                <div className="profile-name-row">
-                    {editingName ? (
-                        <input
-                            className="name-input"
-                            value={nameDraft}
-                            autoFocus
-                            onChange={(e) => setNameDraft(e.target.value)}
-                            onBlur={commitName}
-                            onKeyDown={handleNameKeyDown}
-                            aria-label="Profile name"
-                        />
-                    ) : (
-                        <>
-                            <h1 className="profile-name">{currentProfile?.name || 'My Profile'}</h1>
-                            <button
-                                className="name-edit-btn"
-                                onClick={startEditName}
-                                title="Edit name"
-                                aria-label="Edit profile name"
-                            >
-                                <Pencil size={16} />
-                            </button>
-                        </>
-                    )}
+            {/* Identity band: avatar + name + sync state at a glance */}
+            <div className="identity-band">
+                <div className="identity-avatar" style={{ backgroundColor: currentProfile?.color }}>
+                    {currentProfile?.avatar}
                 </div>
-                {nameNote && <span className="name-note">{nameNote}</span>}
-                <p className="subtitle" style={{ marginTop: '5px' }}>Track your progress</p>
+                <div className="identity-text">
+                    <div className="profile-name-row">
+                        {editingName ? (
+                            <input
+                                className="name-input"
+                                value={nameDraft}
+                                autoFocus
+                                onChange={(e) => setNameDraft(e.target.value)}
+                                onBlur={commitName}
+                                onKeyDown={handleNameKeyDown}
+                                aria-label="Profile name"
+                            />
+                        ) : (
+                            <>
+                                <h1 className="profile-name">{currentProfile?.name || 'My Profile'}</h1>
+                                <button
+                                    className="name-edit-btn"
+                                    onClick={startEditName}
+                                    title="Edit name"
+                                    aria-label="Edit profile name"
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                            </>
+                        )}
+                    </div>
+                    <span className={`identity-sync ${isSynced ? 'online' : ''}`}>
+                        <span className="sync-dot" />
+                        {isSynced ? 'Synced to cloud' : 'Local profile'}
+                    </span>
+                    {nameNote && <span className="name-note">{nameNote}</span>}
+                </div>
             </div>
 
+            {/* Body overview: the numbers this page manages, at a glance */}
+            <section className="body-band">
+                <div className="body-stat">
+                    <span className="body-stat-label">BMI</span>
+                    <span className="body-stat-value">{bmi || '--'}</span>
+                    <span className="body-stat-sub">{bmiCategory || 'Add height & weight'}</span>
+                </div>
+                <div className="body-stat">
+                    <span className="body-stat-label">Current</span>
+                    <span className="body-stat-value">
+                        {userStats.currentWeight || '--'}
+                        <span className="body-stat-unit"> {unitLabels.weight}</span>
+                    </span>
+                    <span className="body-stat-sub">weight</span>
+                </div>
+                <div className="body-stat">
+                    <span className="body-stat-label">Target</span>
+                    <span className="body-stat-value">
+                        {userStats.targetWeight || '--'}
+                        <span className="body-stat-unit"> {unitLabels.weight}</span>
+                    </span>
+                    <span className="body-stat-sub">goal weight</span>
+                </div>
+            </section>
+
             <section className="profile-section">
-                <h2><User size={20} /> Personal Information</h2>
-                <Card className="form-card">
+                <h2><User size={16} /> Personal Information</h2>
+                <div className="form-card">
                     <div className="form-group">
                         <label>Age</label>
                         <input
@@ -319,20 +349,12 @@ const Profile = () => {
                             <Check size={16} /> Saved
                         </span>
                     </div>
-                </Card>
+                </div>
             </section>
 
             <section className="profile-section">
-                <h2><Activity size={20} /> Measurements & BMI</h2>
-                <div className="stats-highlight-grid">
-                    <div className={`metric-card ${bmi ? 'active' : ''}`}>
-                        <span className="metric-label">BMI</span>
-                        <span className="metric-value">{bmi || '--'}</span>
-                        <span className="metric-status">{bmiCategory}</span>
-                    </div>
-                </div>
-
-                <Card className="form-card">
+                <h2><Activity size={16} /> Measurements</h2>
+                <div className="form-card">
                     <div className="form-row-2">
                         <div className="form-group">
                             <label>Current Weight ({unitLabels.weight})</label>
@@ -363,14 +385,14 @@ const Profile = () => {
                             <Check size={16} /> Saved
                         </span>
                     </div>
-                </Card>
+                </div>
             </section>
 
             {/* Weight Progress Chart */}
             {weightGraphData.length > 1 && (
                 <section className="profile-section">
-                    <h2><Activity size={20} /> Weight Progress</h2>
-                    <div className="chart-card glass-panel" style={{ padding: '15px' }}>
+                    <h2><Activity size={16} /> Weight Progress</h2>
+                    <div className="chart-card">
                         <ProgressChart
                             type="line"
                             data={weightGraphData}
@@ -383,8 +405,8 @@ const Profile = () => {
             )}
 
             <section className="profile-section">
-                <h2><Target size={20} /> Fitness Goals</h2>
-                <Card className="form-card">
+                <h2><Target size={16} /> Fitness Goals</h2>
+                <div className="form-card">
                     <div className="form-group">
                         <label>Primary Goal</label>
                         <select name="goal" value={userStats.goal} onChange={handleChange}>
@@ -406,12 +428,12 @@ const Profile = () => {
                         />
                     </div>
                     <AutoSaveIndicator />
-                </Card>
+                </div>
             </section>
 
             <section className="profile-section">
-                <h2 className="optional-header"><Heart size={20} /> Advanced (Optional)</h2>
-                <Card className="form-card">
+                <h2><Heart size={16} /> Advanced (Optional)</h2>
+                <div className="form-card">
                     <div className="form-row-3">
                         <div className="form-group">
                             <label>Body Fat %</label>
@@ -445,15 +467,14 @@ const Profile = () => {
                         </div>
                     </div>
                     <AutoSaveIndicator />
-                </Card>
+                </div>
             </section>
 
-            {/* ACCOUNT & SYNC (replaces Manual Backup) */}
             <section className="profile-section">
-                <h2><Cloud size={20} /> Account & Sync</h2>
-                <Card className="form-card sync-card">
+                <h2><Cloud size={16} /> Account & Sync</h2>
+                <div className="form-card sync-card">
                     <div className="sync-status">
-                        <span className={`sync-dot ${isSynced ? 'online' : 'offline'}`}></span>
+                        <span className={`sync-dot large ${isSynced ? 'online' : ''}`}></span>
                         <div className="sync-text">
                             <span className="sync-title">{isSynced ? 'Synced to cloud' : 'Sign in to sync across devices'}</span>
                             <span className="sync-sub">
@@ -472,7 +493,7 @@ const Profile = () => {
                             </button>
                         )}
                     </div>
-                </Card>
+                </div>
 
                 {/* Advanced data tools (collapsed) */}
                 <button
@@ -484,34 +505,26 @@ const Profile = () => {
                     <ChevronDown size={18} className={`adv-chevron ${showAdvanced ? 'open' : ''}`} />
                 </button>
                 {showAdvanced && (
-                    <Card className="form-card advanced-content">
+                    <div className="form-card advanced-content">
                         <p className="advanced-note">
                             Manually transfer your data between devices.
                         </p>
                         <div className="form-row-2">
-                            <button
-                                className="secondary-btn"
-                                onClick={exportData}
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                            >
+                            <button className="secondary-btn data-btn" onClick={exportData}>
                                 <Download size={18} /> Export Backup
                             </button>
-                            <button
-                                className="secondary-btn"
-                                onClick={handleImportClick}
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderColor: 'var(--accent)', color: 'var(--accent)' }}
-                            >
+                            <button className="secondary-btn data-btn" onClick={handleImportClick}>
                                 <Upload size={18} /> Import Backup
                             </button>
                             <input
                                 type="file"
                                 ref={fileInputRef}
                                 onChange={handleFileChange}
-                                style={{ display: 'none' }}
+                                className="hidden-file-input"
                                 accept=".json"
                             />
                         </div>
-                    </Card>
+                    </div>
                 )}
             </section>
 
@@ -553,11 +566,11 @@ const Profile = () => {
                     </>
                 }
             >
-                <div style={{ textAlign: 'center', padding: '10px 0' }}>
-                    <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
+                <div className="import-warning">
+                    <p className="import-warning-note">
                         This will delete all current data on this device and replace it with the backup file.
                     </p>
-                    <p style={{ fontWeight: 'bold', color: 'var(--danger)' }}>
+                    <p className="import-warning-danger">
                         This action cannot be undone.
                     </p>
                 </div>

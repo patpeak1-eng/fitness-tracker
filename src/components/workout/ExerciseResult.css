@@ -11,7 +11,7 @@
 }
 
 .exercise-result-card:hover {
-    border-color: rgba(191, 255, 0, 0.2);
+    border-color: rgba(var(--primary-rgb), 0.2);
 }
 
 .exercise-header {
@@ -219,7 +219,7 @@
 .col-weight input:focus,
 .col-reps input:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 1px rgba(191, 255, 0, 0.2);
+    box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.2);
     background-color: rgba(0, 0, 0, 0.5);
 }
 
@@ -277,7 +277,7 @@
 
 .input-target {
     color: var(--primary) !important;
-    border-color: rgba(191, 255, 0, 0.3) !important;
+    border-color: rgba(var(--primary-rgb), 0.3) !important;
 }
 
 .subtitle {
@@ -308,7 +308,7 @@
 
 /* Recommendation Toast */
 .recommendation-toast {
-    background: linear-gradient(90deg, rgba(191, 255, 0, 0.1), transparent);
+    background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.1), transparent);
     border-left: 3px solid var(--primary);
     padding: 8px 12px;
     margin-bottom: 12px;

@@ -233,14 +233,14 @@
 
 /* TIMER STATES */
 .timer-circle.working {
-    border-color: rgba(204, 255, 0, 0.3);
-    box-shadow: 0 0 50px rgba(204, 255, 0, 0.1);
+    border-color: rgba(var(--primary-rgb), 0.3);
+    box-shadow: 0 0 50px rgba(var(--primary-rgb), 0.1);
     animation: pulse-ring-lime 2s infinite ease-in-out;
 }
 
 .timer-circle.working.duration-mode {
-    border-color: rgba(0, 243, 255, 0.3);
-    box-shadow: 0 0 50px rgba(0, 243, 255, 0.1);
+    border-color: rgba(76, 141, 255, 0.3);
+    box-shadow: 0 0 50px rgba(76, 141, 255, 0.1);
     animation: pulse-ring-cyan 2s infinite ease-in-out;
 }
 
@@ -252,35 +252,35 @@
 
 @keyframes pulse-ring-lime {
     0% {
-        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
-        border-color: rgba(204, 255, 0, 0.3);
+        box-shadow: 0 0 30px rgba(var(--primary-rgb), 0.1);
+        border-color: rgba(var(--primary-rgb), 0.3);
     }
 
     50% {
-        box-shadow: 0 0 60px rgba(204, 255, 0, 0.4);
-        border-color: rgba(204, 255, 0, 0.6);
+        box-shadow: 0 0 60px rgba(var(--primary-rgb), 0.4);
+        border-color: rgba(var(--primary-rgb), 0.6);
     }
 
     100% {
-        box-shadow: 0 0 30px rgba(204, 255, 0, 0.1);
-        border-color: rgba(204, 255, 0, 0.3);
+        box-shadow: 0 0 30px rgba(var(--primary-rgb), 0.1);
+        border-color: rgba(var(--primary-rgb), 0.3);
     }
 }
 
 @keyframes pulse-ring-cyan {
     0% {
-        box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
-        border-color: rgba(0, 243, 255, 0.3);
+        box-shadow: 0 0 30px rgba(76, 141, 255, 0.1);
+        border-color: rgba(76, 141, 255, 0.3);
     }
 
     50% {
-        box-shadow: 0 0 60px rgba(0, 243, 255, 0.4);
-        border-color: rgba(0, 243, 255, 0.6);
+        box-shadow: 0 0 60px rgba(76, 141, 255, 0.4);
+        border-color: rgba(76, 141, 255, 0.6);
     }
 
     100% {
-        box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
-        border-color: rgba(0, 243, 255, 0.3);
+        box-shadow: 0 0 30px rgba(76, 141, 255, 0.1);
+        border-color: rgba(76, 141, 255, 0.3);
     }
 }
 
@@ -385,7 +385,7 @@
 
 .main-action-btn:active {
     transform: scale(0.96);
-    box-shadow: 0 2px 10px rgba(204, 255, 0, 0.2);
+    box-shadow: 0 2px 10px rgba(var(--primary-rgb), 0.2);
 }
 
 /* RESTING STATE BUTTON */
@@ -474,10 +474,10 @@
 }
 
 .view-instructions-btn:hover {
-    background: rgba(204, 255, 0, 0.15);
+    background: rgba(var(--primary-rgb), 0.15);
     border-color: var(--primary);
     transform: translateY(-2px);
-    box-shadow: 0 0 15px rgba(204, 255, 0, 0.2);
+    box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2);
     color: #fff;
 }
 
@@ -551,4 +551,11 @@
         padding-left: 0;
         flex: 0;
     }
+}
+
+/* PR marker on a logged set (pr-gold token: PR/warm-up markers only) */
+.set-pr-flag {
+    color: var(--pr-gold);
+    margin-left: 4px;
+    vertical-align: middle;
 }

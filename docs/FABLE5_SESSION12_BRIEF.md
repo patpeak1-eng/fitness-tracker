@@ -44,7 +44,7 @@ Two independent visual research passes (ChatGPT, Gemini) both analyzed Hevy, Fit
 
 ### 1.3 Screen-by-Screen Direction
 
-**Scope correction (locked, supersedes any earlier framing):** This app has a validated token system from Session 11 — blue-violet dark base (#0e0e18), 4 surface levels, neon green (#bfff00) accent, 12px card radius, tabular numbers. **This token system is the foundation and travels forward unchanged.**
+**Scope correction (UPDATED 2026-07-04, supersedes the S11 token lock):** The S11 token system (blue-violet base #0e0e18, neon green #bfff00) is RETIRED. The app now runs on **Design Tokens v2 — "Ember on Graphite"** (graphite neutrals, ember #ff5c2a accent, semantic green/gold/blue, Inter + Archivo type) — see docs/DESIGN_TOKENS.md, the locked source of truth. Structural direction below (layout rebuilds per Section 1.2/1.3) is unchanged.
 
 Screen composition, layout, card structure, and information hierarchy are **fully in scope for redesign**. Fable 5 is authorized to rebuild screen layouts against the structural specs in Section 1.2/1.3 below — this is a clone-level visual redesign using the top apps as direct templates, not an incremental CSS pass. Do not preserve current screen composition for its own sake. The S11 tokens (color, radius, typography scale) apply *within* the new layouts; they do not constrain the layouts themselves.
 
@@ -241,12 +241,13 @@ Each stage follows the standard AUDIT_FIX_VERIFY_CLOSE_CYCLE from MASTER_CONTEXT
 - Frontend: https://fitness-tracker-production-54a4.up.railway.app
 - Backend: https://astonishing-laughter-production-de7d.up.railway.app
 
-**Design system (locked, do not replace):**
-- Canvas: `#0e0e18` | Surface 1: `#16162a` | Surface 2: `#1e1e2e` | Surface 3: `#28283c`
-- Primary accent: `#bfff00` (neon green)
-- Card radius: 12px | Input/row radius: 8px | Pills: 999px | CTA buttons: 10px
+**Design system (SUPERSEDED 2026-07-04 — see docs/DESIGN_TOKENS.md, the locked source of truth):**
+- Canvas `#0d0d0f` | Surface 1 `#161618` | Surface 2 `#1e1e21` | Surface 3 `#28282c` (graphite, no blue cast)
+- Brand accent: ember `#ff5c2a` (interactive/selection only) | success `#3dc96e` | PR gold `#e9b84c` | rest blue `#4c8dff` | danger `#e5484d`
+- Type: Inter (self-hosted) + Archivo SemiExpanded display for titles/hero numerals
+- Card radius: 12px | Input/row radius: 8px | Pills: 999px | CTA buttons: 10px (unchanged)
 - Tabular numbers on all weight/rep/timer displays (`font-feature-settings: "tnum"`)
-- Completed set treatment: green tint background + left border, no full-flood color
+- Completed set treatment: success tint background, no full-flood color
 
 **Architecture constraints (unchanged):**
 - WorkoutContext.jsx = HIGH zone, one terminal at a time
