@@ -18,6 +18,7 @@ const KEY = {
     sound: 'fitness_sound',
     defaultRest: 'fitness_default_rest',
     defaultWork: 'fitness_default_work',
+    defaultTimers: 'fitness_default_timers',
     stats: 'fitness_stats',
     weightHistory: 'fitness_weight_history',
     exercisePrefs: 'fitness_exercise_prefs',
@@ -40,6 +41,7 @@ const PROFILE_SCOPED_BASE_KEYS = [
     KEY.sound,
     KEY.defaultRest,
     KEY.defaultWork,
+    KEY.defaultTimers,
     KEY.stats,
     KEY.weightHistory,
     KEY.exercisePrefs,
@@ -58,6 +60,19 @@ const safeParse = (raw, fallback) => {
         return raw ? JSON.parse(raw) : fallback;
     } catch {
         return fallback;
+    }
+};
+
+// localStorage.setItem throws (QuotaExceededError) when the store is full.
+// Persist writes run inside React effects, where an uncaught throw takes down
+// the tree — warn and carry on instead. Returns false on failure.
+const safeSetItem = (key, value) => {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (e) {
+        console.warn(`[Storage] write failed for ${key} (quota?):`, e);
+        return false;
     }
 };
 
@@ -84,7 +99,7 @@ const readRaw = (baseKey, fallback = null, opts = {}) => {
 
 const writeRaw = (baseKey, value, opts = {}) => {
     const key = resolveKey(baseKey, opts);
-    localStorage.setItem(key, String(value));
+    safeSetItem(key, String(value));
 
     if (!opts.global && opts.uid) {
         localStorage.removeItem(legacyScopedKey(baseKey, opts.uid));
@@ -106,7 +121,7 @@ const migrateLegacyProfileKey = (baseKey, uid) => {
 
     const legacyValue = localStorage.getItem(legacy);
     if (legacyValue !== null && localStorage.getItem(next) === null) {
-        localStorage.setItem(next, legacyValue);
+        safeSetItem(next, legacyValue);
     }
     localStorage.removeItem(legacy);
 };
@@ -265,8 +280,16 @@ const StorageService = {
             theme: readRaw(KEY.theme, 'dark', { uid }),
             units,
             soundEnabled: readRaw(KEY.sound, 'true', { uid }) !== 'false',
-            defaultRestTime: Number(readRaw(KEY.defaultRest, '45', { uid })),
-            defaultWorkTime: Number(readRaw(KEY.defaultWork, '45', { uid })),
+            // Timers live in one JSON key so the rest/work pair is written
+            // atomically; fall back to the legacy split keys for older data.
+            defaultRestTime: Number(
+                readJSON(KEY.defaultTimers, {}, { uid }).rest ??
+                readRaw(KEY.defaultRest, '45', { uid })
+            ),
+            defaultWorkTime: Number(
+                readJSON(KEY.defaultTimers, {}, { uid }).work ??
+                readRaw(KEY.defaultWork, '45', { uid })
+            ),
             userStats: readJSON(KEY.stats, {
                 age: '',
                 height: '',
@@ -301,8 +324,12 @@ const StorageService = {
     saveCustomEquipment(uid, items) { writeJSON(KEY.customEquipment, items, { uid }); },
     saveSound(uid, soundEnabled) { writeRaw(KEY.sound, soundEnabled, { uid }); },
     saveDefaultTimers(uid, rest, work) {
-        writeRaw(KEY.defaultRest, rest, { uid });
-        writeRaw(KEY.defaultWork, work, { uid });
+        // Single-key JSON write: localStorage.setItem is atomic, so rest/work
+        // can never be persisted mismatched. Legacy split keys are removed so
+        // the load fallback can't resurrect stale values.
+        writeJSON(KEY.defaultTimers, { rest, work }, { uid });
+        remove(KEY.defaultRest, { uid });
+        remove(KEY.defaultWork, { uid });
     },
     saveUserStats(uid, stats) { writeJSON(KEY.stats, stats, { uid }); },
     saveWeightHistory(uid, weightHistory) { writeJSON(KEY.weightHistory, weightHistory, { uid }); },
@@ -356,7 +383,17 @@ const StorageService = {
         }
         toRemove.forEach(k => localStorage.removeItem(k));
 
-        Object.entries(data).forEach(([k, v]) => localStorage.setItem(k, String(v)));
+        // Quota-guarded writes, but a restore must not fail silently: the old
+        // keys are already cleared above, so any failed write means a partial
+        // restore — surface it to the import UI instead of swallowing it.
+        const failed = Object.entries(data)
+            .filter(([k, v]) => !safeSetItem(k, String(v)))
+            .map(([k]) => k);
+        if (failed.length > 0) {
+            throw new Error(
+                `Backup restore incomplete — ${failed.length} item(s) failed to write (storage full?).`
+            );
+        }
     },
 
     async syncToApi(uid) {
@@ -384,7 +421,7 @@ const StorageService = {
     },
 
     saveAuthToken(token) {
-        localStorage.setItem('fitness_auth_token', token);
+        safeSetItem('fitness_auth_token', token);
     },
 
     loadAuthToken() {
@@ -396,7 +433,7 @@ const StorageService = {
     },
 
     setLoggedOut() {
-        localStorage.setItem('fitness_logged_out', 'true');
+        safeSetItem('fitness_logged_out', 'true');
     },
 
     isLoggedOut() {

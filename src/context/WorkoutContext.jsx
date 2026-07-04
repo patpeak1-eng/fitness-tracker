@@ -619,14 +619,31 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         const localBackendIds = new Set(
                             storedCustom.map(t => t.backendId).filter(Boolean)
                         );
-                        const newTemplates = templateData
+                        // template_data preserves the local 'tpl_custom_*' id the
+                        // template was pushed with. If a local copy has that id but
+                        // no backendId (the write-back after a successful push
+                        // failed), adopt the backend UUID onto it instead of
+                        // re-adding the template as a duplicate.
+                        let adopted = false;
+                        const newTemplates = [];
+                        templateData
                             .filter(t => !localBackendIds.has(t.id))
-                            .map(t => ({
-                                ...t.template_data,   // template_data contains the full template object
-                                backendId: t.id,      // store backend UUID for future deletes
-                                isCustom: true
-                            }));
-                        if (newTemplates.length > 0) {
+                            .forEach(t => {
+                                const orphan = storedCustom.find(
+                                    s => !s.backendId && s.id === t.template_data?.id
+                                );
+                                if (orphan) {
+                                    orphan.backendId = t.id;
+                                    adopted = true;
+                                } else {
+                                    newTemplates.push({
+                                        ...t.template_data,   // template_data contains the full template object
+                                        backendId: t.id,      // store backend UUID for future deletes
+                                        isCustom: true
+                                    });
+                                }
+                            });
+                        if (newTemplates.length > 0 || adopted) {
                             const merged = [...storedCustom, ...newTemplates];
                             StorageService.saveCustomTemplates(profile.id, merged);
                             setTemplates([...DEFAULT_TEMPLATES, ...merged]);
