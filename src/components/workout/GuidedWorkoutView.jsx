@@ -25,10 +25,7 @@ const GuidedWorkoutView = () => {
         units, // Grab units context
         // Pause/resume (Fire Station first-responder use case)
         pauseWorkout,
-        resumeWorkout,
-        equipmentProfiles,
-        activeEquipmentProfileId,
-        sessionEquipmentOverride
+        resumeWorkout
     } = useWorkout();
 
     const {
@@ -129,12 +126,6 @@ const GuidedWorkoutView = () => {
     if (!activeWorkout) return null;
     if (!currentExerciseInstance) return null;
 
-    // Fire Station = active saved profile is fire_station, OR the session override
-    // equals the fire_station profile's equipment list (picker sets an array override).
-    const fireStationEquip = equipmentProfiles?.find(p => p.id === 'fire_station')?.equipment;
-    const isFireStationActive = sessionEquipmentOverride
-        ? JSON.stringify(sessionEquipmentOverride) === JSON.stringify(fireStationEquip)
-        : activeEquipmentProfileId === 'fire_station';
     const isPaused = activeWorkout.status === 'paused';
 
     // --- NAV HELPERS ---
@@ -294,9 +285,7 @@ const GuidedWorkoutView = () => {
                         position: 'fixed',
                         inset: 0,
                         zIndex: 1000,
-                        background: 'rgba(10, 10, 10, 0.92)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
+                        background: 'color-mix(in srgb, var(--bg-app) 85%, transparent)',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
@@ -305,29 +294,25 @@ const GuidedWorkoutView = () => {
                         padding: '24px'
                     }}
                 >
-                    <div style={{ color: '#facc15', marginBottom: '16px' }}>
-                        <Pause size={56} fill="currentColor" />
+                    <div style={{ color: 'var(--text-primary)', marginBottom: '16px' }}>
+                        <Play size={56} strokeWidth={1.75} />
                     </div>
-                    <h2 style={{ fontSize: '2rem', margin: '0 0 8px' }}>Workout Paused</h2>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: '0 0 32px' }}>Stay Safe</p>
+                    <h2 style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 700,
+                        color: 'var(--text-primary)',
+                        fontSize: '1.75rem',
+                        letterSpacing: '0.06em',
+                        margin: '0 0 32px'
+                    }}>
+                        PAUSED
+                    </h2>
                     <button
+                        className="primary-btn"
                         onClick={resumeWorkout}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            background: 'var(--primary)',
-                            color: '#000',
-                            fontWeight: 800,
-                            fontSize: '1.2rem',
-                            padding: '16px 40px',
-                            border: 'none',
-                            borderRadius: '100px',
-                            cursor: 'pointer',
-                            boxShadow: '0 0 25px rgba(var(--primary-rgb), 0.3)'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px' }}
                     >
-                        <Play size={22} fill="currentColor" /> Resume Workout
+                        <Play size={20} fill="currentColor" /> Resume
                     </button>
                 </div>
             )}
@@ -384,8 +369,27 @@ const GuidedWorkoutView = () => {
                 {/* RIGHT PANEL: Stats, Timer, Action */}
                 <div className="right-panel">
 
-                    {/* Header Controls (Exit) */}
-                    <div style={{ position: 'absolute', top: 0, right: 0, padding: '20px' }}>
+                    {/* Header Controls (Pause + Exit) */}
+                    <div style={{ position: 'absolute', top: 0, right: 0, padding: '20px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {activeWorkout.status === 'active' && (
+                            <button
+                                onClick={pauseWorkout}
+                                aria-label="Pause workout"
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-secondary)',
+                                    width: '44px',
+                                    height: '44px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <Pause size={24} strokeWidth={1.75} />
+                            </button>
+                        )}
                         <button className="exit-btn-styled" onClick={() => setShowCancelConfirm(true)} style={{ borderColor: 'transparent', background: 'transparent', color: '#666' }}>
                             <X size={24} /> End Session
                         </button>
@@ -514,34 +518,6 @@ const GuidedWorkoutView = () => {
                             )}
                         </button>
                     </div>
-
-                    {/* PAUSE WORKOUT (Fire Station only) */}
-                    {isFireStationActive && !isPaused && (
-                        <div className="action-buttons-container" style={{ maxWidth: '400px', marginTop: '12px' }}>
-                            <button
-                                onClick={pauseWorkout}
-                                aria-label="Pause workout"
-                                style={{
-                                    width: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                    padding: '14px',
-                                    background: '#facc15',
-                                    color: '#000',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    fontWeight: 800,
-                                    fontSize: '1.05rem',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 0 18px rgba(250, 204, 21, 0.3)'
-                                }}
-                            >
-                                <Pause size={22} fill="currentColor" /> Pause Workout
-                            </button>
-                        </div>
-                    )}
 
                     {/* MENU FAB */}
                     <button className="menu-fab" onClick={handleOpenNotes} aria-label="Menu">

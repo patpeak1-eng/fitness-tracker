@@ -13,7 +13,7 @@ import SyncQueue from '../services/SyncQueue';
 // because TimerProvider is rendered as its descendant).
 export const TimerContext = createContext();
 
-export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, canSyncToBackend }) => {
+export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, canSyncToBackend, workoutPaused }) => {
     const [restTimer, setRestTimer] = useState({ timeLeft: 0, isActive: false, duration: 45 });
     const [workTimer, setWorkTimer] = useState({ timeLeft: 0, isActive: false, duration: 45 });
     const [defaultRestTime, setDefaultRestTime] = useState(45);
@@ -83,6 +83,10 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
     // --- Rest timer countdown ---
     useEffect(() => {
         let interval;
+        // Defense-in-depth: a paused workout freezes all ticking even if a
+        // timer's isActive flag was somehow left true (e.g. stale persisted
+        // state restored after reload while paused).
+        if (workoutPaused) return () => clearInterval(interval);
         if (restTimer.isActive && restTimer.timeLeft > 0) {
             interval = setInterval(() => {
                 setRestTimer(prev => {
@@ -97,7 +101,7 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
         }
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [restTimer.isActive, restTimer.timeLeft, soundEnabled]);
+    }, [restTimer.isActive, restTimer.timeLeft, soundEnabled, workoutPaused]);
 
     const startRestTimer = (seconds) => {
         const duration = seconds || defaultRestTime;
@@ -127,6 +131,8 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
     // --- Work timer countdown ---
     useEffect(() => {
         let interval;
+        // Defense-in-depth: see the rest-timer guard above.
+        if (workoutPaused) return () => clearInterval(interval);
         if (workTimer.isActive && workTimer.timeLeft > 0) {
             interval = setInterval(() => {
                 setWorkTimer(prev => {
@@ -141,7 +147,7 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
         }
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workTimer.isActive, workTimer.timeLeft, soundEnabled]);
+    }, [workTimer.isActive, workTimer.timeLeft, soundEnabled, workoutPaused]);
 
     const startWorkTimer = (seconds) => {
         const actualDuration = seconds || defaultWorkTime;
@@ -162,6 +168,22 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
 
     const resetWorkTimer = () => {
         setWorkTimer(prev => ({ ...prev, timeLeft: prev.duration, isActive: false }));
+    };
+
+    // --- Workout pause/resume (Fire Station) ---
+    // Freeze both countdowns in place, preserving timeLeft (unlike skipRest,
+    // which zeroes the rest countdown). Resume reactivates only timers that
+    // still have time on the clock.
+    const pauseAllTimers = () => {
+        setRestTimer(prev => ({ ...prev, isActive: false }));
+        setWorkTimer(prev => ({ ...prev, isActive: false }));
+    };
+
+    const resumeTimers = () => {
+        setRestTimer(prev => prev.timeLeft > 0 ? { ...prev, isActive: true } : prev);
+        setWorkTimer(prev => prev.timeLeft > 0 && prev.timeLeft < prev.duration
+            ? { ...prev, isActive: true }
+            : prev);
     };
 
     const updateTimerPref = (exerciseId, type, duration) => {
@@ -225,6 +247,8 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
                 resetWorkTimer,
                 stopWorkTimer,
                 startRestTimer,
+                pauseAllTimers,
+                resumeTimers,
                 // Used by WorkoutContext's login pull to apply cloud timer
                 // defaults (backend wins on login, same as stats/coach prefs).
                 setDefaultTimers: (rest, work) => {

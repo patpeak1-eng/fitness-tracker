@@ -352,6 +352,11 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // Profile id whose stored history has been rehydrated into state — gates
     // the history persist effect so pre-restore runs can't wipe storage.
     const [historyHydratedFor, setHistoryHydratedFor] = useState(null);
+    // Same gate for the active-workout persist effect. The previous mount-ref
+    // guard fails under StrictMode replay (the replayed effect run consumes
+    // the guard before the restore commit), wiping an in-progress/paused
+    // session on reload — same hole 8b30633 closed for history.
+    const [activeWorkoutHydratedFor, setActiveWorkoutHydratedFor] = useState(null);
     const [assessments, setAssessments] = useState([]); // NEW: Assessment History
     const [theme, setTheme] = useState('dark');
     const [units, setUnits] = useState('metric');
@@ -529,6 +534,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         } else {
             setActiveWorkout(null);
         }
+        // Same-batch flag: unlocks the active-workout persist effect only for
+        // commits at or after this restore (mirrors historyHydratedFor above).
+        setActiveWorkoutHydratedFor(uid);
 
         setTheme(ps.theme);
         setUnits(ps.units);
@@ -859,21 +867,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     }, [history, currentProfile, historyHydratedFor]);
 
-    // Persist Active Workout
-    const activeWorkoutMountRef = useRef(true);
+    // Persist Active Workout — hydration gate, same rationale as the history
+    // effect above: only write once this profile's stored active workout has
+    // been rehydrated into state. A mount-ref guard is NOT enough — StrictMode
+    // replays the effect after the guard is consumed but before the restore
+    // commit, writing the pre-restore null over a live/paused session
+    // (reproduced on reload in dev).
     useEffect(() => {
-        // Skip the persist write on initial mount: refreshProfileData restores the
-        // saved active workout right after mount, and writing here first would
-        // clobber the saved value with the pre-restore null before the load
-        // completes. (Mirrors the theme/units/sound persist guards.)
-        if (activeWorkoutMountRef.current) {
-            activeWorkoutMountRef.current = false;
-            return;
-        }
-        if (currentProfile) {
+        if (currentProfile && activeWorkoutHydratedFor === currentProfile.id) {
             StorageService.saveActiveWorkout(currentProfile.id, activeWorkout || null);
         }
-    }, [activeWorkout, currentProfile]);
+    }, [activeWorkout, currentProfile, activeWorkoutHydratedFor]);
 
     // Auto-sync to API after a workout is completed (i.e. history changes).
     // Placed after the history AND active-workout persistence effects so that
@@ -1192,6 +1196,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             startTime: new Date().toISOString(),
             status: 'preparing', // CHANGED: Start in prep mode
             notes: '', // Initialize notes
+            pausedAt: null,
+            totalPausedMs: 0,
             exercises: []
         };
         setActiveWorkout(newWorkout);
@@ -1281,6 +1287,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 name: template.name,
                 startTime: new Date().toISOString(),
                 status: 'preparing',
+                pausedAt: null,
+                totalPausedMs: 0,
                 // Track source template for syncing
                 sourceTemplateId: templateId, // TRACK SOURCE
                 exercises: newWorkoutExercises
@@ -1371,11 +1379,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             }
         });
 
+        const endTime = new Date().toISOString();
+        // True training duration: wall-clock minus accumulated pause time. If
+        // the session is finished while still paused, close out the open pause
+        // interval too, so it isn't counted as active time.
+        const openPauseMs = activeWorkout.status === 'paused' && activeWorkout.pausedAt
+            ? Math.max(0, Date.now() - new Date(activeWorkout.pausedAt).getTime())
+            : 0;
+        const totalPausedMs = (activeWorkout.totalPausedMs || 0) + openPauseMs;
         const completedWorkout = {
             ...activeWorkout,
             units: units, // unit active at completion → drives displayWeight() in history/analytics
-            endTime: new Date().toISOString(),
+            endTime,
             status: 'completed',
+            pausedAt: null,
+            totalPausedMs,
+            activeDurationMs: Math.max(0,
+                new Date(endTime).getTime() - new Date(activeWorkout.startTime).getTime() - totalPausedMs
+            ),
             recommendations: uniqueRecs // NEW: Save to history
         };
         setHistory(prev => [completedWorkout, ...prev]);
@@ -1681,12 +1702,13 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     };
 
     // Freeze the session in place (first-responder use case). Stops both timers
-    // and flags the workout as paused; localStorage persistence already runs on
-    // every activeWorkout change, so a paused session survives reloads.
+    // in place — preserving their remaining time, unlike skipRest which zeroes
+    // the rest countdown — and flags the workout as paused; localStorage
+    // persistence already runs on every activeWorkout change, so a paused
+    // session survives reloads.
     const pauseWorkout = () => {
         if (!activeWorkout) return;
-        timerApiRef.current?.stopWorkTimer();
-        timerApiRef.current?.skipRest();
+        timerApiRef.current?.pauseAllTimers?.();
         setActiveWorkout(prev => prev ? ({
             ...prev,
             status: 'paused',
@@ -1696,11 +1718,23 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
     const resumeWorkout = () => {
         if (!activeWorkout) return;
-        setActiveWorkout(prev => prev ? ({
-            ...prev,
-            status: 'active',
-            pausedAt: null
-        }) : prev);
+        setActiveWorkout(prev => {
+            if (!prev) return prev;
+            // Accumulate this pause interval so finishWorkout can report the
+            // true active duration. Guard against a missing/garbled pausedAt
+            // (e.g. a paused session persisted by the pre-S13 build).
+            const pausedAtMs = prev.pausedAt ? new Date(prev.pausedAt).getTime() : NaN;
+            const pauseMs = Number.isFinite(pausedAtMs)
+                ? Math.max(0, Date.now() - pausedAtMs)
+                : 0;
+            return {
+                ...prev,
+                status: 'active',
+                pausedAt: null,
+                totalPausedMs: (prev.totalPausedMs || 0) + pauseMs
+            };
+        });
+        timerApiRef.current?.resumeTimers?.();
     };
 
     const addSet = (exerciseInstanceId) => {
