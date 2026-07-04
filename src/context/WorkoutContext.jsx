@@ -1270,6 +1270,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         targetReps: configuredReps || smartReps,
                         targetTime: configuredSet.targetTime || fullExercise.default_duration || 0,
                         reps: 0, distance: 0, time: 0, completed: false,
+                        setType: 'normal',
                         lastPerformance: lastStats // METADATA
                     };
                 });
@@ -1317,20 +1318,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             const effectiveIncrement = smartProgressionEnabled ? progressionIncrement : (units === 'metric' ? 2.5 : 5);
 
             let shouldRecommend = false;
+            // Progression judges working sets only — warm-ups neither block a
+            // "all sets met target" pass nor anchor the last-set reference.
+            // Sets predating setType (undefined) count as working sets.
+            const workingSets = (ex.sets || []).filter(s => s.setType !== 'warmup');
             // Guard against empty sets
-            if (!ex.sets || ex.sets.length === 0) return;
+            if (workingSets.length === 0) return;
 
-            let lastSet = ex.sets[ex.sets.length - 1]; // Default reference for weight
+            let lastSet = workingSets[workingSets.length - 1]; // Default reference for weight
 
             if (effectiveMode === 'double') {
                 // Double Progression: All sets must meet target
-                const allSetsMet = ex.sets.every(s => s.targetReps > 0 && s.reps >= s.targetReps && s.weight > 0);
+                const allSetsMet = workingSets.every(s => s.targetReps > 0 && s.reps >= s.targetReps && s.weight > 0);
                 if (allSetsMet) shouldRecommend = true;
             } else {
                 // Linear (Standard): Any set meeting target triggers recommendation (usually final set logic, but let's be generous: if last set hit it)
                 // Actually, standard linear usually implies if you hit your reps on the last set (AMRAP or fixed), you go up.
                 // We'll check if the LAST set met the target.
-                const finalSet = ex.sets[ex.sets.length - 1];
+                const finalSet = workingSets[workingSets.length - 1];
                 if (finalSet && finalSet.targetReps > 0 && finalSet.reps >= finalSet.targetReps && finalSet.weight > 0) {
                     shouldRecommend = true;
                 }
@@ -1455,7 +1460,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 reps: 0,
                 distance: 0,
                 time: 0,
-                completed: false
+                completed: false,
+                setType: 'normal'
             }]
         };
         setActiveWorkout(prev =>
@@ -1772,7 +1778,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             reps: previousReps,
             distance: previousDist,
             time: previousTime,
-            completed: false
+            completed: false,
+            // Always 'normal', never copied from the previous set — a warmup
+            // must not silently propagate onto added working sets.
+            setType: 'normal'
         };
 
         return ActiveWorkoutService.addSet(prev, { exerciseInstanceId, newSet });
@@ -2179,6 +2188,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         return workout.exercises.reduce((total, ex) => {
             return total + ex.sets.reduce((setTotal, set) => {
                 if (!set.completed) return setTotal;
+                // Warm-ups don't count toward training volume. Sets predating
+                // setType (undefined) are treated as 'normal' and counted.
+                if (set.setType === 'warmup') return setTotal;
                 return setTotal + (set.weight * set.reps);
             }, 0);
         }, 0);

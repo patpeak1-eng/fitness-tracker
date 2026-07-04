@@ -81,7 +81,9 @@ const Analytics = () => {
                     maxWeight = e1rm;
                     bestSet = set;
                 }
-                totalVolume += (weight * reps);
+                // Warm-up sets are excluded from volume (S13 set-type rule);
+                // they still count for the e1RM/best-set line above.
+                if (set.setType !== 'warmup') totalVolume += (weight * reps);
             });
 
             if (maxWeight > 0) {

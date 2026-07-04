@@ -11,6 +11,18 @@ import ExerciseMedia from './ExerciseMedia';
 import InstructionModal from './InstructionModal';
 import './GuidedWorkoutView.css';
 
+// Set-type differentiation (S13). Missing/undefined setType === 'normal'.
+const SET_TYPE_CYCLE = ['normal', 'warmup', 'amrap', 'dropset'];
+const SET_TYPE_LABELS = { warmup: 'W', amrap: 'A', dropset: 'D' };
+const SET_TYPE_CHIP_COLORS = {
+    warmup: { color: 'var(--pr-gold)', background: 'color-mix(in srgb, var(--pr-gold) 14%, transparent)' },
+    amrap: { color: 'var(--primary)', background: 'var(--primary-dim)' },
+    dropset: { color: 'var(--text-muted)', background: 'var(--input-bg)' }
+};
+// Subtle full-row tint for warm-up sets; kept on completion (the checkmark
+// still goes success-green via the .completed class).
+const WARMUP_ROW_TINT = 'color-mix(in srgb, var(--pr-gold) 8%, transparent)';
+
 const GuidedWorkoutView = () => {
     const {
         activeWorkout,
@@ -421,12 +433,43 @@ const GuidedWorkoutView = () => {
                             <span>Reps</span>
                             <span></span>
                         </div>
-                        {currentExerciseInstance.sets.map((set, index) => (
+                        {currentExerciseInstance.sets.map((set, index) => {
+                            const setType = set.setType || 'normal';
+                            const chipColors = SET_TYPE_CHIP_COLORS[setType];
+                            const cycleSetType = () => {
+                                const next = SET_TYPE_CYCLE[
+                                    (SET_TYPE_CYCLE.indexOf(setType) + 1) % SET_TYPE_CYCLE.length
+                                ];
+                                updateSet(currentExerciseInstance.id, set.id, { setType: next });
+                            };
+                            return (
                             <div
                                 key={set.id}
                                 className={`active-set-row ${set.completed ? 'completed' : ''} ${index === currentSetIndex ? 'current' : ''}`}
+                                style={setType === 'warmup' ? { background: WARMUP_ROW_TINT } : undefined}
                             >
-                                <span className="active-set-number">
+                                <span className="active-set-number" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={cycleSetType}
+                                        aria-label={`Set type: ${setType}. Tap to change.`}
+                                        style={{
+                                            width: '24px',
+                                            height: '20px',
+                                            flexShrink: 0,
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            fontSize: '0.625rem',
+                                            fontWeight: 600,
+                                            textTransform: 'uppercase',
+                                            lineHeight: 1,
+                                            cursor: 'pointer',
+                                            background: chipColors ? chipColors.background : 'transparent',
+                                            color: chipColors ? chipColors.color : 'transparent'
+                                        }}
+                                    >
+                                        {SET_TYPE_LABELS[setType] || ''}
+                                    </button>
                                     {index + 1}
                                     {set.isPR && <Trophy size={12} className="set-pr-flag" aria-label="Personal record" />}
                                 </span>
@@ -441,7 +484,8 @@ const GuidedWorkoutView = () => {
                                     {set.completed && <Check size={18} strokeWidth={3} />}
                                 </button>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* TIMER CIRCLE */}

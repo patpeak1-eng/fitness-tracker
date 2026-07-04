@@ -49,8 +49,10 @@ const WorkoutSummary = () => {
     const durationStr = formatDuration(durationMs);
 
     const totalSets = exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.completed).length, 0);
+    // Warm-up sets are excluded from volume (S13 set-type rule).
     const totalVolume = exercises.reduce((acc, ex) => {
-        return acc + ex.sets.reduce((sAcc, s) => sAcc + (s.completed ? (s.weight * s.reps) : 0), 0);
+        return acc + ex.sets.reduce((sAcc, s) =>
+            sAcc + (s.completed && s.setType !== 'warmup' ? (s.weight * s.reps) : 0), 0);
     }, 0);
 
     // Extract PRs

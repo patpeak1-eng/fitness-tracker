@@ -23,8 +23,11 @@ const WorkoutDetails = ({ workout, onBack }) => {
     // Filter valid exercises preventing crashes from corrupted data
     const validExercises = workout.exercises ? workout.exercises.filter(ex => ex && ex.exercise) : [];
 
+    // Warm-up sets are excluded from volume (S13 set-type rule); sets without
+    // a setType (pre-S13 history) count as normal working sets.
     const totalVolume = validExercises.reduce((acc, ex) => {
-        return acc + ex.sets.reduce((sAcc, set) => sAcc + (set.weight * set.reps), 0);
+        return acc + ex.sets.reduce((sAcc, set) =>
+            sAcc + (set.setType === 'warmup' ? 0 : (set.weight * set.reps)), 0);
     }, 0);
 
     const displayVolume = Math.round(displayWeight(totalVolume, workoutUnit, units));
@@ -93,22 +96,36 @@ const WorkoutDetails = ({ workout, onBack }) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {ex.sets.map((set, i) => (
+                                    {ex.sets.map((set, i) => {
+                                        // Warm-up rows render muted (still shown, just lighter).
+                                        const mutedStyle = set.setType === 'warmup'
+                                            ? { color: 'var(--text-muted)' }
+                                            : undefined;
+                                        return (
                                         <tr key={set.id}>
                                             <td className="col-set">
                                                 <span className="set-pill">{i + 1}</span>
+                                                {set.setType === 'warmup' && (
+                                                    <span style={{
+                                                        marginLeft: '6px',
+                                                        color: 'var(--pr-gold)',
+                                                        fontSize: '0.625rem',
+                                                        fontWeight: 600
+                                                    }}>W</span>
+                                                )}
                                             </td>
-                                            <td className="col-weight">
+                                            <td className="col-weight" style={mutedStyle}>
                                                 {formatWeight(set.weight)}
                                             </td>
-                                            <td className="col-goal">
+                                            <td className="col-goal" style={mutedStyle}>
                                                 {set.targetReps || '-'}
                                             </td>
-                                            <td className="col-reps">
+                                            <td className="col-reps" style={mutedStyle}>
                                                 {set.reps}
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
