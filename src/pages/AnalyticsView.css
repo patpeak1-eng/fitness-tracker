@@ -2,6 +2,59 @@
     padding-bottom: 80px;
 }
 
+.analytics-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.analytics-header-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.info-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+}
+
+.info-toggle-btn:hover {
+    color: var(--text-primary);
+}
+
+.info-panel {
+    margin: 0 20px 20px;
+    padding: 15px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.info-panel-block + .info-panel-block {
+    margin-top: 12px;
+}
+
+.info-panel-block strong {
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
 .analytics-controls {
     padding: 0 20px;
     margin-bottom: 20px;
@@ -19,96 +72,125 @@
     font-weight: 500;
 }
 
-.exercise-select {
-    width: 100%;
-    background-color: var(--bg-card);
-    color: var(--text-primary);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 12px;
-    border-radius: 12px;
-    font-size: 1rem;
-    outline: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23888%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
-    background-repeat: no-repeat;
-    background-position: right 1rem center;
-    background-size: 1em;
-}
+/* --- Overview band: PR ring + all-time records --- */
 
-.stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    padding: 0 20px;
-    margin-bottom: 25px;
-}
-
-.stat-card {
-    background: rgba(255, 255, 255, 0.08);
-    /* Much lighter dark grey */
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    /* Clearly visible border */
-    border-radius: 16px;
+.overview-band {
+    margin: 0 20px 15px;
     padding: 15px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
+    gap: 18px;
 }
 
-.stat-card.active {
-    border-color: var(--primary);
-    background: rgba(191, 255, 0, 0.05);
+.pr-ring {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    flex-shrink: 0;
 }
 
-.stat-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
+.pr-ring-center {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--primary);
 }
 
-.stat-card.active .stat-icon {
-    background: var(--primary);
-    color: #000;
-}
-
-.stat-info {
-    display: flex;
-    flex-direction: column;
-}
-
-.stat-info .label {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.stat-info .value {
+.pr-ring-value {
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--text-primary);
+    font-feature-settings: "tnum";
 }
 
-.stat-info .unit {
-    font-size: 0.8rem;
+.overview-stats {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.overview-caption {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.overview-stat-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.overview-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.overview-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+}
+
+.overview-unit {
+    font-size: 0.75rem;
     font-weight: 400;
     color: var(--text-muted);
 }
 
+/* --- Metric segmented control --- */
+
+.metric-segment {
+    display: flex;
+    margin: 0 20px 15px;
+    padding: 4px;
+    background: var(--input-bg);
+    border-radius: 999px;
+    gap: 4px;
+}
+
+.metric-segment button {
+    flex: 1;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.metric-segment button.active {
+    background: var(--primary);
+    color: var(--bg-app);
+}
+
+/* --- Chart card --- */
+
 .chart-container-card {
-    margin: 0 20px 80px;
+    margin: 0 20px 25px;
     background: var(--bg-card);
-    border-radius: 20px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    height: 350px;
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid var(--border);
+    height: 320px;
     display: flex;
     flex-direction: column;
 }
@@ -117,7 +199,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
 }
 
 .chart-header h3 {
@@ -126,10 +210,115 @@
     margin: 0;
 }
 
+.range-chips {
+    display: flex;
+    gap: 4px;
+}
+
+.range-chip {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+    background: none;
+    border: none;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-feature-settings: "tnum";
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.range-chip.active {
+    background: var(--input-bg);
+    color: var(--text-primary);
+}
+
 .chart-wrapper {
     flex: 1;
     width: 100%;
+    /* Recharts tick numerals line up when tabular */
+    font-feature-settings: "tnum";
 }
+
+.chart-range-empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* --- Recent sessions --- */
+
+.recent-sessions {
+    margin: 0 20px;
+}
+
+.recent-sessions h3 {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 10px;
+}
+
+.recent-sessions ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.session-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 15px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.session-row-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.session-date {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+}
+
+.session-best-set {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-feature-settings: "tnum";
+}
+
+.session-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+}
+
+.session-unit {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* --- Empty state: icon + one sentence + one action --- */
 
 .empty-chart-state {
     display: flex;
@@ -141,7 +330,24 @@
     color: var(--text-muted);
 }
 
-.empty-chart-state h3 {
-    color: var(--text-primary);
-    margin: 15px 0 5px;
+.empty-chart-state p {
+    margin: 15px 0 20px;
+    color: var(--text-secondary);
+    max-width: 32ch;
+    line-height: 1.5;
+}
+
+.empty-state-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 20px;
+    background: var(--primary);
+    color: var(--bg-app);
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
 }
