@@ -65,7 +65,10 @@ const Login = () => {
                     id: result.user_id || 'cloud_' + Date.now(),
                     name: cleanName,
                     color: '#bfff00',
-                    avatar: cleanName.charAt(0).toUpperCase()
+                    avatar: cleanName.charAt(0).toUpperCase(),
+                    // Every cloud-sync gate keys on profile.email — without it
+                    // an email/password account never syncs in either direction.
+                    email: email.trim()
                 }, result.access_token);
             }
         } catch (err) {
@@ -87,7 +90,9 @@ const Login = () => {
                     id: result.user_id || 'cloud_' + Date.now(),
                     name: cleanName,
                     color: '#bfff00',
-                    avatar: cleanName.charAt(0).toUpperCase()
+                    avatar: cleanName.charAt(0).toUpperCase(),
+                    // Same email gate as register — see canSyncToBackend.
+                    email: email.trim()
                 }, result.access_token);
             }
         } catch (err) {

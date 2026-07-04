@@ -186,6 +186,23 @@ export const deleteCustomTemplate = async (id) => {
   // 204 No Content on success — nothing to parse.
 };
 
+// Custom exercises — same blob pattern as templates: the full local exercise
+// object rides in exercise_data, and the backend row id comes back for dedup.
+export const getCustomExercises = () =>
+  apiFetch('/api/exercises').then(r => r.json());
+
+export const saveCustomExercise = async (exercise) => {
+  const r = await apiFetch('/api/exercises', {
+    method: 'POST',
+    body: JSON.stringify({ exercise_data: exercise })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, '/api/exercises', text);
+  }
+  return r.json();
+};
+
 export { isAvailable };
 
 export const getGoogleAuthUrl = () => {

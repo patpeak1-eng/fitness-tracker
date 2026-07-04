@@ -402,10 +402,16 @@ const StorageService = {
             const state = this.loadProfileState(uid);
             // Best-effort sync — the caller need not await this; localStorage stays the source of truth.
             // Per-call failures are warned and swallowed so one bad request can't abort the rest.
-            // Sync history
+            // Sync history. Only push workouts that carry a client_id:
+            // locally-created workouts always have one (crypto.randomUUID at
+            // creation), so a client_id-less item is a cloud-origin row that
+            // is already server-side — re-posting it would bypass the
+            // backend's client_id idempotency and duplicate it on every boot.
             if (state.history && state.history.length > 0) {
                 const lastWorkout = state.history[0];
-                await saveWorkout(lastWorkout).catch(e => console.warn('API sync: saveWorkout failed', e));
+                if (lastWorkout.client_id) {
+                    await saveWorkout(lastWorkout).catch(e => console.warn('API sync: saveWorkout failed', e));
+                }
             }
             // Sync active workout
             if (state.activeWorkout) {

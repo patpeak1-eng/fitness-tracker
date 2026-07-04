@@ -332,6 +332,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 }
             }
         });
+        SyncQueue.registerExecutor('exercise', async op => {
+            const resp = await ApiService.saveCustomExercise(op.payload);
+            if (resp?.id && op.uid) {
+                const stored = StorageService.loadCustomExercises(op.uid);
+                const idx = stored.findIndex(e => e.id === op.payload.id);
+                if (idx !== -1) {
+                    stored[idx].backendId = resp.id;
+                    StorageService.saveCustomExercises(op.uid, stored);
+                }
+            }
+        });
         SyncQueue.init();
     }, []);
 
@@ -462,6 +473,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // Tracks the profile whose load is currently active, so an in-flight cloud
     // pull can detect a profile switch and avoid cross-writing the wrong state.
     const latestProfileIdRef = useRef(null);
+    // Profiles already backfilled this app boot — see the backfill block below.
+    const backfilledProfilesRef = useRef(new Set());
 
     const refreshProfileData = (profile) => {
         if (!profile) return;
@@ -539,14 +552,15 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         ApiService.getProfile(),
                         ApiService.getHistory(),
                         ApiService.getWeightHistory(),
-                        ApiService.getCustomTemplates()
+                        ApiService.getCustomTemplates(),
+                        ApiService.getCustomExercises()
                     ]);
                     results.forEach((result, i) => {
                         if (result.status === 'rejected') {
                             console.warn(`Cloud pull [${i}] failed:`, result.reason);
                         }
                     });
-                    const [profileData, workoutData, weightData, templateData] =
+                    const [profileData, workoutData, weightData, templateData, exerciseData] =
                         results.map(r => r.status === 'fulfilled' ? r.value : null);
 
                     // The user may have switched profiles while these were in flight.
@@ -614,22 +628,29 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                     // own UUID on push, so the same workout returns with an id absent
                     // locally. Timestamps are normalized to epoch-ms so format drift
                     // (e.g. .000Z vs microseconds) doesn't cause false "new" items.
+                    // Timestamped items match cross-source by name+epoch-ms.
+                    // Timeless items (e.g. legacy backend rows with null
+                    // start_time) can't be matched that way, so key them by
+                    // their own id — otherwise a distinct same-named timeless
+                    // workout would be shadowed and never pulled. Shared with
+                    // the backfill pass below.
+                    const keyOf = (name, t, id) => {
+                        const ms = t ? new Date(t).getTime() : NaN;
+                        return Number.isNaN(ms) ? `${name}|id:${id}` : `${name}|${ms}`;
+                    };
                     if (workoutData?.items?.length > 0) {
                         setHistory(prev => {
-                            // Timestamped items match cross-source by name+epoch-ms.
-                            // Timeless items (e.g. legacy backend rows with null
-                            // start_time) can't be matched that way, so key them by
-                            // their own id — otherwise a distinct same-named timeless
-                            // workout would be shadowed and never pulled.
-                            const keyOf = (name, t, id) => {
-                                const ms = t ? new Date(t).getTime() : NaN;
-                                return Number.isNaN(ms) ? `${name}|id:${id}` : `${name}|${ms}`;
-                            };
                             const localKeys = new Set(prev.map(w => keyOf(w.name, w.startTime, w.id)));
                             const newItems = workoutData.items
                                 .filter(w => !localKeys.has(keyOf(w.name, w.start_time, w.id)))
                                 .map(w => ({
                                     id: w.id,
+                                    // Keep client_id: without it, any re-push of
+                                    // a pulled workout (e.g. syncToApi's
+                                    // history[0] push) bypasses the backend's
+                                    // client_id idempotency and duplicates the
+                                    // row server-side on every boot.
+                                    client_id: w.client_id || null,
                                     name: w.name,
                                     startTime: w.start_time,
                                     endTime: w.end_time,
@@ -702,6 +723,103 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                             StorageService.saveCustomTemplates(profile.id, merged);
                             setTemplates([...DEFAULT_TEMPLATES, ...merged]);
                         }
+                    }
+
+                    // Custom exercises — same merge as templates (dedup by
+                    // backendId, adopt onto orphans). Pulling these alongside
+                    // templates also resolves template references to custom
+                    // exercises created on another device — the definitions
+                    // arrive in the same pull, so nothing dangles.
+                    if (exerciseData?.length > 0) {
+                        const storedEx = StorageService.loadCustomExercises(profile.id);
+                        const exBackendIds = new Set(
+                            storedEx.map(e => e.backendId).filter(Boolean)
+                        );
+                        let exAdopted = false;
+                        const newExercises = [];
+                        exerciseData
+                            .filter(e => !exBackendIds.has(e.id))
+                            .forEach(e => {
+                                const orphan = storedEx.find(
+                                    s => !s.backendId && s.id === e.exercise_data?.id
+                                );
+                                if (orphan) {
+                                    orphan.backendId = e.id;
+                                    exAdopted = true;
+                                } else {
+                                    newExercises.push({
+                                        ...e.exercise_data,
+                                        backendId: e.id
+                                    });
+                                }
+                            });
+                        if (newExercises.length > 0 || exAdopted) {
+                            const mergedEx = [...storedEx, ...newExercises];
+                            StorageService.saveCustomExercises(profile.id, mergedEx);
+                            setExercises([...DEFAULT_EXERCISES, ...mergedEx]);
+                        }
+                    }
+
+                    // BACKFILL — recover device-only data that never reached
+                    // the cloud (e.g. accounts affected by the pre-fix email
+                    // gate, or pushes that failed before the retry queue
+                    // existed). Runs after the merges above, so storage holds
+                    // union(local, cloud) and "not in the pulled cloud set"
+                    // means genuinely cloud-absent. Idempotent: templates and
+                    // exercises are excluded once they carry a backendId, and
+                    // workouts/weights match by the same name+epoch-ms /
+                    // epoch-ms fingerprints the merges use, so re-running
+                    // cannot create duplicates. Pushes ride the retry queue.
+                    // Once per profile per app boot: the boot sequence can run
+                    // this pull more than once, and a second pass computed
+                    // before the first pass's pushes land server-side would
+                    // re-push the same items (verified live — duplicate rows).
+                    if (backfilledProfilesRef.current.has(profile.id)) {
+                        return;
+                    }
+                    backfilledProfilesRef.current.add(profile.id);
+                    const backfill = [];
+                    StorageService.loadCustomTemplates(profile.id)
+                        .filter(t => !t.backendId)
+                        .forEach(t => backfill.push({ type: 'template', key: t.id, payload: t, uid: profile.id }));
+                    StorageService.loadCustomExercises(profile.id)
+                        .filter(e => !e.backendId)
+                        .forEach(e => backfill.push({ type: 'exercise', key: e.id, payload: e, uid: profile.id }));
+                    // Cloud membership for workouts/weights is only knowable
+                    // when that part of the pull succeeded — a failed fetch
+                    // must not be mistaken for an empty cloud.
+                    if (workoutData?.items) {
+                        const cloudWorkoutKeys = new Set(
+                            workoutData.items.map(w => keyOf(w.name, w.start_time, w.id))
+                        );
+                        const localHistory = StorageService.loadProfileState(profile.id).history || [];
+                        localHistory
+                            .filter(w => !cloudWorkoutKeys.has(keyOf(w.name, w.startTime, w.id)))
+                            .forEach(w => backfill.push({
+                                type: 'workout',
+                                key: w.client_id || w.id,
+                                payload: w,
+                                uid: profile.id
+                            }));
+                    }
+                    if (Array.isArray(weightData)) {
+                        const cloudWeightMs = new Set(
+                            weightData.map(e => new Date(e.recorded_at).getTime())
+                        );
+                        const localWeights = StorageService.loadProfileState(profile.id).weightHistory || [];
+                        localWeights
+                            .filter(e => !cloudWeightMs.has(new Date(e.date).getTime()))
+                            .forEach(e => backfill.push({
+                                type: 'weight',
+                                key: e.date,
+                                payload: { weight: e.weight, date: e.date },
+                                uid: profile.id
+                            }));
+                    }
+                    if (backfill.length > 0) {
+                        console.info(`[CloudSync] Backfilling ${backfill.length} device-only item(s) to the cloud.`);
+                        backfill.forEach(op => SyncQueue.enqueue(op));
+                        SyncQueue.flush();
                     }
 
                 } catch (err) {
@@ -1639,6 +1757,32 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         const customExercises = StorageService.loadCustomExercises(currentProfile?.id);
         customExercises.push(exerciseWithId);
         StorageService.saveCustomExercises(currentProfile?.id, customExercises);
+
+        // Cloud push (best-effort, fire-and-forget so the creation UI stays
+        // synchronous). Failures land in the retry queue.
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            const uid = currentProfile.id;
+            ApiService.saveCustomExercise(exerciseWithId)
+                .then(resp => {
+                    if (resp?.id) {
+                        const stored = StorageService.loadCustomExercises(uid);
+                        const idx = stored.findIndex(e => e.id === exerciseWithId.id);
+                        if (idx !== -1) {
+                            stored[idx].backendId = resp.id;
+                            StorageService.saveCustomExercises(uid, stored);
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.warn('[CloudSync] Exercise push failed (non-fatal):', err.message);
+                    SyncQueue.enqueue({
+                        type: 'exercise',
+                        key: exerciseWithId.id,
+                        payload: exerciseWithId,
+                        uid
+                    });
+                });
+        }
     };
 
     const addWeightEntry = async (weight) => {
@@ -1773,6 +1917,34 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         const storedTemplates = StorageService.loadCustomTemplates(currentProfile.id);
         const newStored = [...storedTemplates, newTemplate];
         StorageService.saveCustomTemplates(currentProfile.id, newStored);
+
+        // Cloud push — this is the PRIMARY template-creation path (the "Build
+        // My Own" builder) and previously never synced. Mirrors the
+        // saveWorkoutAsTemplate push; fire-and-forget so the caller keeps its
+        // synchronous return value. Failures land in the retry queue.
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            const uid = currentProfile.id;
+            ApiService.saveCustomTemplate(newTemplate)
+                .then(resp => {
+                    if (resp?.id) {
+                        const stored = StorageService.loadCustomTemplates(uid);
+                        const idx = stored.findIndex(t => t.id === newTemplate.id);
+                        if (idx !== -1) {
+                            stored[idx].backendId = resp.id;
+                            StorageService.saveCustomTemplates(uid, stored);
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.warn('[CloudSync] Template push failed (non-fatal):', err.message);
+                    SyncQueue.enqueue({
+                        type: 'template',
+                        key: newTemplate.id,
+                        payload: newTemplate,
+                        uid
+                    });
+                });
+        }
 
         return newTemplate;
     };
