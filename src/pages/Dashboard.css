@@ -4,6 +4,31 @@
     margin: 0 auto;
 }
 
+/* v2 filled cards (S13): the shared Card component still carries the retired
+   glass treatment; neutralize it here, scoped to the Dashboard only —
+   surface/1 background, radius 12, no border, no blur, no shine, no lift. */
+.dashboard .card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 12px;
+}
+
+.dashboard .card::before {
+    content: none;
+}
+
+.dashboard .card:hover {
+    transform: none;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.dashboard .card:active {
+    transform: none;
+}
+
 .dashboard-header {
     display: flex;
     justify-content: space-between;
@@ -28,15 +53,14 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    color: #fff;
+    color: var(--text-primary);
     font-weight: bold;
     font-size: 1.2rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid var(--border);
     cursor: pointer;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     transition: transform 0.2s;
     background: var(--bg-card);
     /* Ensure bg */
@@ -44,8 +68,6 @@
 
 .profile-avatar-small:hover {
     transform: scale(1.1);
-    border-color: var(--primary);
-    box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .settings-btn-icon {
@@ -62,10 +84,9 @@
 }
 
 .settings-btn-icon:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--input-bg);
     color: var(--primary);
     transform: rotate(15deg);
-    border-color: var(--primary);
 }
 
 /* --- DASHBOARD GRID --- */
@@ -85,25 +106,25 @@
     position: relative;
     overflow: hidden;
     background: var(--bg-card);
-    backdrop-filter: var(--glass-blur);
-    border: var(--border-glass);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-glass);
+    border: none;
+    border-radius: 12px;
 }
 
 .goal-info h3 {
-    font-size: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
     margin-bottom: 10px;
 }
 
+/* Data value: text/primary, never accent (token rule). */
 .goal-percentage {
     font-size: 3.5rem;
     font-weight: 800;
-    color: var(--primary);
-    text-shadow: 0 0 20px var(--primary-glow);
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
     line-height: 1;
 }
 
@@ -122,10 +143,11 @@
 
 .goal-ring-bg {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.1);
+    stroke: var(--input-bg);
     stroke-width: 10;
 }
 
+/* Chart primary series — accent allowed here (token rule), glow is not. */
 .goal-ring-progress {
     fill: none;
     stroke: var(--primary);
@@ -133,7 +155,6 @@
     stroke-linecap: round;
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
-    filter: drop-shadow(0 0 8px var(--primary-glow));
     transition: stroke-dashoffset 1s ease-out;
 }
 
@@ -152,9 +173,8 @@
     display: flex;
     flex-direction: column;
     background: var(--bg-card);
-    border: var(--border-glass);
-    border-radius: var(--radius-md);
-    backdrop-filter: var(--glass-blur);
+    border: none;
+    border-radius: 12px;
 }
 
 /* 3. WORKOUT TYPES ROW */
@@ -166,8 +186,8 @@
 .workout-type-card {
     flex: 1;
     background: var(--bg-card);
-    border: var(--border-glass);
-    border-radius: 20px;
+    border: none;
+    border-radius: 12px;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -175,22 +195,17 @@
     justify-content: center;
     gap: 10px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    backdrop-filter: var(--glass-blur);
+    transition: background 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .workout-type-card:hover {
-    transform: translateY(-5px);
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--primary);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    background: var(--surface);
 }
 
 .workout-icon-box {
     width: 50px;
     height: 50px;
-    background: rgba(var(--primary-rgb), 0.1);
-    /* Keep explicit alpha for Tint */
+    background: var(--primary-dim);
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -202,8 +217,7 @@
 
 .workout-type-card:hover .workout-icon-box {
     background: var(--primary);
-    color: #000;
-    box-shadow: 0 0 15px var(--primary-glow);
+    color: var(--bg-app);
 }
 
 .workout-type-label {

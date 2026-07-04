@@ -104,25 +104,39 @@ const Dashboard = () => {
                 </Card>
 
                 {/* 1b. STREAK CARD */}
-                <Card className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Card style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Current Streak</p>
-                        <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                        <p style={{
+                            margin: 0,
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            color: 'var(--text-muted)'
+                        }}>Current Streak</p>
+                        {/* Data value: text/primary, never accent (token rule). */}
+                        <p style={{
+                            margin: 0,
+                            fontSize: '1.8rem',
+                            fontWeight: 700,
+                            color: 'var(--text-primary)',
+                            fontFeatureSettings: '"tnum"'
+                        }}>
                             {currentStreak} {currentStreak === 1 ? 'day' : 'days'}
                         </p>
                     </div>
-                    <Flame size={32} style={{ color: currentStreak > 0 ? 'var(--primary)' : 'var(--text-secondary)' }} />
+                    <Flame size={32} strokeWidth={1.75} style={{ color: currentStreak > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }} />
                 </Card>
 
                 {/* 2. ACTIVE WORKOUT BANNER (If Active) */}
                 {activeWorkout && (
                     <Card className="hero-card action-btn" onClick={() => navigate('/track')}
-                        style={{ cursor: 'pointer', textAlign: 'center', padding: '20px', border: '1px solid var(--primary)', background: 'rgba(var(--primary-rgb),0.05)' }}>
+                        style={{ cursor: 'pointer', textAlign: 'center', padding: '20px', background: 'var(--primary-dim)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                             {activeWorkout.status === 'paused' ? (
-                                <div style={{ fontWeight: 'bold', color: '#facc15' }}>● PAUSED</div>
+                                <div style={{ fontWeight: 'bold', color: 'var(--text-secondary)' }}>● PAUSED</div>
                             ) : (
-                                <div className="pulse-text-lime" style={{ fontWeight: 'bold' }}>● LIVE SESSION</div>
+                                <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>● LIVE SESSION</div>
                             )}
                         </div>
                         <h3 style={{ margin: '10px 0', fontSize: '1.4rem' }}>{activeWorkout.name}</h3>
@@ -143,14 +157,14 @@ const Dashboard = () => {
                     </div>
 
                     <div className="workout-type-card" onClick={() => navigate('/track')}>
-                        <div className="workout-icon-box" style={{ color: 'var(--accent)', background: 'rgba(76, 141, 255, 0.1)' }}>
+                        <div className="workout-icon-box">
                             <Flame size={28} />
                         </div>
                         <span className="workout-type-label">HIIT</span>
                     </div>
 
                     <div className="workout-type-card" onClick={() => navigate('/analytics')}>
-                        <div className="workout-icon-box" style={{ color: '#bd00ff', background: 'rgba(189, 0, 255, 0.1)' }}>
+                        <div className="workout-icon-box">
                             <BarChart3 size={28} />
                         </div>
                         <span className="workout-type-label">Data</span>
@@ -160,7 +174,7 @@ const Dashboard = () => {
                 {/* 4. RECENT ACTIVITY (Glass Card) */}
                 <h3 style={{ margin: '20px 0 0', fontSize: '1.1rem', paddingLeft: '5px' }}>Recent Activity</h3>
                 {history.length > 0 ? (
-                    <Card className="glass-panel" onClick={() => navigate('/history')} style={{ cursor: 'pointer', padding: '20px' }}>
+                    <Card onClick={() => navigate('/history')} style={{ cursor: 'pointer', padding: '20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h4 style={{ fontSize: '1.1rem' }}>{history[0].name}</h4>
@@ -168,13 +182,19 @@ const Dashboard = () => {
                                     {format(new Date(history[0].startTime), 'EEE, MMM d')}
                                 </p>
                             </div>
-                            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px 12px', borderRadius: '8px', fontSize: '0.9rem' }}>
+                            <div style={{
+                                background: 'color-mix(in srgb, var(--success) 12%, transparent)',
+                                color: 'var(--success)',
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                fontSize: '0.9rem'
+                            }}>
                                 Completed
                             </div>
                         </div>
                     </Card>
                 ) : (
-                    <Card className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
+                    <Card style={{ padding: '24px', textAlign: 'center' }}>
                         <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
                             No workouts yet. Take the fitness assessment to get a personalised program.
                         </p>
