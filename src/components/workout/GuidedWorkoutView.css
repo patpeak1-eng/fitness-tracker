@@ -29,16 +29,16 @@
     display: flex;
     height: 50px;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border);
 }
 
 .exit-btn-styled {
     display: flex;
     align-items: center;
     gap: 5px;
-    background: rgba(255, 0, 0, 0.1);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
     color: var(--error);
-    border: 1px solid rgba(255, 0, 0, 0.2);
+    border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
     padding: 6px 14px;
     border-radius: 8px;
     font-size: 0.85rem;
@@ -55,7 +55,7 @@
 /* SIDEBAR (Desktop/Tablet) */
 .guided-sidebar {
     width: 300px;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid var(--border);
     background: rgba(0, 0, 0, 0.2);
     display: none;
     /* Hidden on mobile */
@@ -172,8 +172,8 @@
 }
 
 .active-set-row.completed {
-    background: rgba(52, 199, 89, 0.10);
-    border-left: 2px solid rgba(52, 199, 89, 0.6);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+    border-left: 2px solid color-mix(in srgb, var(--success) 60%, transparent);
 }
 
 .active-set-number,
@@ -185,7 +185,7 @@
 
 .active-set-row.completed .active-set-number,
 .active-set-row.completed .active-set-value {
-    color: rgba(52, 199, 89, 0.9);
+    color: var(--success);
 }
 
 .active-set-check {
@@ -202,9 +202,9 @@
 }
 
 .active-set-row.completed .active-set-check {
-    border-color: rgba(52, 199, 89, 0.85);
-    background: rgba(52, 199, 89, 0.9);
-    color: #06120a;
+    border-color: var(--success);
+    background: var(--success);
+    color: var(--bg-app);
 }
 
 /* TIMER CIRCLE - NEON CENTERPIECE */
@@ -225,7 +225,7 @@
     justify-content: center;
     position: relative;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.2) 70%);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
     /* Detailed border */
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
     transition: all 0.5s ease;
@@ -239,14 +239,14 @@
 }
 
 .timer-circle.working.duration-mode {
-    border-color: rgba(76, 141, 255, 0.3);
-    box-shadow: 0 0 50px rgba(76, 141, 255, 0.1);
+    border-color: color-mix(in srgb, var(--rest-blue) 30%, transparent);
+    box-shadow: 0 0 50px color-mix(in srgb, var(--rest-blue) 10%, transparent);
     animation: pulse-ring-cyan 2s infinite ease-in-out;
 }
 
 .timer-circle.resting {
-    border-color: rgba(0, 150, 255, 0.3);
-    box-shadow: 0 0 50px rgba(0, 150, 255, 0.1);
+    border-color: color-mix(in srgb, var(--rest-blue) 30%, transparent);
+    box-shadow: 0 0 50px color-mix(in srgb, var(--rest-blue) 10%, transparent);
     animation: pulse-ring-blue 2s infinite ease-in-out;
 }
 
@@ -269,35 +269,35 @@
 
 @keyframes pulse-ring-cyan {
     0% {
-        box-shadow: 0 0 30px rgba(76, 141, 255, 0.1);
-        border-color: rgba(76, 141, 255, 0.3);
+        box-shadow: 0 0 30px color-mix(in srgb, var(--rest-blue) 10%, transparent);
+        border-color: color-mix(in srgb, var(--rest-blue) 30%, transparent);
     }
 
     50% {
-        box-shadow: 0 0 60px rgba(76, 141, 255, 0.4);
-        border-color: rgba(76, 141, 255, 0.6);
+        box-shadow: 0 0 60px color-mix(in srgb, var(--rest-blue) 40%, transparent);
+        border-color: color-mix(in srgb, var(--rest-blue) 60%, transparent);
     }
 
     100% {
-        box-shadow: 0 0 30px rgba(76, 141, 255, 0.1);
-        border-color: rgba(76, 141, 255, 0.3);
+        box-shadow: 0 0 30px color-mix(in srgb, var(--rest-blue) 10%, transparent);
+        border-color: color-mix(in srgb, var(--rest-blue) 30%, transparent);
     }
 }
 
 @keyframes pulse-ring-blue {
     0% {
-        box-shadow: 0 0 30px rgba(0, 150, 255, 0.1);
-        border-color: rgba(0, 150, 255, 0.3);
+        box-shadow: 0 0 30px color-mix(in srgb, var(--rest-blue) 10%, transparent);
+        border-color: color-mix(in srgb, var(--rest-blue) 30%, transparent);
     }
 
     50% {
-        box-shadow: 0 0 60px rgba(0, 150, 255, 0.4);
-        border-color: rgba(0, 150, 255, 0.6);
+        box-shadow: 0 0 60px color-mix(in srgb, var(--rest-blue) 40%, transparent);
+        border-color: color-mix(in srgb, var(--rest-blue) 60%, transparent);
     }
 
     100% {
-        box-shadow: 0 0 30px rgba(0, 150, 255, 0.1);
-        border-color: rgba(0, 150, 255, 0.3);
+        box-shadow: 0 0 30px color-mix(in srgb, var(--rest-blue) 10%, transparent);
+        border-color: color-mix(in srgb, var(--rest-blue) 30%, transparent);
     }
 }
 
@@ -329,8 +329,8 @@
 }
 
 .timer-circle.resting .timer-value {
-    color: #4facfe;
-    text-shadow: 0 0 20px rgba(79, 172, 254, 0.4);
+    color: var(--rest-blue);
+    text-shadow: 0 0 20px color-mix(in srgb, var(--rest-blue) 40%, transparent);
 }
 
 .timer-adjust-side {
@@ -351,7 +351,7 @@
 .timer-adjust-side:active {
     background: rgba(255, 255, 255, 0.2);
     transform: scale(0.95);
-    color: #fff;
+    color: var(--text-primary);
 }
 
 /* ACTION CONTROLS */
@@ -368,7 +368,7 @@
     justify-content: center;
     gap: 8px;
     background: var(--primary);
-    color: #000;
+    color: var(--bg-app);
     border: none;
     padding: 20px;
     border-radius: 10px;
@@ -390,8 +390,8 @@
 
 /* RESTING STATE BUTTON */
 .main-action-btn.skip {
-    background: #333;
-    color: #fff;
+    background: var(--input-bg);
+    color: var(--text-primary);
     border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: none;
 }
@@ -413,7 +413,7 @@
     flex-direction: column;
     justify-content: center;
     padding-right: 40px;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid var(--border);
 }
 
 .right-panel {
@@ -429,7 +429,7 @@
 /* EXERCISE CARD (Left Panel) */
 .exercise-card {
     background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
     border-radius: 999px;
     padding: 30px;
     margin-bottom: 30px;
@@ -478,7 +478,7 @@
     border-color: var(--primary);
     transform: translateY(-2px);
     box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2);
-    color: #fff;
+    color: var(--text-primary);
 }
 
 /* NAVIGATION (Bottom Left) */
@@ -498,7 +498,7 @@
 }
 
 .nav-arrow-btn:hover {
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .nav-indicator {
@@ -517,7 +517,7 @@
     border-radius: 50%;
     background: var(--primary);
     /* Neon Lime */
-    color: #000;
+    color: var(--bg-app);
     display: flex;
     align-items: center;
     justify-content: center;

@@ -339,7 +339,7 @@ const GuidedWorkoutView = () => {
 
                 {/* LEFT PANEL: Context & Navigation */}
                 <div className="left-panel">
-                    <div className="set-indicator-large" style={{ fontSize: '1.2rem', fontWeight: '600', color: 'var(--primary)', marginBottom: '20px' }}>
+                    <div className="set-indicator-large" style={{ fontSize: '1.2rem', fontWeight: '600', color: 'var(--text-primary)', fontFeatureSettings: '"tnum"', marginBottom: '20px' }}>
                         Set {currentSetIndex + 1}/{currentExerciseInstance.sets.length}
                     </div>
 
@@ -402,7 +402,7 @@ const GuidedWorkoutView = () => {
                                 <Pause size={24} strokeWidth={1.75} />
                             </button>
                         )}
-                        <button className="exit-btn-styled" onClick={() => setShowCancelConfirm(true)} style={{ borderColor: 'transparent', background: 'transparent', color: '#666' }}>
+                        <button className="exit-btn-styled" onClick={() => setShowCancelConfirm(true)} style={{ borderColor: 'transparent', background: 'transparent', color: 'var(--text-muted)' }}>
                             <X size={24} /> End Session
                         </button>
                     </div>
@@ -413,7 +413,7 @@ const GuidedWorkoutView = () => {
                             className="detail-pill clickable"
                             onClick={() => setTargetModal({ isOpen: true, type: 'weight', value: currentSet.weight || 0 })}
                         >
-                            <span style={{ color: 'var(--primary)' }}>{currentSet.weight > 0 ? `${currentSet.weight}` : 'BW'}</span>
+                            <span style={{ color: 'var(--text-primary)', fontFeatureSettings: '"tnum"' }}>{currentSet.weight > 0 ? `${currentSet.weight}` : 'BW'}</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{units === 'imperial' ? 'LBS' : 'KGS'}</span>
                         </button>
 
@@ -421,7 +421,7 @@ const GuidedWorkoutView = () => {
                             className="detail-pill clickable"
                             onClick={() => setTargetModal({ isOpen: true, type: 'reps', value: currentSet.targetReps || 8 })}
                         >
-                            <span style={{ color: 'var(--accent)' }}>{currentSet.targetReps || '8'}</span>
+                            <span style={{ color: 'var(--text-primary)', fontFeatureSettings: '"tnum"' }}>{currentSet.targetReps || '8'}</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>REPS</span>
                         </button>
                     </div>
@@ -507,7 +507,7 @@ const GuidedWorkoutView = () => {
                                             else toggleWorkTimer();
                                         }}
                                         style={{
-                                            background: 'rgba(255,255,255,0.1)',
+                                            background: 'var(--input-bg)',
                                             border: 'none',
                                             borderRadius: '50%',
                                             width: '50px',
@@ -515,7 +515,7 @@ const GuidedWorkoutView = () => {
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            color: '#fff',
+                                            color: 'var(--text-primary)',
                                             cursor: 'pointer'
                                         }}
                                     >
@@ -565,7 +565,7 @@ const GuidedWorkoutView = () => {
 
                     {/* MENU FAB */}
                     <button className="menu-fab" onClick={handleOpenNotes} aria-label="Menu">
-                        <StickyNote size={24} color="#000" />
+                        <StickyNote size={24} color="var(--bg-app)" />
                     </button>
                 </div>
             </div>

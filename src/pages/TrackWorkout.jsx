@@ -313,9 +313,9 @@ const TrackWorkout = () => {
                                     setDeleteConfirmation({ ...deleteConfirmation, isOpen: false });
                                 }}
                                 style={{
-                                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                                    color: '#ef4444',
-                                    border: '1px solid #ef4444',
+                                    backgroundColor: 'color-mix(in srgb, var(--danger) 20%, transparent)',
+                                    color: 'var(--danger)',
+                                    border: '1px solid var(--danger)',
                                     padding: '8px 16px',
                                     borderRadius: '8px',
                                     cursor: 'pointer',
@@ -348,12 +348,12 @@ const TrackWorkout = () => {
             <div className="track-workout-container" style={{ paddingBottom: '140px' }}>
                 <header className="active-header">
                     <div>
-                        <span className="status-badge" style={{ background: '#facc15', color: '#000' }}>PREPARATION</span>
+                        <span className="status-badge" style={{ background: 'var(--primary-dim)', color: 'var(--primary)' }}>PREPARATION</span>
                         <h1 style={{ marginTop: '10px' }}>{activeWorkout.name}</h1>
                     </div>
                     <button
                         onClick={cancelWorkout}
-                        style={{ position: 'absolute', right: '20px', top: '25px', background: 'transparent', border: 'none', color: '#666' }}
+                        style={{ position: 'absolute', right: '20px', top: '25px', background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
                     >
                         <XCircle size={24} />
                     </button>
@@ -372,7 +372,7 @@ const TrackWorkout = () => {
                             START WORKOUT
                         </button>
                         {!prepValidation.canStartGuidedWorkout && (
-                            <p style={{ margin: '0 0 15px', color: '#fca5a5', fontSize: '0.9rem', textAlign: 'center' }}>
+                            <p style={{ margin: '0 0 15px', color: 'var(--danger)', fontSize: '0.9rem', textAlign: 'center' }}>
                                 Enter a weight greater than 0 for every weighted set before starting.
                             </p>
                         )}
@@ -409,8 +409,8 @@ const TrackWorkout = () => {
                                 justifyContent: 'center',
                                 gap: '8px',
                                 padding: '12px 0',
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                border: '1px solid var(--border-color)',
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border)',
                                 borderRadius: '10px',
                                 color: 'var(--text-primary)',
                                 cursor: 'pointer',
