@@ -84,14 +84,6 @@ and hard-stop if actual zone is higher than claimed.
 The prompt cannot reclassify what the code actually is.
 Example: a prompt labeled LOW that touches auth.py is HIGH — full stop.
 
-## SESSION_BUDGET_RULE
-The session bar % at claude.ai/settings/usage → "Current session"
-is the ONLY authoritative usage signal. Terminal internal token
-math is informational only — do NOT use it to mandate restarts
-or stop work mid-task. Recommend a fresh terminal when context
-feels long or task is complete. Require one only when the
-coordinator instructs it or the session bar exceeds 80%.
-
 ## CONTEXT_EFFICIENCY_RULE
 Minimize token burn on every operation:
   - Read files once — never cat the same large file twice in one task
@@ -145,7 +137,6 @@ Zero regressions: [CONFIRMED / issues found]
 Verification method: [how it was checked — Chrome MCP, build, lint, endpoint probe]
 Commit SHA: [sha]
 Deployed SHA: [sha] — status=[ok/failed] deploy=[green/red]
-Context estimate: [LOW / MEDIUM / HIGH]
 Surprises / gotchas: [list or NONE]
 Ready for next task: [suggested next item from open backlog]
 

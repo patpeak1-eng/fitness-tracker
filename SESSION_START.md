@@ -43,58 +43,52 @@ graphite neutrals (#0d0d0f canvas, no blue cast), ember #ff5c2a accent
 self-hosted in public/fonts (Inter body, Archivo SemiExpanded display) —
 never add a font CDN import. The S11 neon-green/purple system is RETIRED.
 
-## Session 12 Final State
-Session 12 final SHA on main: 8f03019 (deployed, Railway ACTIVE, green)
+## Session 13 Final State
+Session 13 final code SHA on main: fe31b12 (plus the docs commit that
+updated this file).
 
-Nine commits, in order (all deployed green):
-1. ea80d7f - fix(ui): null guard, emoji removal, 44px touch targets,
-   token colors (approved audit-fix pass)
-2. 02b46f5 - docs(architecture): verify sections 4.5, 7, 8 against source
-   (S12 audit — dual Bearer/cookie auth + full route inventory VERIFIED)
-3. 5867b10 - docs(brief): close backlog items 1,4,6,9,10 as already built
-   (Equipment Profiles, Duration filter, Plate calc, e1RM, Assessment CTA
-   all shipped pre-S12)
-4. 567484b - fix(storage): quota-safe writes, atomic timer persistence,
-   template dedup adoption (reliability hardening)
-5. fdb3321 - feat(sync): retry queue, sync-status badge, 401 re-login
-   prompt, settings pull-down (SyncQueue system)
-6. 7b81066 - feat(sync): exercise/template cloud sync, email-gate fix,
-   trapped-data backfill (Critical #1/#2/#3 closed)
-7. 8b30633 - fix(workout): hydration-gate history persistence against
-   pre-restore wipes (StrictMode-replay defeat; ref guards insufficient)
-8. bb883de - feat(analytics): rebuild screen per S12 visual spec (PR ring,
-   segmented metric, time-range chips, recent-sessions list)
-9. 8f03019 - feat(design): migrate to Ember-on-Graphite token system v2
-   (self-hosted Inter+Archivo, ember palette, app-wide sweep,
-   Analytics/Profile/Settings re-skinned)
+Session 13 commits, in order:
+1. 650f6ca - docs: retire Codex review references (inline self-review is
+   the sole review standard; "Cleared, proceed with commit" gates)
+2. 4258794 - docs: add fire-station-pause and set-type-differentiation
+   specs (both P0 specs approved and committed before implementation)
+3. c70a32f - feat(workout): pause/resume for Fire Station use case —
+   pauseAllTimers/resumeTimers freeze countdowns in place, totalPausedMs
+   accounting, activeDurationMs on completed workouts, token-compliant
+   paused overlay + always-visible header pause button. ALSO fixed a
+   pre-existing P1: active-workout persist effect wiped storage on
+   reload under StrictMode replay — now hydration-gated (same pattern
+   as 8b30633 used for history).
+4. 9a31cdf - feat(workout): set-type differentiation — setType field
+   (normal/warmup/amrap/dropset, undefined = normal so zero migration),
+   tap-to-cycle chip on set rows, warmup excluded from volume at ALL
+   FOUR computation sites (calculateVolume, WorkoutSummary, Analytics,
+   WorkoutDetails) and from progression checks. Legacy history verified.
+5. 84c15f3 - style(dashboard): data values to --text-primary + tnum,
+   glassmorphism retired via .dashboard-scoped Card override,
+   grep-zero hardcoded colors.
+6. fe31b12 - style(screens): token pass on Exercise Library, TrackWorkout,
+   GuidedWorkoutView — neon lime/cyan legacy palettes tokenized,
+   accent-on-data fixed, exercise cards de-glassed.
 
-Reliability workstream (data-loss audit): CLOSED. All 3 CRITICAL and
-all 4 MODERATE findings fixed and verified live.
-Visual workstream: Analytics/Profile/Settings rebuilt + entire app
-migrated to Design Tokens v2.
+Both P0 features (Fire Station pause, set-type differentiation) SHIPPED.
+Dashboard P1 visual pass SHIPPED. Codex review retired from all docs.
 
-## Session 13 Open Items (priority order)
-P0 - Fire Station pause button (brief Section 3, item 2) — SPEC FIRST.
-     Prominent pause/resume on active workout, tied to Fire Station
-     equipment profile. HIGH zone (WorkoutContext) — coordinator sign-off.
-P0 - Set-type differentiation (brief Section 3, item 3) — SPEC FIRST.
-     warm-up/working/AMRAP/drop set field + UI toggle + volume-calc
-     exclusion for warm-ups. HIGH zone. All sets currently identical.
-P1 - Dashboard visual pass — the token migration re-skinned it centrally
-     but Dashboard renders DATA VALUES in ember accent ("0 days" streak,
-     "50%" goal), which the token spec reserves for interactive/active
-     states only. Also still uses the shared Card.css glassmorphism.
-     Needs its own screen pass to the v2 grammar.
+## Session 14 Open Items (priority order)
 P2 - Per-screen light-mode QA — light theme is at token-level parity
      (graphite-inverse mapping) but not audited screen-by-screen.
-P2 - Card.css glassmorphism retirement — the shared Card component is
-     pre-S11 glass (blur + shine + hover-lift); Analytics/Profile/Settings
-     dropped it, but Dashboard/History/others still use it.
+P2 - Card.css glassmorphism retirement (shared component) — Dashboard now
+     overrides it locally; the shared Card.css glass (blur + shine +
+     hover-lift) still applies on History and any other Card consumers.
+     Retire centrally once remaining consumers are audited.
 P3 - Backend /api/auth/me dual-transport (backend-auth tier) — Option 2
      from the email-gate fix; not urgent (Option 1 self-heal shipped).
 P3 - StrictMode-replay hole in remaining guard-only persist effects
-     (weight/activeWorkout/theme) — dev-only symptom, prod-safe single
-     mount; use the hydration-gate pattern if sweeping. Dead-code pass.
+     (weight/theme/units/sound/stats — activeWorkout fixed in c70a32f) —
+     dev-only symptom, prod-safe single mount; use the hydration-gate
+     pattern if sweeping. Dead-code pass.
+P3 - PR detection still counts warmup-tagged sets (noted in S13 review);
+     decide whether warmups should be PR-eligible.
 
 ## VISUAL_REVIEW_RULE (standing)
 Before/after screenshots are MANDATORY deliverables for every design
