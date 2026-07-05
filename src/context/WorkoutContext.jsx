@@ -1645,7 +1645,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             const ex = activeWorkout.exercises.find(e => e.id === exerciseInstanceId);
             const set = ex?.sets.find(s => s.id === setId);
 
-            if (ex && set) {
+            // Warm-up sets are never PR-eligible — complete them and run the
+            // rest timer as normal, but skip the PR check entirely. Sets
+            // predating setType (undefined) count as 'normal' and are checked.
+            const isWarmup = (set?.setType || 'normal') === 'warmup';
+
+            if (ex && set && !isWarmup) {
                 // Determine if PR
                 const isPR = checkPersonalRecord(ex.exercise.id, set.weight || 0, set.reps || 0); // Handle 0 safely
                 if (isPR) updates.isPR = true;
