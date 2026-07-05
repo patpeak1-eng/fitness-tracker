@@ -62,8 +62,6 @@
     color: var(--text-secondary);
     background: var(--bg-card);
     border: var(--border-glass);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     transition: all 0.2s ease;
 }
 
@@ -131,12 +129,9 @@
 .coach-bubble-coach {
     align-self: flex-start;
     background: var(--bg-card);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     border: var(--border-glass);
     color: var(--text-primary);
     border-radius: 18px 18px 18px 4px;
-    box-shadow: var(--shadow-glass);
 }
 
 .coach-bubble-error {
@@ -234,8 +229,6 @@
     color: var(--text-secondary);
     background: var(--bg-card);
     border: var(--border-glass);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     transition: all 0.2s ease;
 }
 
@@ -271,8 +264,6 @@
     color: var(--error);
     background: var(--bg-card);
     border: 1px solid var(--error);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     transition: all 0.2s ease;
 }
 

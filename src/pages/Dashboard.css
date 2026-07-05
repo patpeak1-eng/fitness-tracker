@@ -4,30 +4,6 @@
     margin: 0 auto;
 }
 
-/* v2 filled cards (S13): the shared Card component still carries the retired
-   glass treatment; neutralize it here, scoped to the Dashboard only —
-   surface/1 background, radius 12, no border, no blur, no shine, no lift. */
-.dashboard .card {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: none;
-    box-shadow: none;
-    border-radius: 12px;
-}
-
-.dashboard .card::before {
-    content: none;
-}
-
-.dashboard .card:hover {
-    transform: none;
-    border-color: transparent;
-    box-shadow: none;
-}
-
-.dashboard .card:active {
-    transform: none;
-}
 
 .dashboard-header {
     display: flex;

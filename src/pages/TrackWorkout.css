@@ -14,11 +14,8 @@
     padding: 2.5rem;
     max-width: 450px;
     background: var(--bg-card);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: var(--border-glass);
+    border: none;
     border-radius: 12px;
-    box-shadow: var(--shadow-glass);
 }
 
 .empty-icon {
@@ -210,7 +207,6 @@
     padding: 2rem;
     color: var(--text-secondary);
     background: var(--bg-card);
-    backdrop-filter: var(--glass-blur);
     border-radius: var(--radius-md);
 }
 

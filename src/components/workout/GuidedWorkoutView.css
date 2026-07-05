@@ -98,7 +98,6 @@
 .detail-pill {
     background: var(--bg-card);
     border: var(--border-glass);
-    backdrop-filter: var(--glass-blur);
     padding: 10px 20px;
     border-radius: 12px;
     font-weight: 600;
@@ -345,7 +344,6 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    backdrop-filter: var(--glass-blur);
 }
 
 .timer-adjust-side:active {

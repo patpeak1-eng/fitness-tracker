@@ -4,12 +4,9 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(0, 0, 0, 0.7);
-    /* Reverted opacity as requested */
-    /* Darker to hide background text */
-    backdrop-filter: blur(12px);
-    /* Reverted blur intensity */
-    /* Heavy blur to obscure 'Save/Start' buttons */
+    /* Opaque enough to obscure the 'Save/Start' buttons behind the modal
+       (previously blur-assisted; blur retired with the v2 card sweep). */
+    background-color: rgba(0, 0, 0, 0.85);
     z-index: 9999;
     /* Ensure it stays on top of everything */
     display: flex;
