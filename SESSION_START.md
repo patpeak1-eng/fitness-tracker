@@ -44,7 +44,7 @@ self-hosted in public/fonts (Inter body, Archivo SemiExpanded display) —
 never add a font CDN import. The S11 neon-green/purple system is RETIRED.
 
 ## Session 13 Final State
-Session 13 final code SHA on main: fe31b12 (plus the docs commit that
+Session 13 final code SHA on main: 040edd4 (plus the docs commit that
 updated this file).
 
 Session 13 commits, in order:
@@ -70,25 +70,48 @@ Session 13 commits, in order:
 6. fe31b12 - style(screens): token pass on Exercise Library, TrackWorkout,
    GuidedWorkoutView — neon lime/cyan legacy palettes tokenized,
    accent-on-data fixed, exercise cards de-glassed.
+7. b57a94b - docs: SESSION_START to S13 state; SESSION_BUDGET_RULE
+   retired from CLAUDE.md per coordinator addendum.
+
+S13 continuation run (same session, second prompt):
+8. c40750a - fix(workout): warmup sets excluded from PR detection
+   (guard in toggleSetComplete; historical warmups still set the PR
+   baseline — product decision pending).
+9. c77c4e5 - style(card): shared Card.css glassmorphism retired
+   centrally (v2 filled card); ALL backdrop-filter swept from src/
+   (14 files — modals, bottom nav, coach bubbles, login/help/history);
+   Dashboard-local override removed as superseded.
+10. 040edd4 - fix(context): hydration-gate sweep — all 10 remaining
+    mount-ref persist effects converted (theme/units/sound/coach x2/
+    stats/weight/progression/equipment x2); coach prefs now hydrated
+    from storage in refreshProfileData (they never were — gate would
+    have written boot defaults over stored values otherwise).
+Profile-switch race (planned 4th fix): VERIFIED ALREADY CLOSED by the
+c70a32f hydration gate — empirically tested B->C switch mid-workout,
+no cross-profile write; no code change shipped (switchingRef would be
+dead code).
 
 Both P0 features (Fire Station pause, set-type differentiation) SHIPPED.
 Dashboard P1 visual pass SHIPPED. Codex review retired from all docs.
+Glassmorphism fully retired app-wide. StrictMode persist holes closed.
 
 ## Session 14 Open Items (priority order)
+P1 - Settings sync to backend — user_preferences table, GET/PATCH
+     /api/preferences endpoints, wire the (now hydration-gated)
+     WorkoutContext persist effects to push on change. HIGH zone:
+     SPEC_FIRST required, DB migration involved, coordinator sign-off
+     at every gate.
 P2 - Per-screen light-mode QA — light theme is at token-level parity
      (graphite-inverse mapping) but not audited screen-by-screen.
-P2 - Card.css glassmorphism retirement (shared component) — Dashboard now
-     overrides it locally; the shared Card.css glass (blur + shine +
-     hover-lift) still applies on History and any other Card consumers.
-     Retire centrally once remaining consumers are audited.
 P3 - Backend /api/auth/me dual-transport (backend-auth tier) — Option 2
      from the email-gate fix; not urgent (Option 1 self-heal shipped).
-P3 - StrictMode-replay hole in remaining guard-only persist effects
-     (weight/theme/units/sound/stats — activeWorkout fixed in c70a32f) —
-     dev-only symptom, prod-safe single mount; use the hydration-gate
-     pattern if sweeping. Dead-code pass.
-P3 - PR detection still counts warmup-tagged sets (noted in S13 review);
-     decide whether warmups should be PR-eligible.
+P3 - TimerContext.jsx still has two mount-ref persist effects (timer
+     defaults, exercise prefs) — same StrictMode hole class, apply the
+     hydration-gate pattern (was out of scope for the 040edd4 sweep).
+P3 - History screen date numerals render in ember accent (accent-on-data
+     violation) — needs its own token pass.
+P3 - Dead-code pass: ProfileSelector.jsx is unimported (only live
+     switchProfile callers are logout + cloud auth).
 
 ## VISUAL_REVIEW_RULE (standing)
 Before/after screenshots are MANDATORY deliverables for every design
