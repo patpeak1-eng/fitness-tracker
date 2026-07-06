@@ -357,6 +357,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // the guard before the restore commit), wiping an in-progress/paused
     // session on reload — same hole 8b30633 closed for history.
     const [activeWorkoutHydratedFor, setActiveWorkoutHydratedFor] = useState(null);
+    // Same gate for the remaining settings/stats/equipment persist effects —
+    // one flag covers them all because refreshProfileData restores every one
+    // of these values in the same synchronous batch (S13 mount-ref sweep).
+    const [settingsHydratedFor, setSettingsHydratedFor] = useState(null);
     const [assessments, setAssessments] = useState([]); // NEW: Assessment History
     const [theme, setTheme] = useState('dark');
     const [units, setUnits] = useState('metric');
@@ -548,11 +552,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
 
+        // Coach prefs are global-keyed (not profile-scoped) and were previously
+        // never hydrated into context state — the boot defaults sat in state
+        // until a cloud pull or user edit. Hydrate them here so the (now
+        // hydration-gated) coach persist effects can never write the boot
+        // defaults over a stored value.
+        setCoachPersonality(StorageService.loadCoachPersonality());
+        setCoachVoiceId(StorageService.loadCoachVoiceId());
+
         // Load Templates Scoped to User
         const userTemplates = StorageService.loadCustomTemplates(uid);
         // Reset to Defaults + User Custom
         // Use Set to prevent duplicates if any weird merging happens (though simply replacing is safer)
         setTemplates([...DEFAULT_TEMPLATES, ...userTemplates]);
+
+        // Same-batch flag: unlocks the settings/stats/equipment persist
+        // effects only for commits at or after this restore (mirrors
+        // historyHydratedFor / activeWorkoutHydratedFor above).
+        setSettingsHydratedFor(uid);
 
         // --- CLOUD PULL (Google OAuth users only) ---
         // profile.email is only set on cloud profiles built from GET /api/auth/me.
@@ -892,153 +909,118 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     }, [history]);
 
+    // The persist effects below are hydration-gated on settingsHydratedFor
+    // (S13 sweep): mount-ref guards fail under StrictMode replay — the
+    // replayed run consumes the guard before the restore commit and writes
+    // the pre-restore default over storage. The gate skips every run until
+    // this profile's values have been rehydrated, which also covers the
+    // profile-switch window (gate still holds the outgoing profile's id).
+    //
+    // For the backend-synced settings, the syncedProfileRef "same profile"
+    // check is unchanged: the first gated run after a mount/switch is the
+    // restore run (ref holds the prior id) — persisted locally, not pushed.
+    // Only genuine user edits after that push to the backend.
+
     // Persist Theme
-    const themeMountRef = useRef(true);
     const themeSyncedProfileRef = useRef(null);
     useEffect(() => {
-        // Apply theme to the DOM on every run (incl. mount) so the current/default
-        // theme is always reflected visually.
+        // Apply theme to the DOM on every run (incl. pre-hydration) so the
+        // current/default theme is always reflected visually.
         document.documentElement.setAttribute('data-theme', theme);
-        // Skip the persist write on initial mount: refreshProfileData loads the
-        // stored theme right after mount, and writing here first would clobber the
-        // saved value with the default before the load completes.
-        if (themeMountRef.current) {
-            themeMountRef.current = false;
-            themeSyncedProfileRef.current = currentProfile?.id ?? null;
-            return;
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        StorageService.saveTheme(currentProfile.id, theme);
+        const sameProfile = themeSyncedProfileRef.current === currentProfile.id;
+        themeSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ theme })
+                .catch(err => {
+                    console.warn('[settings-sync] theme:', err);
+                    SyncQueue.enqueue({ type: 'profile_settings', key: 'theme', payload: { theme } });
+                });
         }
-        if (currentProfile) {
-            StorageService.saveTheme(currentProfile.id, theme);
-            // Best-effort backend sync — only on genuine user edits (same profile),
-            // not the login/profile-switch restore run, which fires this effect with
-            // the pre-restore value and would clobber the backend.
-            const sameProfile = themeSyncedProfileRef.current === currentProfile.id;
-            themeSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncRef.current()) {
-                ApiService.saveProfile({ theme })
-                    .catch(err => {
-                        console.warn('[settings-sync] theme:', err);
-                        SyncQueue.enqueue({ type: 'profile_settings', key: 'theme', payload: { theme } });
-                    });
-            }
-        }
-    }, [theme, currentProfile]);
+    }, [theme, currentProfile, settingsHydratedFor]);
 
     // Persist Units
-    const unitsMountRef = useRef(true);
     const unitsSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (unitsMountRef.current) {
-            unitsMountRef.current = false;
-            unitsSyncedProfileRef.current = currentProfile?.id ?? null;
-            return;
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        StorageService.saveUnits(currentProfile.id, units);
+        const sameProfile = unitsSyncedProfileRef.current === currentProfile.id;
+        unitsSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ units })
+                .catch(err => {
+                    console.warn('[settings-sync] units:', err);
+                    SyncQueue.enqueue({ type: 'profile_settings', key: 'units', payload: { units } });
+                });
         }
-        if (currentProfile) {
-            StorageService.saveUnits(currentProfile.id, units);
-            const sameProfile = unitsSyncedProfileRef.current === currentProfile.id;
-            unitsSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncRef.current()) {
-                ApiService.saveProfile({ units })
-                    .catch(err => {
-                        console.warn('[settings-sync] units:', err);
-                        SyncQueue.enqueue({ type: 'profile_settings', key: 'units', payload: { units } });
-                    });
-            }
-        }
-    }, [units, currentProfile]);
+    }, [units, currentProfile, settingsHydratedFor]);
 
     // Persist Sound
-    const soundMountRef = useRef(true);
     const soundSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (soundMountRef.current) {
-            soundMountRef.current = false;
-            soundSyncedProfileRef.current = currentProfile?.id ?? null;
-            return;
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        StorageService.saveSound(currentProfile.id, soundEnabled);
+        const sameProfile = soundSyncedProfileRef.current === currentProfile.id;
+        soundSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ sound_enabled: soundEnabled })
+                .catch(err => {
+                    console.warn('[settings-sync] sound_enabled:', err);
+                    SyncQueue.enqueue({ type: 'profile_settings', key: 'sound_enabled', payload: { sound_enabled: soundEnabled } });
+                });
         }
-        if (currentProfile) {
-            StorageService.saveSound(currentProfile.id, soundEnabled);
-            const sameProfile = soundSyncedProfileRef.current === currentProfile.id;
-            soundSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncRef.current()) {
-                ApiService.saveProfile({ sound_enabled: soundEnabled })
-                    .catch(err => {
-                        console.warn('[settings-sync] sound_enabled:', err);
-                        SyncQueue.enqueue({ type: 'profile_settings', key: 'sound_enabled', payload: { sound_enabled: soundEnabled } });
-                    });
-            }
-        }
-    }, [soundEnabled, currentProfile]);
+    }, [soundEnabled, currentProfile, settingsHydratedFor]);
 
     // Persist Coach Personality
-    const coachPersonalityMountRef = useRef(true);
     const coachPersonalitySyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (coachPersonalityMountRef.current) {
-            coachPersonalityMountRef.current = false;
-            coachPersonalitySyncedProfileRef.current = currentProfile?.id ?? null;
-            return;
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        StorageService.saveCoachPersonality(coachPersonality);
+        const sameProfile = coachPersonalitySyncedProfileRef.current === currentProfile.id;
+        coachPersonalitySyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ coach_personality: coachPersonality })
+                .catch(err => {
+                    console.warn('[settings-sync] coach_personality:', err);
+                    SyncQueue.enqueue({ type: 'profile_settings', key: 'coach_personality', payload: { coach_personality: coachPersonality } });
+                });
         }
-        if (currentProfile) {
-            StorageService.saveCoachPersonality(coachPersonality);
-            const sameProfile = coachPersonalitySyncedProfileRef.current === currentProfile.id;
-            coachPersonalitySyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncRef.current()) {
-                ApiService.saveProfile({ coach_personality: coachPersonality })
-                    .catch(err => {
-                        console.warn('[settings-sync] coach_personality:', err);
-                        SyncQueue.enqueue({ type: 'profile_settings', key: 'coach_personality', payload: { coach_personality: coachPersonality } });
-                    });
-            }
-        }
-    }, [coachPersonality, currentProfile]);
+    }, [coachPersonality, currentProfile, settingsHydratedFor]);
 
     // Persist Coach Voice ID
-    const coachVoiceIdMountRef = useRef(true);
     const coachVoiceIdSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (coachVoiceIdMountRef.current) {
-            coachVoiceIdMountRef.current = false;
-            coachVoiceIdSyncedProfileRef.current = currentProfile?.id ?? null;
-            return;
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        StorageService.saveCoachVoiceId(coachVoiceId);
+        const sameProfile = coachVoiceIdSyncedProfileRef.current === currentProfile.id;
+        coachVoiceIdSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ coach_voice_id: coachVoiceId })
+                .catch(err => {
+                    console.warn('[settings-sync] coach_voice_id:', err);
+                    SyncQueue.enqueue({ type: 'profile_settings', key: 'coach_voice_id', payload: { coach_voice_id: coachVoiceId } });
+                });
         }
-        if (currentProfile) {
-            StorageService.saveCoachVoiceId(coachVoiceId);
-            const sameProfile = coachVoiceIdSyncedProfileRef.current === currentProfile.id;
-            coachVoiceIdSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncRef.current()) {
-                ApiService.saveProfile({ coach_voice_id: coachVoiceId })
-                    .catch(err => {
-                        console.warn('[settings-sync] coach_voice_id:', err);
-                        SyncQueue.enqueue({ type: 'profile_settings', key: 'coach_voice_id', payload: { coach_voice_id: coachVoiceId } });
-                    });
-            }
-        }
-    }, [coachVoiceId, currentProfile]);
+    }, [coachVoiceId, currentProfile, settingsHydratedFor]);
 
     // Persist Stats
-    const statsMountRef = useRef(true);
     useEffect(() => {
-        if (statsMountRef.current) { statsMountRef.current = false; return; }
-        if (currentProfile) {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
             StorageService.saveUserStats(currentProfile.id, userStats);
         }
-    }, [userStats, currentProfile]);
+    }, [userStats, currentProfile, settingsHydratedFor]);
 
     // Persist Weight History
-    const weightMountRef = useRef(true);
     useEffect(() => {
-        if (weightMountRef.current) { weightMountRef.current = false; return; }
-        if (currentProfile) {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
             StorageService.saveWeightHistory(currentProfile.id, weightHistory);
         }
-    }, [weightHistory, currentProfile]);
+    }, [weightHistory, currentProfile, settingsHydratedFor]);
 
     // Persist Progression Settings
-    const progressionMountRef = useRef(true);
     useEffect(() => {
-        if (progressionMountRef.current) { progressionMountRef.current = false; return; }
-        if (currentProfile) {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
             StorageService.saveProgressionSettings(currentProfile.id, {
                 smartProgressionEnabled,
                 progressionMode,
@@ -1046,25 +1028,21 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 progressionIncrement
             });
         }
-    }, [smartProgressionEnabled, progressionMode, progressionType, progressionIncrement, currentProfile]);
+    }, [smartProgressionEnabled, progressionMode, progressionType, progressionIncrement, currentProfile, settingsHydratedFor]);
 
     // Persist Active Equipment Profile
-    const equipmentProfileMountRef = useRef(true);
     useEffect(() => {
-        if (equipmentProfileMountRef.current) { equipmentProfileMountRef.current = false; return; }
-        if (currentProfile) {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
             StorageService.saveEquipmentProfile(currentProfile.id, activeEquipmentProfileId);
         }
-    }, [activeEquipmentProfileId, currentProfile]);
+    }, [activeEquipmentProfileId, currentProfile, settingsHydratedFor]);
 
     // Persist Custom Equipment Items
-    const customEquipmentMountRef = useRef(true);
     useEffect(() => {
-        if (customEquipmentMountRef.current) { customEquipmentMountRef.current = false; return; }
-        if (currentProfile) {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
             StorageService.saveCustomEquipment(currentProfile.id, customEquipmentItems);
         }
-    }, [customEquipmentItems, currentProfile]);
+    }, [customEquipmentItems, currentProfile, settingsHydratedFor]);
 
 
 
