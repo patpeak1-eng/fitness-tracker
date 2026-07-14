@@ -27,7 +27,8 @@ Railway:   peak-ops-q (877335d0-ecc2-4460-9800-291ffcb3f660)
   (email/password, JWT in localStorage) OR session_token cookie
   (Google OAuth). Both carry the same JWT. Cloud users identified by
   currentProfile.email presence (canSyncToBackend gate).
-  - Backend /api/auth/me is COOKIE-ONLY by construction (ignores Bearer)
+  - /api/auth/me is dual-transport since S14 (810c940) — uses the shared
+    get_current_user dependency like every other route
 - WorkoutContext.jsx: central state, HIGHEST RISK — one terminal at a time
 - StorageService.js: localStorage layer (quota-safe writes)
 - ApiService.js: all backend calls via apiFetch() with credentials:include
@@ -43,75 +44,71 @@ graphite neutrals (#0d0d0f canvas, no blue cast), ember #ff5c2a accent
 self-hosted in public/fonts (Inter body, Archivo SemiExpanded display) —
 never add a font CDN import. The S11 neon-green/purple system is RETIRED.
 
-## Session 13 Final State
-Session 13 final code SHA on main: 040edd4 (plus the docs commit that
-updated this file).
+## Session 13 Final State (reference)
+S13 closed at 17d3a42 (final code SHA 040edd4 + docs). Shipped: Fire
+Station pause, set-type differentiation, dashboard + screens token
+passes, glassmorphism fully retired, WorkoutContext hydration-gate
+sweep (10 persist effects), warmup-PR guard, Codex review retired.
+Full commit list: git log 650f6ca..17d3a42.
 
-Session 13 commits, in order:
-1. 650f6ca - docs: retire Codex review references (inline self-review is
-   the sole review standard; "Cleared, proceed with commit" gates)
-2. 4258794 - docs: add fire-station-pause and set-type-differentiation
-   specs (both P0 specs approved and committed before implementation)
-3. c70a32f - feat(workout): pause/resume for Fire Station use case —
-   pauseAllTimers/resumeTimers freeze countdowns in place, totalPausedMs
-   accounting, activeDurationMs on completed workouts, token-compliant
-   paused overlay + always-visible header pause button. ALSO fixed a
-   pre-existing P1: active-workout persist effect wiped storage on
-   reload under StrictMode replay — now hydration-gated (same pattern
-   as 8b30633 used for history).
-4. 9a31cdf - feat(workout): set-type differentiation — setType field
-   (normal/warmup/amrap/dropset, undefined = normal so zero migration),
-   tap-to-cycle chip on set rows, warmup excluded from volume at ALL
-   FOUR computation sites (calculateVolume, WorkoutSummary, Analytics,
-   WorkoutDetails) and from progression checks. Legacy history verified.
-5. 84c15f3 - style(dashboard): data values to --text-primary + tnum,
-   glassmorphism retired via .dashboard-scoped Card override,
-   grep-zero hardcoded colors.
-6. fe31b12 - style(screens): token pass on Exercise Library, TrackWorkout,
-   GuidedWorkoutView — neon lime/cyan legacy palettes tokenized,
-   accent-on-data fixed, exercise cards de-glassed.
-7. b57a94b - docs: SESSION_START to S13 state; SESSION_BUDGET_RULE
-   retired from CLAUDE.md per coordinator addendum.
+## Session 14 Final State
+Session 14 commits, in order:
+1. b5c5658 - fix(storage): coach_* keys (enabled/personality/voice_id/
+   voice_input/autoplay) included in JSON backup export/import —
+   they are bare (non-fitness_-prefixed) keys and were silently
+   excluded from every backup. Import clears them before restore
+   (full replace); old backups without coach keys still import.
+2. 85e568c - style(history): accent-on-data fixes — History date-badge
+   day numeral, WorkoutDetails workout-title and rec-value → 
+   --text-primary. exercise-number badge kept accent (wayfinding, not
+   data) but repointed from orphaned --primary-color to --primary —
+   it was rendering with NO background at all.
+3. 5b39d71 - chore: ProfileSelector dead-code pass — only a stale
+   comment removed. isEditing is a live feature; glass-panel is still
+   a real utility class (index.css converted it to filled-card in S13,
+   the class was kept). Component itself remains unimported (see open
+   items).
+4. 52d944d - fix(context): TimerContext hydration-gate sweep — both
+   mount-ref persist effects (timer defaults incl. backend sync,
+   exercise prefs) converted to a TimerContext-local timerHydratedFor
+   gate set in the profile-load effect. Verified live: seeded
+   non-default values survive StrictMode dev reload. Backend-sync
+   restore-run suppression preserved via timersSyncedProfileRef.
+5. 810c940 - refactor(auth): /api/auth/me uses the shared
+   get_current_user dependency (HIGH zone, coordinator-cleared) —
+   hand-rolled cookie-only JWT block and _user_id_from_session
+   removed; /me now accepts Bearer OR cookie like every other route.
+   Response shape unchanged; OAuth cookie flow traced end-to-end.
+   401 detail unifies to "Could not validate credentials" (no
+   frontend consumer reads the detail text).
+6. (this commit) docs: SESSION_START.md to Session 14 state.
 
-S13 continuation run (same session, second prompt):
-8. c40750a - fix(workout): warmup sets excluded from PR detection
-   (guard in toggleSetComplete; historical warmups still set the PR
-   baseline — product decision pending).
-9. c77c4e5 - style(card): shared Card.css glassmorphism retired
-   centrally (v2 filled card); ALL backdrop-filter swept from src/
-   (14 files — modals, bottom nav, coach bubbles, login/help/history);
-   Dashboard-local override removed as superseded.
-10. 040edd4 - fix(context): hydration-gate sweep — all 10 remaining
-    mount-ref persist effects converted (theme/units/sound/coach x2/
-    stats/weight/progression/equipment x2); coach prefs now hydrated
-    from storage in refreshProfileData (they never were — gate would
-    have written boot defaults over stored values otherwise).
-Profile-switch race (planned 4th fix): VERIFIED ALREADY CLOSED by the
-c70a32f hydration gate — empirically tested B->C switch mid-workout,
-no cross-profile write; no code change shipped (switchingRef would be
-dead code).
+FOUND ALREADY COMPLETE during S14 prep: "Settings sync to backend"
+(theme/units/sound/timers/coach prefs) is fully built — hydration-gated
+persist effects in WorkoutContext/TimerContext push via canSyncToBackend()
++ ApiService.saveProfile() with SyncQueue fallback. The former P1 open
+item is CLOSED without code; only the coach_* backup/export gap remained
+(fixed this session, commit 1).
 
-Both P0 features (Fire Station pause, set-type differentiation) SHIPPED.
-Dashboard P1 visual pass SHIPPED. Codex review retired from all docs.
-Glassmorphism fully retired app-wide. StrictMode persist holes closed.
-
-## Session 14 Open Items (priority order)
-P1 - Settings sync to backend — user_preferences table, GET/PATCH
-     /api/preferences endpoints, wire the (now hydration-gated)
-     WorkoutContext persist effects to push on change. HIGH zone:
-     SPEC_FIRST required, DB migration involved, coordinator sign-off
-     at every gate.
+## Session 15 Open Items (priority order)
 P2 - Per-screen light-mode QA — light theme is at token-level parity
      (graphite-inverse mapping) but not audited screen-by-screen.
-P3 - Backend /api/auth/me dual-transport (backend-auth tier) — Option 2
-     from the email-gate fix; not urgent (Option 1 self-heal shipped).
-P3 - TimerContext.jsx still has two mount-ref persist effects (timer
-     defaults, exercise prefs) — same StrictMode hole class, apply the
-     hydration-gate pattern (was out of scope for the 040edd4 sweep).
-P3 - History screen date numerals render in ember accent (accent-on-data
-     violation) — needs its own token pass.
-P3 - Dead-code pass: ProfileSelector.jsx is unimported (only live
-     switchProfile callers are logout + cloud auth).
+P2 - Orphaned --primary-color in ExerciseSelector.css (T2 S14 finding):
+     7 uses (lines 125, 127, 163, 165, 212, 221, 276) reference a
+     variable defined NOWHERE — selected-state backgrounds/borders/text
+     in the exercise selector silently resolve to nothing today. Swap
+     to --primary (+ visual verify). Note: --primary-rgb and
+     --primary-light are NOT orphaned (defined in index.css:39/:56);
+     --primary-light has one decorative use (History empty-icon), fine.
+P3 - ProfileSelector.jsx is entirely unimported (no route renders it) —
+     deleting page + CSS is a product decision: it is the only UI for
+     local multi-profile create/manage. Coordinator call.
+P3 - Historical warmup sets still seed the PR baseline (S13 c40750a
+     note) — product decision pending.
+P3 - Browser-pane screenshot capture timed out repeatedly in the S14
+     terminal session (page responsive, infra issue) — T2 was verified
+     via computed-style probes instead of before/after PNGs. If it
+     recurs, screenshot deliverables need the chrome-devtools MCP path.
 
 ## VISUAL_REVIEW_RULE (standing)
 Before/after screenshots are MANDATORY deliverables for every design
