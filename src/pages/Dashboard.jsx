@@ -1,5 +1,6 @@
 import React from 'react';
 import Card from '../components/common/Card';
+import Modal from '../components/common/Modal';
 import { Activity, Play, Calendar, Timer, TrendingUp, Settings, BarChart3, HelpCircle, Dumbbell, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
@@ -9,6 +10,10 @@ import './Dashboard.css';
 const Dashboard = () => {
     const navigate = useNavigate();
     const { history, currentProfile, activeWorkout, cancelWorkout } = useWorkout();
+
+    // Require confirmation before discarding an in-progress session (same
+    // pattern as GuidedWorkoutView's showCancelConfirm modal).
+    const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
 
     // Stats Calculation
     const thisWeekCount = history.filter(w => {
@@ -143,6 +148,23 @@ const Dashboard = () => {
                         <button className="primary-btn" style={{ width: '100%' }}>
                             {activeWorkout.status === 'paused' ? 'Resume Paused Workout' : 'Resume'}
                         </button>
+                        {/* Secondary destructive action — stopPropagation so it
+                            doesn't trigger the card's navigate('/track'). */}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowCancelConfirm(true); }}
+                            style={{
+                                marginTop: '10px',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--danger)',
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                padding: '6px 12px'
+                            }}
+                        >
+                            End Workout
+                        </button>
                     </Card>
                 )}
 
@@ -209,6 +231,33 @@ const Dashboard = () => {
                 )}
 
             </section>
+
+            {/* Rendered outside the banner Card: Modal doesn't portal, so
+                inside the Card its clicks would bubble to navigate('/track'). */}
+            <Modal
+                isOpen={showCancelConfirm}
+                onClose={() => setShowCancelConfirm(false)}
+                title="End Workout?"
+                actions={
+                    <>
+                        <button className="modal-btn-secondary" onClick={() => setShowCancelConfirm(false)}>
+                            Keep Going
+                        </button>
+                        <button
+                            className="modal-btn-primary"
+                            style={{ background: 'var(--danger)', color: '#fff', boxShadow: '0 0 10px rgba(255, 51, 102, 0.4)' }}
+                            onClick={() => {
+                                setShowCancelConfirm(false);
+                                cancelWorkout();
+                            }}
+                        >
+                            End Workout
+                        </button>
+                    </>
+                }
+            >
+                <p>Your progress will be lost. This cannot be undone.</p>
+            </Modal>
         </div>
     );
 };
