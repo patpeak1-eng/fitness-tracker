@@ -560,7 +560,7 @@ Themes:     light theme via data-theme attribute on root (S15)
 | Set-type differentiation | ✅ Shipped S13 | `setType: 'normal' \| 'warmup'` on every set; warm-ups excluded from progression + PRs (see 5.4). AMRAP/drop not built. |
 | Component tree documentation | ✅ Resolved S17 | Section 4.6 is a full verified `src/` inventory as of 2026-07-14. |
 | Backend architecture | Verified S12 | Section 7 read directly from backend source + live openapi.json, 2026-07-03; /me dual-transport note added S17. |
-| npm audit — workbox transitive deps | Open — scheduled S17 Task 9 | Never actioned since early sessions. |
+| npm audit — workbox transitive deps | ✅ Resolved (verified S17 Task 9) | `npm audit` reports 0 vulnerabilities (686 deps); workbox-build 7.4.1 via vite-plugin-pwa 1.3.0. The early-session findings were resolved upstream by interim dependency upgrades — no change was needed. |
 | OAuth state/nonce/PKCE hardening | Open — spec being written S17 Task 11 | Session 8 notes claim a `state` param was added; actual current status of state/nonce/PKCE to be audited in the spec, implementation is a future HIGH-zone session. |
 | TimerContext mount-refs | ✅ Resolved S15 | Replaced by `timerHydratedFor` hydration gate. |
 
