@@ -180,3 +180,17 @@
     padding: 40px 20px;
     font-size: 0.95rem;
 }
+
+/* S17 — equipment-profile + muscle filter rows (shared .filter-chip style) */
+.ex-filter-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    scrollbar-width: none;
+}
+
+.ex-filter-row::-webkit-scrollbar {
+    display: none;
+}

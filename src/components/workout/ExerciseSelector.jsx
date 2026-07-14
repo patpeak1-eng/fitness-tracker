@@ -2,12 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { X, Plus, Search, Filter, Check } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import ExerciseIllustration from '../common/ExerciseIllustration';
+import {
+    CATEGORIES, MUSCLE_GROUPS, EQUIPMENT,
+    matchesSearch, matchesCategory, matchesMuscle, matchesEquipmentTerm,
+} from '../../utils/exerciseFilters';
 import '../../styles/filter-chips.css';
 import './ExerciseSelector.css';
-
-const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio'];
-const MUSCLE_GROUPS = ['All', 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Abs', 'Full Body'];
-const EQUIPMENT = ['All', 'Dumbbells', 'Barbell', 'Cable', 'Machine', 'Pull-up Bar', 'None'];
 
 const ExerciseSelector = ({
     exercises,
@@ -28,36 +28,16 @@ const ExerciseSelector = ({
 
     // Custom Form State
     const [customName, setCustomName] = useState('');
-    const [customCategory, setCustomCategory] = useState('Weight Lifting');
+    const [customCategory, setCustomCategory] = useState('Weights');
     const [customMuscle, setCustomMuscle] = useState('Full Body');
 
     const filteredExercises = useMemo(() => {
-        return exercises.filter(ex => {
-            const matchesSearch = ex.name.toLowerCase().includes(searchTerm.toLowerCase());
-
-            // Map UI category to Data category
-            let targetCategory = activeCategory;
-            if (activeCategory === 'Weight Lifting') targetCategory = 'Weights';
-
-            const matchesCategory = activeCategory === 'All' || ex.category === targetCategory;
-
-            // Map property name 'primary_muscle'
-            const matchesMuscle = activeMuscle === 'All' || ex.primary_muscle === activeMuscle;
-
-            // Equipment: 'None' also covers missing/empty; others are case-insensitive contains
-            let matchesEquipment = true;
-            if (activeEquipment !== 'All') {
-                if (activeEquipment === 'None') {
-                    matchesEquipment = !ex.equipment || ex.equipment === 'None';
-                } else {
-                    matchesEquipment = (ex.equipment || '')
-                        .toLowerCase()
-                        .includes(activeEquipment.toLowerCase());
-                }
-            }
-
-            return matchesSearch && matchesCategory && matchesMuscle && matchesEquipment;
-        });
+        return exercises.filter(ex =>
+            matchesSearch(ex, searchTerm) &&
+            matchesCategory(ex, activeCategory) &&
+            matchesMuscle(ex, activeMuscle) &&
+            matchesEquipmentTerm(ex, activeEquipment)
+        );
     }, [exercises, searchTerm, activeCategory, activeMuscle, activeEquipment]);
 
     const handleCreateCustom = (e) => {
@@ -66,7 +46,7 @@ const ExerciseSelector = ({
 
         const newExercise = {
             name: customName,
-            category: customCategory === 'Weight Lifting' ? 'Weights' : customCategory,
+            category: customCategory, // canonical labels ARE the data values now
             primary_muscle: customMuscle, // Use correct property name
             instructions: 'Custom user exercise',
             isCustom: true

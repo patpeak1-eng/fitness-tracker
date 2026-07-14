@@ -3,24 +3,37 @@ import { Search, ChevronDown } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import BackButton from '../components/common/BackButton';
 import ExerciseIllustration from '../components/common/ExerciseIllustration';
+import {
+    CATEGORIES, MUSCLE_GROUPS,
+    matchesSearch, matchesCategory, matchesMuscle, matchesEquipmentProfile,
+} from '../utils/exerciseFilters';
+import '../styles/filter-chips.css';
 import './Exercises.css';
 
-const CATEGORIES = ['All', 'Weights', 'Calisthenics', 'Cardio', 'Yoga'];
-
 const Exercises = () => {
-    const { exercises } = useWorkout();
+    const { exercises, equipmentProfiles, customEquipmentItems } = useWorkout();
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
+    // Local-only browsing filters — deliberately do NOT touch the saved
+    // activeEquipmentProfileId or sessionEquipmentOverride (this page is
+    // read-only reference; TrackWorkout owns the real equipment selection).
+    const [equipmentProfileId, setEquipmentProfileId] = useState('all');
+    const [activeMuscle, setActiveMuscle] = useState('All');
     const [expandedId, setExpandedId] = useState(null);
 
     const filtered = useMemo(() => {
-        const q = search.toLowerCase().trim();
-        return (exercises || []).filter((ex) => {
-            const matchesCategory = activeCategory === 'All' || ex.category === activeCategory;
-            const matchesSearch = !q || (ex.name || '').toLowerCase().includes(q);
-            return matchesCategory && matchesSearch;
-        });
-    }, [exercises, search, activeCategory]);
+        let equipmentList = null; // null = no equipment filter
+        if (equipmentProfileId !== 'all') {
+            const p = (equipmentProfiles || []).find(p => p.id === equipmentProfileId);
+            if (p) equipmentList = p.id === 'custom' ? customEquipmentItems : p.equipment;
+        }
+        return (exercises || []).filter((ex) =>
+            matchesSearch(ex, search) &&
+            matchesCategory(ex, activeCategory) &&
+            matchesMuscle(ex, activeMuscle) &&
+            matchesEquipmentProfile(ex, equipmentList)
+        );
+    }, [exercises, search, activeCategory, activeMuscle, equipmentProfileId, equipmentProfiles, customEquipmentItems]);
 
     const toggle = (id) => setExpandedId((prev) => (prev === id ? null : id));
 
@@ -50,6 +63,36 @@ const Exercises = () => {
                         onClick={() => setActiveCategory(cat)}
                     >
                         {cat}
+                    </button>
+                ))}
+            </div>
+
+            <div className="ex-filter-row" aria-label="Filter by equipment profile">
+                <button
+                    className={`filter-chip${equipmentProfileId === 'all' ? ' active' : ''}`}
+                    onClick={() => setEquipmentProfileId('all')}
+                >
+                    Any Equipment
+                </button>
+                {(equipmentProfiles || []).map((p) => (
+                    <button
+                        key={p.id}
+                        className={`filter-chip${equipmentProfileId === p.id ? ' active' : ''}`}
+                        onClick={() => setEquipmentProfileId(p.id)}
+                    >
+                        {p.name}
+                    </button>
+                ))}
+            </div>
+
+            <div className="ex-filter-row" aria-label="Filter by muscle group">
+                {MUSCLE_GROUPS.map((muscle) => (
+                    <button
+                        key={muscle}
+                        className={`filter-chip${activeMuscle === muscle ? ' active' : ''}`}
+                        onClick={() => setActiveMuscle(muscle)}
+                    >
+                        {muscle}
                     </button>
                 ))}
             </div>
