@@ -694,29 +694,8 @@
     margin-bottom: 4px;
 }
 
-.filter-chip {
-    padding: 7px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-}
-
-.filter-chip:active {
-    transform: scale(0.96);
-}
-
-.filter-chip.active {
-    background: rgba(var(--primary-rgb), 0.15);
-    border-color: var(--primary);
-    color: var(--primary);
-    font-weight: 600;
-}
+/* .filter-chip styles moved to src/styles/filter-chips.css (shared with
+   ExerciseSelector — S17 consolidation) */
 
 /* ZONE 3 — Template results */
 .template-list {

@@ -1,0 +1,29 @@
+/* Shared filter-chip style — single source of truth (S17).
+   Previously defined independently (and differently) in TrackWorkout.css and
+   ExerciseSelector.css; both stylesheets load together on /track, so the two
+   equal-specificity definitions collided and bundle order decided the winner.
+   Canonical style is the Design Tokens v2 version (ember tint, pill radius). */
+
+.filter-chip {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.filter-chip:active {
+    transform: scale(0.96);
+}
+
+.filter-chip.active {
+    background: rgba(var(--primary-rgb), 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+}

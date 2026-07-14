@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Plus, Search, Filter, Check } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import ExerciseIllustration from '../common/ExerciseIllustration';
+import '../../styles/filter-chips.css';
 import './ExerciseSelector.css';
 
 const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio'];

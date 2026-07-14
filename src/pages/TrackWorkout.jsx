@@ -6,6 +6,7 @@ import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
 import PlateCalculator from '../components/workout/PlateCalculator';
 import Modal from '../components/common/Modal'; // Import reusable Modal
 import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings } from 'lucide-react';
+import '../styles/filter-chips.css';
 import './TrackWorkout.css';
 
 // --- Template Picker filter helpers (Iteration 2) ---

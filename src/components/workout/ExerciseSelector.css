@@ -109,23 +109,9 @@
     display: none;
 }
 
-.filter-chip {
-    padding: 6px 16px;
-    border-radius: 20px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.filter-chip.active {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
+/* .filter-chip styles moved to src/styles/filter-chips.css (shared with
+   TrackWorkout — S17 consolidation; both stylesheets load on /track, the two
+   old definitions collided at equal specificity) */
 
 .filter-chip-sm {
     padding: 4px 12px;
