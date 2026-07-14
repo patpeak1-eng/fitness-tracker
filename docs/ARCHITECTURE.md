@@ -280,7 +280,11 @@ src/
 │   └── ActiveWorkoutService.js  (+ .test.js) — pure reducers
 │
 ├── constants/  storageKeys.js, coachPersonalities.js, voiceIds.js
-└── utils/      recommendationEngine.js, units.js, types.js
+└── utils/      recommendationEngine.js, units.js, types.js,
+                exerciseFilters.js (S17 — shared filter predicates + canonical
+                category/muscle/equipment vocabulary for Exercises.jsx and
+                ExerciseSelector.jsx; matchesEquipmentProfile mirrors
+                WorkoutContext's internal isExerciseCompatible)
 ```
 
 ### 4.7 Settings Sync + SyncQueue ✅ VERIFIED (S12–S16)
