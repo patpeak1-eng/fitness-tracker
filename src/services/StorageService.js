@@ -6,6 +6,10 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 const LEGACY_PREFIX = 'fitness_';
 const USER_SEGMENT = '_user_';
 
+// Coach settings use bare (non-fitness_-prefixed) keys, so the prefix-based
+// snapshot filter misses them — include them explicitly in backup/restore.
+const COACH_KEYS = Object.values(STORAGE_KEYS);
+
 const KEY = {
     profiles: 'fitness_profiles',
     currentProfileId: 'fitness_current_profile_id',
@@ -365,7 +369,9 @@ const StorageService = {
         const data = {};
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith(LEGACY_PREFIX)) data[key] = localStorage.getItem(key);
+            if (key && (key.startsWith(LEGACY_PREFIX) || COACH_KEYS.includes(key))) {
+                data[key] = localStorage.getItem(key);
+            }
         }
         return data;
     },
@@ -379,7 +385,9 @@ const StorageService = {
         const toRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith(LEGACY_PREFIX)) toRemove.push(key);
+            if (key && (key.startsWith(LEGACY_PREFIX) || COACH_KEYS.includes(key))) {
+                toRemove.push(key);
+            }
         }
         toRemove.forEach(k => localStorage.removeItem(k));
 
