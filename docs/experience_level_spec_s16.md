@@ -107,6 +107,45 @@ No frontend coach-call change: the backend reads `experience_level` from the
 authenticated User row (authoritative, synced). Local-only profiles can't
 reach the coach anyway (authenticated backend route).
 
+## Migration deploy safety (explicit — coordinator review points)
+
+**down_revision references 0005's real revision ID, not its filename.**
+0005's file is `0005_add_coach_prefs.py` but its internal
+`revision: str = "add_coach_prefs"` (verified, that file line 24). Alembic
+chains on the revision-identifier *string*, not the filename, so 0006 sets
+`down_revision = "add_coach_prefs"` — the exact value. (Using
+`"0005_add_coach_prefs"` would break the chain and fail `alembic upgrade
+head` on Railway deploy.) 0006's own `revision = "add_experience_lvl"`
+(18 chars ≤ 32).
+
+**`server_default="intermediate"` is a TRUE database-level default, not
+ORM-only.** In the migration, `op.add_column("users", sa.Column(
+"experience_level", sa.String(20), nullable=True,
+server_default="intermediate"))` emits
+`ALTER TABLE users ADD COLUMN experience_level VARCHAR(20) DEFAULT
+'intermediate'`. Postgres applies that DEFAULT to **every existing row
+immediately** at migration time — existing users are backfilled to
+`'intermediate'`, NOT left NULL. This is exactly how 0005 backfilled
+coach_personality/coach_voice_id, which deployed cleanly. (`default=` —
+which this spec does NOT use — is the ORM-only variant that would leave
+existing rows NULL until each row is next written.)
+
+**NULL cannot arise through the normal write path either.** The PUT
+/api/profile handler is `payload.model_dump(exclude_unset=True)` → setattr
+loop (profile.py:45-50), so a field absent from the request body is never
+written; only an explicit `experience_level: null` in the JSON body would
+NULL the column, and the frontend's `ApiService.saveProfile({
+experience_level: <value> })` always sends a real enum value.
+
+**Defense-in-depth fallback retained regardless.** Because the column is
+declared `nullable=True` (matching the 0005 pattern), NULL is technically
+representable even though no path produces it. So the `None`/empty →
+`"intermediate"` fallback in `_build_user_context()` stays, and the
+frontend defaults to `'intermediate'` at three layers (StorageService
+`readRaw` default, WorkoutContext `useState`, backend context fallback).
+Net effect: a row that somehow reads NULL still yields intermediate
+behavior with no error.
+
 ## Files touched (exact)
 
 | File | Change |
