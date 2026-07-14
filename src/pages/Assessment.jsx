@@ -12,7 +12,7 @@ import './Assessment.css';
 
 const Assessment = () => {
     const navigate = useNavigate();
-    const { saveAssessment, importProgram, startWorkoutFromTemplate, userStats, setUserStats } = useWorkout();
+    const { saveAssessment, importProgram, startWorkoutFromTemplate, userStats, setUserStats, setExperienceLevel } = useWorkout();
 
     // Steps: 0=Intro, 1=Stats, 2=Goal, 3=Experience, 4=Equipment, 5=Result
     const [step, setStep] = useState(0);
@@ -60,6 +60,10 @@ const Assessment = () => {
             date: new Date().toISOString(),
             type: 'Onboarding Survey'
         });
+
+        // Coach calibration follows the assessment answer; the person can
+        // change it later in Settings without retaking the assessment.
+        setExperienceLevel(formData.experience);
 
         // Get Rec
         const rec = getRecommendation(formData);

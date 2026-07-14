@@ -23,6 +23,13 @@ const COACH_PERSONALITY_OPTIONS = [
     { id: COACH_PERSONALITIES.ZEN,  label: 'Zen', desc: 'Calm & technical' },
 ];
 
+// Values match Assessment.jsx's `experience` answer — one shared vocabulary.
+const EXPERIENCE_LEVEL_OPTIONS = [
+    { id: 'beginner', label: 'Beginner' },
+    { id: 'intermediate', label: 'Intermediate' },
+    { id: 'advanced', label: 'Advanced' },
+];
+
 // The single on/off switch used everywhere on this screen.
 const Toggle = ({ checked, onChange, label }) => (
     <label className="coach-switch">
@@ -64,6 +71,7 @@ const Settings = () => {
         soundEnabled, setSoundEnabled,
         coachPersonality, setCoachPersonality,
         coachVoiceId, setCoachVoiceId,
+        experienceLevel, setExperienceLevel,
         currentProfile, switchProfile,
         smartProgressionEnabled, setSmartProgressionEnabled,
         progressionMode, setProgressionMode,
@@ -306,6 +314,23 @@ const Settings = () => {
                                 {coachVoiceId === v.id && <Check size={16} className="voice-check" />}
                             </button>
                         ))}
+                        <Row
+                            label="Experience level"
+                            desc="Calibrates how much the coach explains"
+                            stacked
+                        >
+                            <div className="unit-toggle">
+                                {EXPERIENCE_LEVEL_OPTIONS.map((lvl) => (
+                                    <button
+                                        key={lvl.id}
+                                        className={`unit-btn ${experienceLevel === lvl.id ? 'active' : ''}`}
+                                        onClick={() => setExperienceLevel(lvl.id)}
+                                    >
+                                        {lvl.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </Row>
                         <Row label="Voice input" desc="Speak your messages to the coach">
                             <Toggle checked={coachVoiceInput} onChange={handleCoachVoiceInput} label="Voice input" />
                         </Row>

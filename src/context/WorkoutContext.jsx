@@ -370,6 +370,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [sessionEquipmentOverride, setSessionEquipmentOverride] = useState(null); // null = use saved profile, array = temp override
     const [coachPersonality, setCoachPersonality] = useState(DEFAULT_PERSONALITY);
     const [coachVoiceId, setCoachVoiceId] = useState(DEFAULT_VOICE_ID);
+    // Coach depth calibration ('beginner'|'intermediate'|'advanced') — set by
+    // Assessment completion or Settings; syncs like theme/units (S16 spec).
+    const [experienceLevel, setExperienceLevel] = useState('intermediate');
     const [userStats, setUserStats] = useState({
         age: '',
         height: '',
@@ -545,6 +548,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setTheme(ps.theme);
         setUnits(ps.units);
         setSoundEnabled(ps.soundEnabled);
+        setExperienceLevel(ps.experienceLevel || 'intermediate');
 
         setActiveEquipmentProfileId(ps.equipmentProfileId || 'full_gym');
         setCustomEquipmentItems(ps.customEquipmentItems || []);
@@ -641,6 +645,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         if (typeof u.sound_enabled === 'boolean') {
                             setSoundEnabled(u.sound_enabled);
                             StorageService.saveSound(profile.id, u.sound_enabled);
+                        }
+                        if (u.experience_level) {
+                            setExperienceLevel(u.experience_level);
+                            StorageService.saveExperienceLevel(profile.id, u.experience_level);
                         }
                         // Timers are pushed as a pair, so they arrive as a pair;
                         // applying a lone value would clobber the other side.
@@ -1003,6 +1011,22 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 });
         }
     }, [coachVoiceId, currentProfile, settingsHydratedFor]);
+
+    // Persist Experience Level
+    const experienceLevelSyncedProfileRef = useRef(null);
+    useEffect(() => {
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        StorageService.saveExperienceLevel(currentProfile.id, experienceLevel);
+        const sameProfile = experienceLevelSyncedProfileRef.current === currentProfile.id;
+        experienceLevelSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ experience_level: experienceLevel })
+                .catch(err => {
+                    console.warn('[settings-sync] experience_level:', err);
+                    SyncQueue.enqueue({ type: 'profile_settings', key: 'experience_level', payload: { experience_level: experienceLevel } });
+                });
+        }
+    }, [experienceLevel, currentProfile, settingsHydratedFor]);
 
     // Persist Stats
     useEffect(() => {
@@ -2261,6 +2285,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setCoachPersonality,
         coachVoiceId,
         setCoachVoiceId,
+        experienceLevel,
+        setExperienceLevel,
         startWorkout,
         startWorkoutFromTemplate,
         finishWorkout,

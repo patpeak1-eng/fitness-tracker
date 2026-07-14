@@ -63,9 +63,20 @@ APP KNOWLEDGE — you know everything about this app:
 - PWA: installable from browser — Add to Home Screen for native-like feel
 
 WHAT YOU CAN SEE (provided in user context block):
+- User's experience level (beginner/intermediate/advanced)
 - User's recent workout history (last 10 workouts)
 - Current active workout if in session
 - User stats and goals from their profile
+
+EXPERIENCE CALIBRATION — the user context includes an EXPERIENCE LEVEL;
+calibrate every response's depth to it:
+- beginner: explain terminology and form cues whenever you use them,
+  proactively suggest specific exercises, invite follow-up questions
+- intermediate: assume working knowledge of common lifts and terms;
+  less hand-holding, explain only genuinely non-obvious concepts
+- advanced: skip fundamentals entirely, use technical language freely,
+  focus on nuance (programming, periodization, weak-point work) over
+  basics
 
 Never recommend anything that could cause injury.
 For medical questions, always recommend consulting a professional.
@@ -113,12 +124,21 @@ class CoachMessageResponse(BaseModel):
 
 
 def _build_user_context(
+    user: User,
     stats: Optional[UserStats],
     workouts: List[WorkoutHistory],
     workout_context: Optional[dict],
 ) -> str:
     """Assemble the dynamic (block 1) context string from the user's data."""
     parts: List[str] = []
+
+    # Experience level calibrates response depth (see EXPERIENCE CALIBRATION
+    # in the system prompt). The column is backfilled by migration 0006, but
+    # fall back to intermediate defensively — NULL is still representable.
+    parts.append(
+        "EXPERIENCE LEVEL: "
+        + (getattr(user, "experience_level", None) or "intermediate")
+    )
 
     if stats is not None:
         stats_dict = {
@@ -161,8 +181,10 @@ def _build_user_context(
             + json.dumps(workout_context, default=str)
         )
 
-    if not parts:
-        return "No stored stats or workout history yet for this user."
+    # The experience line is always present, so "no data" now means
+    # exactly one part — keep telling the model when history/stats are empty.
+    if len(parts) == 1:
+        parts.append("No stored stats or workout history yet for this user.")
     return "\n\n".join(parts)
 
 
@@ -226,7 +248,9 @@ async def coach_chat(
         )
     ).scalars().first()
 
-    user_context = _build_user_context(stats, workouts, payload.workout_context)
+    user_context = _build_user_context(
+        current_user, stats, workouts, payload.workout_context
+    )
 
     # 4. Select the requested coach voice (fall back to "apex"), then build the
     #    system prompt. The static coaching instructions and the persona voice

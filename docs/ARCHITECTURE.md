@@ -434,8 +434,15 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
 Model:        claude-sonnet-4-6 (COACH_MODEL in routers/coach.py, max_tokens 1024)
 Personas:     apex (default) / hype / zen — persona prompt is system block 1,
               static app-knowledge prompt is block 0, both prompt-cached;
-              per-request user context (stats + last 10 workouts + active
-              session) is block 2, uncached
+              per-request user context (experience level + stats + last 10
+              workouts + active session) is block 2, uncached
+Calibration:  users.experience_level (beginner/intermediate/advanced, default
+              intermediate, migration 0006) controls response DEPTH — the
+              EXPERIENCE CALIBRATION block in COACH_SYSTEM_PROMPT tells the
+              model how much to explain per level. Set by Assessment
+              completion or Settings > AI Coach; syncs via PUT /api/profile
+              like theme/units/coach prefs (S16 spec:
+              docs/experience_level_spec_s16.md)
 Voice:        ElevenLabs "Jarvis" (FxZjRiAEBESrb7srpme7), model eleven_flash_v2_5;
               REST synth at POST /api/voice/coach-synthesize, streaming bridge
               at WS /api/voice/stream

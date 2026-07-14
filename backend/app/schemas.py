@@ -68,6 +68,7 @@ class UserResponse(BaseModel):
     default_work_time: Optional[int] = None
     coach_personality: Optional[str] = None
     coach_voice_id: Optional[str] = None
+    experience_level: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -88,6 +89,7 @@ class ProfileUpdate(BaseModel):
     default_work_time: Optional[int] = None
     coach_personality: Optional[str] = None
     coach_voice_id: Optional[str] = None
+    experience_level: Optional[str] = None
     # Optional nested body-stats update.
     stats: Optional[UserStatsUpdate] = None
 
