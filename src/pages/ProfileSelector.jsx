@@ -26,8 +26,6 @@ const ProfileSelector = () => {
         e.stopPropagation(); // Prevent logging in when clicking delete
         if (window.confirm(`Are you sure you want to delete profile "${name}"? This cannot be undone.`)) {
             deleteProfile(profileId);
-            // If checking edit mode with 0 profiles, maybe turn it off?
-            // But context update will cause re-render anyway.
         }
     };
 
