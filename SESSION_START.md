@@ -59,72 +59,91 @@ fixes, ProfileSelector dead-code pass, TimerContext hydration gates,
 to backend" found ALREADY COMPLETE during prep. Full commit list:
 git log 17d3a42..4971674.
 
-## Session 15 Final State
-Session 15 commits, in order:
-1. 01749aa - feat(dashboard): "End Workout" cancel action on the
-   active-workout banner card — --danger ghost button + confirmation
-   modal (same copy/pattern as GuidedWorkoutView), stopPropagation so
-   the card's navigate('/track') doesn't fire, modal rendered outside
-   the clickable Card (common/Modal doesn't portal). Verified for
-   preparing AND active statuses; canceled workouts don't enter
-   history. This closes the "stuck test workout" report — the gap was
-   reachability of cancelWorkout(), which itself was fine.
-2. 62ea8a4 - fix(guided-view): REAL DESKTOP BUG found by T2's 1440px
-   screenshot — the >1024px side-by-side split overflowed the 600px
-   .main-content shell (Layout.css) and overflow:hidden clipped the
-   sets table (REPS column, checkboxes) and the End Session button
-   entirely. Stacked layout is now the base at every width; dead
-   split rules + media query removed. 375px was already correct.
-3. 4e1ed26 - fix(style): 7 orphaned --primary-color refs in
-   ExerciseSelector.css → --primary. Grep-zero --primary-color across
-   src/ now. Filter chips/buttons render ember where they previously
-   resolved to nothing.
-4. f583f04 - fix(theme): "Create New Exercise" button had a hardcoded
-   S11 neon-green rgba background (surfaced by the T3 fix making its
-   ember border/text visible) → --primary-dim / primary-rgb tokens.
-   Found during the T5 light-mode spot check.
-5. (this commit) docs: SESSION_START.md to Session 15 state.
+## Session 15 Final State (reference)
+S15 closed at f8a09fe. Shipped: Dashboard End-Workout cancel action
+(01749aa, closed the "stuck test workout" report), guided-view desktop
+clipping fix — stacked layout at all widths (62ea8a4), orphaned
+--primary-color repointed in ExerciseSelector (4e1ed26), neon-green
+Create-New-Exercise bg tokenized (f583f04). Equipment-filter/Home-Gym
+complaint RESOLVED as reachability, not a missing feature.
+ProfileSelector confirmed fully unreachable (product decision pending).
+Full commit list: git log 4971674..f8a09fe.
+CORRECTION (S16): S15 claimed design-review screenshots are "untracked
+per convention" — that was WRONG. S13's screenshots ARE tracked;
+screenshots are COMMITTED deliverables. The s15-*.png set was lost as a
+result; S16's set is committed.
 
-EQUIPMENT-FILTER COMPLAINT: RESOLVED as a reachability issue, not a
-missing feature. "Home Gym" renders in picker Zone 1 at 1440px and
-375px, is selectable (aria-pressed), and live-filters templates
-(6 -> 2 workouts verified). The person could never reach the picker
-because a stuck activeWorkout replaced it — fixed by commit 1. No new
-filter UI needed. Screenshots: docs/design-review/s15-*.png (kept
-untracked, same convention as s13/s14 sets).
+## Session 16 Final State
+Session 16 commits, in order:
+1. d4cb6ab - refactor(dashboard): duplicate Start Training nav cards
+   removed (Strength/HIIT/Data duplicated bottom-nav Workout/Progress
+   tabs). Also removed 4 icon imports that were ALREADY dead pre-task
+   (Play/Calendar/Timer/TrendingUp) + the section's Dashboard-only CSS.
+2. 945aaec - fix(track): equipment row VERIFIED scrolling correctly at
+   1440px (528px strip of 752px content, all cards reachable) — the
+   "cut off" report was a discoverability gap, not clipping: scrollbar
+   hidden, no affordance. Added alpha-only mask-image right-edge fade
+   (36px) + matching padding so the last card sits clear at max scroll.
+   First mask pattern in the codebase. Screenshots COMMITTED:
+   docs/design-review/s16-equipment-row-{1440,375}.png.
+3. 2059bc8 - docs(spec): experience-level coach calibration spec.
+4. eb0ed96 - docs(spec): migration deploy-safety made explicit
+   (down_revision = 0005's revision ID "add_coach_prefs" not filename;
+   server_default is TRUE DB-level default — existing rows backfilled,
+   never NULL).
+5. 26a1048 - feat(coach): experience-level setting calibrates coach
+   response depth (HIGH zone, both gates cleared). users.experience_level
+   (migration 0006) + ProfileUpdate/UserResponse fields + EXPERIENCE
+   CALIBRATION block in COACH_SYSTEM_PROMPT + _build_user_context reads
+   it (single call site confirmed; /chat/stream alias delegates) +
+   frontend: StorageService key, WorkoutContext hydration-gated persist
+   + login-pull, Settings 3-way control, Assessment auto-populates from
+   its experience answer. Deploy VERIFIED: Railway pre-deploy log shows
+   "Running upgrade add_coach_prefs -> add_experience_lvl" on
+   PostgresqlImpl, both services ACTIVE on 26a1048. Live A/B transcripts
+   captured via disposable accounts: beginner vs advanced visibly
+   different in depth/terminology; never-set account defaults to
+   intermediate, no errors.
+6. (this commit) docs: SESSION_START.md to Session 16 state.
 
-PROFILESELECTOR FINDINGS (T4, product decision PENDING — coordinator):
-- Genuinely dead: zero static/lazy/dynamic imports; App.jsx enumerates
-  every route and none references it. Only its own .jsx/.css files
-  (and this doc) mention it.
-- Current local-profile flow WITHOUT it: a first-time visitor gets ONE
-  auto-created local profile ("Main User", user_default) via
-  StorageService.getOrCreateProfiles(); after explicit logout, the
-  /login gate offers "Continue without account" (Login.jsx
-  handleContinueWithout), which re-creates that same single default
-  profile. So local usage works, but multi-local-profile create/
-  manage/switch UI does not exist anywhere reachable — ProfileSelector
-  was the only UI for it. Decision needed: delete the page+CSS, or
-  re-route it (e.g. from Profile page).
+EXERCISE-BROWSING OVERLAP (T3, product decision PENDING — coordinator):
+Three browsing UIs: Exercises.jsx (/exercises page: search + category
+tabs + instruction accordions; NO equipment/muscle filters),
+TrackWorkout picker (filters TEMPLATES not exercises), and
+ExerciseSelector.jsx (Build-My-Own modal: search + category + equipment
++ muscle filters, multi-select, custom-exercise form; NO instructions).
+Latent inconsistencies: category vocabularies differ ("Weight Lifting"
+vs "Weights"), and the selector offers a "Functional" category that
+exists in NO data — a chip that always returns zero results. Verdict:
+full component merge NOT worth it (page vs modal, read-only vs
+mutating); realistic share = extract filter predicates to one util
+(fixes vocabulary drift + dead chip as a side effect). Open product
+question: should /exercises gain equipment/muscle filters for parity?
 
-## Session 16 Open Items (priority order)
+COACH TEST ACCOUNTS: two disposable accounts remain on the live backend
+(s16-coach-test-*@example.com) — no user-delete endpoint exists.
+Harmless; flag for cleanup if a delete endpoint ever ships.
+
+## Session 17 Open Items (priority order)
 P2 - Per-screen light-mode QA (full audit) — token-level parity but
-     not audited screen-by-screen. S15 spot-checked only the files it
-     touched (Dashboard banner/modal, picker, ExerciseSelector): all
-     readable. NEW finding for the audit: common/Modal renders on a
-     dark surface even in light theme (readable, but visually
-     inconsistent) — affects every modal app-wide.
-P3 - ProfileSelector product decision (see T4 findings above).
+     not audited screen-by-screen. S15 spot-check finding for the
+     audit: common/Modal renders on a dark surface even in light theme
+     (readable, but visually inconsistent) — affects every modal.
+P3 - ProfileSelector product decision (see S15 findings) — delete the
+     unreachable page+CSS, or re-route it.
+P3 - Exercise-browsing overlap product decision (see T3 findings
+     above) — shared filter-predicate util + whether /exercises gains
+     equipment/muscle filters. Quick win regardless: remove the dead
+     "Functional" category chip.
 P3 - Historical warmup sets still seed the PR baseline (S13 c40750a
      note) — product decision pending.
 P3 - .filter-chip.active is defined in BOTH TrackWorkout.css and
      ExerciseSelector.css (different looks, cascade-order dependent
      winner) — harmless now (both token-compliant) but worth
      deduplicating.
-P3 - Browser-pane screenshot capture still broken in the S15 terminal
-     session (second session in a row) — all S15 visual verification
-     went through the Playwright MCP instead, which works well and
-     saves PNGs directly to docs/design-review/.
+P3 - Browser-pane screenshot capture broken 3 sessions running — the
+     Playwright MCP path is the working standard (saves PNGs directly
+     to docs/design-review/; commit them).
 
 ## VISUAL_REVIEW_RULE (standing)
 Before/after screenshots are MANDATORY deliverables for every design
