@@ -110,8 +110,9 @@ All route pages are lazy-loaded (`React.lazy`) so each compiles to its own chunk
 | `/settings` | Settings | Theme/units/sound, AI Coach prefs, equipment profiles |
 | `/assessment` | Assessment | Onboarding wizard, recommendation engine |
 | `/help` | HelpView | Help/reference content |
+| `/profiles` | ProfileSelector | Local (device-only) multi-profile management — create/switch/delete; entry point: Settings > Account > "Manage local profiles" (S17 Task 6). Local profiles have no `email`, so `canSyncToBackend` keeps them off the backend by design |
 
-Template creation is a modal (`CreateTemplateModal.jsx` → `ExerciseSelector.jsx`) over `/track`, not a routed page. `ProfileSelector.jsx` exists in `src/pages/` but currently has **no route** (S17 Task 6 re-routes it).
+Template creation is a modal (`CreateTemplateModal.jsx` → `ExerciseSelector.jsx`) over `/track`, not a routed page.
 
 Provider nesting (App.jsx): `BrowserRouter > ErrorBoundary > WorkoutProvider > TimerProvider > Routes`. A shared `timerApiRef` bridges WorkoutContext → TimerContext imperative actions (WorkoutProvider can't `useTimer()` because TimerProvider is nested inside it).
 
@@ -254,7 +255,7 @@ src/
 │   ├── CoachView.jsx            — AI Coach chat
 │   ├── WorkoutSummary.jsx
 │   ├── Profile.jsx / Settings.jsx / Assessment.jsx / HelpView.jsx
-│   └── ProfileSelector.jsx      — local multi-profile management (no route until S17 Task 6)
+│   └── ProfileSelector.jsx      — local multi-profile management (/profiles, S17)
 │
 ├── components/
 │   ├── layout/    Layout.jsx (shell + <Outlet/>), BottomNavigation.jsx,

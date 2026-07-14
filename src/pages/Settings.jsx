@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Moon, Sun, Check, Volume2, VolumeX, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Moon, Sun, Check, Volume2, VolumeX, LogOut, Users } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import { useTimer } from '../context/TimerContext';
 import Modal from '../components/common/Modal';
@@ -63,6 +64,7 @@ const Row = ({ label, desc, children, stacked = false }) => (
 );
 
 const Settings = () => {
+    const navigate = useNavigate();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
 
     const {
@@ -143,6 +145,13 @@ const Settings = () => {
                         <span className="setting-desc">Current profile</span>
                     </div>
                 </div>
+                <button className="settings-row row-action" onClick={() => navigate('/profiles')}>
+                    <div className="setting-info">
+                        <span className="setting-label">Manage local profiles</span>
+                        <span className="setting-desc">Device-only profiles for sharing this device — separate from cloud accounts</span>
+                    </div>
+                    <Users size={18} />
+                </button>
                 <button className="settings-row row-action danger" onClick={() => setShowLogoutModal(true)}>
                     <span className="setting-label">Switch profile</span>
                     <LogOut size={18} />

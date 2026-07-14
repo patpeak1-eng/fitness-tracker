@@ -21,6 +21,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const WorkoutSummary = lazy(() => import('./pages/WorkoutSummary'));
 const Assessment = lazy(() => import('./pages/Assessment'));
 const HelpView = lazy(() => import('./pages/HelpView'));
+const ProfileSelector = lazy(() => import('./pages/ProfileSelector'));
 const CoachView = lazy(() => import('./pages/CoachView'));
 
 // Inner component to check profile status
@@ -60,6 +61,7 @@ const AppRoutes = ({ timerApiRef }) => {
                     <Route path="settings" element={<Settings />} />
                     <Route path="assessment" element={<Assessment />} />
                     <Route path="help" element={<HelpView />} />
+                    <Route path="profiles" element={<ProfileSelector />} />
                 </Route>
             </Routes>
         </Suspense>
