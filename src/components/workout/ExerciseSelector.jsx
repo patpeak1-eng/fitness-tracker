@@ -4,7 +4,7 @@ import { useWorkout } from '../../context/WorkoutContext';
 import ExerciseIllustration from '../common/ExerciseIllustration';
 import './ExerciseSelector.css';
 
-const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio', 'Functional'];
+const CATEGORIES = ['All', 'Weight Lifting', 'Calisthenics', 'Yoga', 'Cardio'];
 const MUSCLE_GROUPS = ['All', 'Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Abs', 'Full Body'];
 const EQUIPMENT = ['All', 'Dumbbells', 'Barbell', 'Cable', 'Machine', 'Pull-up Bar', 'None'];
 
