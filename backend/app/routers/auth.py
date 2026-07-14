@@ -1,20 +1,17 @@
 """Authentication routes: register, login, Google OAuth, session (/me), logout."""
 import os
 import secrets
-from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
-    ALGORITHM,
-    SECRET_KEY,
     create_access_token,
+    get_current_user,
     hash_password,
     verify_password,
 )
@@ -269,42 +266,14 @@ async def google_callback(
     return response
 
 
-def _user_id_from_session(token: str) -> UUID:
-    """Decode the session JWT and return its user id (the ``sub`` claim).
-
-    app/auth.py exposes no standalone verify helper, so decode here with the
-    same SECRET_KEY/ALGORITHM. Raises (JWTError / ValueError / KeyError) on an
-    invalid, expired, or malformed token.
-    """
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    return UUID(str(payload["sub"]))
-
-
 @router.get("/me")
-async def get_current_user_info(
-    request: Request, db: AsyncSession = Depends(get_db)
-):
-    """Return the current user's info, identified by the session cookie."""
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+async def get_current_user_info(user: User = Depends(get_current_user)):
+    """Return the current user's info.
 
-    try:
-        user_id = _user_id_from_session(session_token)
-    except (JWTError, ValueError, KeyError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session"
-        )
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
-        )
-
+    Auth goes through the shared get_current_user dependency, so this accepts
+    either transport: the Bearer header or the HttpOnly session cookie (Google
+    OAuth users hit this with the cookie only).
+    """
     return {
         "id": str(user.id),
         "email": user.email,
