@@ -394,33 +394,35 @@
     box-shadow: none;
 }
 
-/* --- SPLIT LAYOUT REFACTOR (Phase I) --- */
+/* Stacked column at every width: the app shell caps .main-content at 600px
+   (Layout.css), so the former >1024px side-by-side split could never fit —
+   it overflowed the container and overflow:hidden clipped the sets table
+   and the End Session button on desktop (verified via 1440px screenshot,
+   S15). */
 .guided-layout-container {
     display: flex;
+    flex-direction: column;
     flex: 1;
     width: 100%;
     height: 100%;
-    overflow: hidden;
-    padding: 0 40px;
-    /* Horizontal padding for desktop/tablet */
+    overflow-y: auto;
+    padding: 20px;
 }
 
 .left-panel {
-    flex: 1;
+    flex: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding-right: 40px;
-    border-right: 1px solid var(--border);
+    margin-bottom: 30px;
 }
 
 .right-panel {
-    flex: 1;
+    flex: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding-left: 40px;
     position: relative;
 }
 
@@ -527,28 +529,6 @@
 
 .menu-fab:active {
     transform: scale(0.9);
-}
-
-/* Responsive Override */
-@media (max-width: 1024px) {
-    .guided-layout-container {
-        flex-direction: column;
-        padding: 20px;
-        overflow-y: auto;
-    }
-
-    .left-panel {
-        border-right: none;
-        padding-right: 0;
-        margin-bottom: 30px;
-        flex: 0;
-        /* Let it shrink/grow naturally */
-    }
-
-    .right-panel {
-        padding-left: 0;
-        flex: 0;
-    }
 }
 
 /* PR marker on a logged set (pr-gold token: PR/warm-up markers only) */
