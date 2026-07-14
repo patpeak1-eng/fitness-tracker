@@ -169,7 +169,7 @@
 }
 
 .core-exercises {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--surface);
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 25px;

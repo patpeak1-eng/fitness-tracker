@@ -17,6 +17,13 @@
     white-space: nowrap;
 }
 
+/* Light theme: the white-alpha border/bg above are invisible on a light
+   canvas — flip to black-alpha at the same weights (S17 light-mode audit) */
+[data-theme='light'] .filter-chip {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.04);
+}
+
 .filter-chip:active {
     transform: scale(0.96);
 }

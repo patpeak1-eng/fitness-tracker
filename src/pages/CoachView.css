@@ -180,7 +180,7 @@
 .coach-input {
     flex: 1;
     min-width: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--input-bg);
     border: var(--border-glass);
     color: var(--text-primary);
     border-radius: 24px;

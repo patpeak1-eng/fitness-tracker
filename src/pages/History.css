@@ -62,7 +62,7 @@
 }
 
 .date-badge {
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: var(--surface);
     border-radius: 12px;
     padding: 0.5rem;
     display: flex;

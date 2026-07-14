@@ -6,7 +6,7 @@
     justify-content: center;
     min-height: 100vh;
     padding: 2rem;
-    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+    background: var(--bg-app);
     text-align: center;
 }
 
@@ -14,14 +14,11 @@
     font-size: 2.5rem;
     font-weight: 800;
     margin-bottom: 0.5rem;
-    background: linear-gradient(to right, #ffffff, #888888);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--text-primary);
 }
 
 .profile-header p {
-    color: #a0a0a0;
+    color: var(--text-secondary);
     margin-bottom: 3rem;
     font-size: 1.1rem;
 }
@@ -58,11 +55,12 @@
     width: 100px;
     height: 100px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--surface);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--profile-color, #ffffff);
+    color: var(--text-primary);
+    border: 2px solid var(--profile-color, var(--border));
     box-shadow: 0 0 15px var(--profile-color, rgba(255, 255, 255, 0.2));
     transition: all 0.3s ease;
     position: relative;
@@ -81,12 +79,12 @@
 .profile-name {
     font-size: 1.1rem;
     font-weight: 500;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 /* ADD PROFILE CARD */
 .add-profile-card .profile-avatar {
-    border: 2px dashed #404040;
+    border: 2px dashed var(--text-muted);
     box-shadow: none;
 }
 
@@ -97,7 +95,7 @@
 }
 
 .add-profile-card .profile-avatar svg {
-    color: #404040;
+    color: var(--text-muted);
 }
 
 .add-profile-card:hover .profile-avatar svg {
@@ -159,7 +157,7 @@
     justify-content: center;
     cursor: pointer;
     z-index: 10;
-    border: 2px solid #1a1a1a;
+    border: 2px solid var(--bg-app);
     transition: transform 0.2s;
 }
 

@@ -159,7 +159,7 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--input-bg);
     border: var(--border-glass);
     color: var(--text-primary);
     border-radius: 12px;
