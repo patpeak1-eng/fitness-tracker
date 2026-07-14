@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
-import { Activity, Play, Calendar, Timer, TrendingUp, Settings, BarChart3, HelpCircle, Dumbbell, Flame } from 'lucide-react';
+import { Activity, Settings, HelpCircle, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
 import { format } from 'date-fns';
@@ -168,32 +168,7 @@ const Dashboard = () => {
                     </Card>
                 )}
 
-                {/* 3. QUICK ACTIONS (The Square Cards) */}
-                <h3 style={{ margin: '10px 0 0', fontSize: '1.1rem', paddingLeft: '5px' }}>Start Training</h3>
-                <div className="workouts-row">
-                    <div className="workout-type-card" onClick={() => navigate('/track')}>
-                        <div className="workout-icon-box">
-                            <Dumbbell size={28} />
-                        </div>
-                        <span className="workout-type-label">Strength</span>
-                    </div>
-
-                    <div className="workout-type-card" onClick={() => navigate('/track')}>
-                        <div className="workout-icon-box">
-                            <Flame size={28} />
-                        </div>
-                        <span className="workout-type-label">HIIT</span>
-                    </div>
-
-                    <div className="workout-type-card" onClick={() => navigate('/analytics')}>
-                        <div className="workout-icon-box">
-                            <BarChart3 size={28} />
-                        </div>
-                        <span className="workout-type-label">Data</span>
-                    </div>
-                </div>
-
-                {/* 4. RECENT ACTIVITY (Glass Card) */}
+                {/* 3. RECENT ACTIVITY */}
                 <h3 style={{ margin: '20px 0 0', fontSize: '1.1rem', paddingLeft: '5px' }}>Recent Activity</h3>
                 {history.length > 0 ? (
                     <Card onClick={() => navigate('/history')} style={{ cursor: 'pointer', padding: '20px' }}>
