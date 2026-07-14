@@ -51,64 +51,80 @@ passes, glassmorphism fully retired, WorkoutContext hydration-gate
 sweep (10 persist effects), warmup-PR guard, Codex review retired.
 Full commit list: git log 650f6ca..17d3a42.
 
-## Session 14 Final State
-Session 14 commits, in order:
-1. b5c5658 - fix(storage): coach_* keys (enabled/personality/voice_id/
-   voice_input/autoplay) included in JSON backup export/import —
-   they are bare (non-fitness_-prefixed) keys and were silently
-   excluded from every backup. Import clears them before restore
-   (full replace); old backups without coach keys still import.
-2. 85e568c - style(history): accent-on-data fixes — History date-badge
-   day numeral, WorkoutDetails workout-title and rec-value → 
-   --text-primary. exercise-number badge kept accent (wayfinding, not
-   data) but repointed from orphaned --primary-color to --primary —
-   it was rendering with NO background at all.
-3. 5b39d71 - chore: ProfileSelector dead-code pass — only a stale
-   comment removed. isEditing is a live feature; glass-panel is still
-   a real utility class (index.css converted it to filled-card in S13,
-   the class was kept). Component itself remains unimported (see open
-   items).
-4. 52d944d - fix(context): TimerContext hydration-gate sweep — both
-   mount-ref persist effects (timer defaults incl. backend sync,
-   exercise prefs) converted to a TimerContext-local timerHydratedFor
-   gate set in the profile-load effect. Verified live: seeded
-   non-default values survive StrictMode dev reload. Backend-sync
-   restore-run suppression preserved via timersSyncedProfileRef.
-5. 810c940 - refactor(auth): /api/auth/me uses the shared
-   get_current_user dependency (HIGH zone, coordinator-cleared) —
-   hand-rolled cookie-only JWT block and _user_id_from_session
-   removed; /me now accepts Bearer OR cookie like every other route.
-   Response shape unchanged; OAuth cookie flow traced end-to-end.
-   401 detail unifies to "Could not validate credentials" (no
-   frontend consumer reads the detail text).
-6. (this commit) docs: SESSION_START.md to Session 14 state.
+## Session 14 Final State (reference)
+S14 closed at 4971674 (final code SHA 810c940 + docs). Shipped: coach_*
+keys in backup export/import, History/WorkoutDetails accent-on-data
+fixes, ProfileSelector dead-code pass, TimerContext hydration gates,
+/api/auth/me dual-transport (coordinator-cleared HIGH). "Settings sync
+to backend" found ALREADY COMPLETE during prep. Full commit list:
+git log 17d3a42..4971674.
 
-FOUND ALREADY COMPLETE during S14 prep: "Settings sync to backend"
-(theme/units/sound/timers/coach prefs) is fully built — hydration-gated
-persist effects in WorkoutContext/TimerContext push via canSyncToBackend()
-+ ApiService.saveProfile() with SyncQueue fallback. The former P1 open
-item is CLOSED without code; only the coach_* backup/export gap remained
-(fixed this session, commit 1).
+## Session 15 Final State
+Session 15 commits, in order:
+1. 01749aa - feat(dashboard): "End Workout" cancel action on the
+   active-workout banner card — --danger ghost button + confirmation
+   modal (same copy/pattern as GuidedWorkoutView), stopPropagation so
+   the card's navigate('/track') doesn't fire, modal rendered outside
+   the clickable Card (common/Modal doesn't portal). Verified for
+   preparing AND active statuses; canceled workouts don't enter
+   history. This closes the "stuck test workout" report — the gap was
+   reachability of cancelWorkout(), which itself was fine.
+2. 62ea8a4 - fix(guided-view): REAL DESKTOP BUG found by T2's 1440px
+   screenshot — the >1024px side-by-side split overflowed the 600px
+   .main-content shell (Layout.css) and overflow:hidden clipped the
+   sets table (REPS column, checkboxes) and the End Session button
+   entirely. Stacked layout is now the base at every width; dead
+   split rules + media query removed. 375px was already correct.
+3. 4e1ed26 - fix(style): 7 orphaned --primary-color refs in
+   ExerciseSelector.css → --primary. Grep-zero --primary-color across
+   src/ now. Filter chips/buttons render ember where they previously
+   resolved to nothing.
+4. f583f04 - fix(theme): "Create New Exercise" button had a hardcoded
+   S11 neon-green rgba background (surfaced by the T3 fix making its
+   ember border/text visible) → --primary-dim / primary-rgb tokens.
+   Found during the T5 light-mode spot check.
+5. (this commit) docs: SESSION_START.md to Session 15 state.
 
-## Session 15 Open Items (priority order)
-P2 - Per-screen light-mode QA — light theme is at token-level parity
-     (graphite-inverse mapping) but not audited screen-by-screen.
-P2 - Orphaned --primary-color in ExerciseSelector.css (T2 S14 finding):
-     7 uses (lines 125, 127, 163, 165, 212, 221, 276) reference a
-     variable defined NOWHERE — selected-state backgrounds/borders/text
-     in the exercise selector silently resolve to nothing today. Swap
-     to --primary (+ visual verify). Note: --primary-rgb and
-     --primary-light are NOT orphaned (defined in index.css:39/:56);
-     --primary-light has one decorative use (History empty-icon), fine.
-P3 - ProfileSelector.jsx is entirely unimported (no route renders it) —
-     deleting page + CSS is a product decision: it is the only UI for
-     local multi-profile create/manage. Coordinator call.
+EQUIPMENT-FILTER COMPLAINT: RESOLVED as a reachability issue, not a
+missing feature. "Home Gym" renders in picker Zone 1 at 1440px and
+375px, is selectable (aria-pressed), and live-filters templates
+(6 -> 2 workouts verified). The person could never reach the picker
+because a stuck activeWorkout replaced it — fixed by commit 1. No new
+filter UI needed. Screenshots: docs/design-review/s15-*.png (kept
+untracked, same convention as s13/s14 sets).
+
+PROFILESELECTOR FINDINGS (T4, product decision PENDING — coordinator):
+- Genuinely dead: zero static/lazy/dynamic imports; App.jsx enumerates
+  every route and none references it. Only its own .jsx/.css files
+  (and this doc) mention it.
+- Current local-profile flow WITHOUT it: a first-time visitor gets ONE
+  auto-created local profile ("Main User", user_default) via
+  StorageService.getOrCreateProfiles(); after explicit logout, the
+  /login gate offers "Continue without account" (Login.jsx
+  handleContinueWithout), which re-creates that same single default
+  profile. So local usage works, but multi-local-profile create/
+  manage/switch UI does not exist anywhere reachable — ProfileSelector
+  was the only UI for it. Decision needed: delete the page+CSS, or
+  re-route it (e.g. from Profile page).
+
+## Session 16 Open Items (priority order)
+P2 - Per-screen light-mode QA (full audit) — token-level parity but
+     not audited screen-by-screen. S15 spot-checked only the files it
+     touched (Dashboard banner/modal, picker, ExerciseSelector): all
+     readable. NEW finding for the audit: common/Modal renders on a
+     dark surface even in light theme (readable, but visually
+     inconsistent) — affects every modal app-wide.
+P3 - ProfileSelector product decision (see T4 findings above).
 P3 - Historical warmup sets still seed the PR baseline (S13 c40750a
      note) — product decision pending.
-P3 - Browser-pane screenshot capture timed out repeatedly in the S14
-     terminal session (page responsive, infra issue) — T2 was verified
-     via computed-style probes instead of before/after PNGs. If it
-     recurs, screenshot deliverables need the chrome-devtools MCP path.
+P3 - .filter-chip.active is defined in BOTH TrackWorkout.css and
+     ExerciseSelector.css (different looks, cascade-order dependent
+     winner) — harmless now (both token-compliant) but worth
+     deduplicating.
+P3 - Browser-pane screenshot capture still broken in the S15 terminal
+     session (second session in a row) — all S15 visual verification
+     went through the Playwright MCP instead, which works well and
+     saves PNGs directly to docs/design-review/.
 
 ## VISUAL_REVIEW_RULE (standing)
 Before/after screenshots are MANDATORY deliverables for every design
