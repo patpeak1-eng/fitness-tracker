@@ -122,9 +122,9 @@
 }
 
 .filter-chip.active {
-    background: var(--primary-color);
+    background: var(--primary);
     color: white;
-    border-color: var(--primary-color);
+    border-color: var(--primary);
 }
 
 .filter-chip-sm {
@@ -160,9 +160,9 @@
     margin: 10px 20px;
     padding: 12px;
     background: rgba(0, 255, 136, 0.1);
-    border: 1px dashed var(--primary-color);
+    border: 1px dashed var(--primary);
     border-radius: 12px;
-    color: var(--primary-color);
+    color: var(--primary);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
@@ -209,7 +209,7 @@
     border-radius: 50%;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    color: var(--primary-color);
+    color: var(--primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -218,7 +218,7 @@
 }
 
 .exercise-item:hover .add-btn {
-    background: var(--primary-color);
+    background: var(--primary);
     color: #000;
 }
 
@@ -273,7 +273,7 @@
 }
 
 .primary-btn {
-    background: var(--primary-color);
+    background: var(--primary);
     color: #000;
     border: none;
 }
