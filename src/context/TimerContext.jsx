@@ -19,6 +19,13 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
     const [defaultRestTime, setDefaultRestTime] = useState(45);
     const [defaultWorkTime, setDefaultWorkTime] = useState(45);
     const [exercisePrefs, setExercisePrefs] = useState({});
+    // Profile id whose stored timer prefs have been rehydrated into state —
+    // gates both persist effects below (hydration-gate pattern, S13 sweep:
+    // mount-ref guards fail under StrictMode replay). One flag covers timers
+    // and exercisePrefs because the load effect restores both in the same
+    // synchronous batch. Scoped to TimerContext — never shared with
+    // WorkoutContext's gates (one-way dependency, see header comment).
+    const [timerHydratedFor, setTimerHydratedFor] = useState(null);
 
     // Latest-value ref for the sync guard so the persist effect can call it
     // without listing the prop as a dependency (avoids a redundant sync when
@@ -37,6 +44,9 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
         setRestTimer(prev => ({ ...prev, duration: ps.defaultRestTime }));
         setWorkTimer(prev => ({ ...prev, duration: ps.defaultWorkTime }));
         setExercisePrefs(ps.exercisePrefs);
+        // Same-batch flag: unlocks the persist effects only for commits at or
+        // after this restore (mirrors refreshProfileData's hydration flags).
+        setTimerHydratedFor(currentProfile.id);
     }, [currentProfile]);
 
     // --- Audio ---
@@ -196,45 +206,38 @@ export const TimerProvider = ({ children, currentProfile, soundEnabled, apiRef, 
         }));
     };
 
-    // --- Persist timer defaults (skip first mount so initial defaults don't
-    // clobber stored values before the load effect runs). ---
-    const timersMountRef = useRef(true);
+    // --- Persist timer defaults — hydration gate: only write once this
+    // profile's stored values have been rehydrated into state (the mount-ref
+    // guard this replaces fails under StrictMode replay — the replayed run
+    // consumes the guard before the restore commit and writes the initial
+    // defaults over storage). ---
     const timersSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (timersMountRef.current) {
-            timersMountRef.current = false;
-            timersSyncedProfileRef.current = currentProfile?.id ?? null;
-            return;
-        }
-        if (currentProfile) {
-            StorageService.saveDefaultTimers(currentProfile.id, defaultRestTime, defaultWorkTime);
-            // Best-effort backend sync — only on genuine user edits (same profile),
-            // not the login/profile-switch restore run. canSyncToBackend comes from
-            // WorkoutContext via prop (one-way dep: TimerContext can't import it).
-            const sameProfile = timersSyncedProfileRef.current === currentProfile.id;
-            timersSyncedProfileRef.current = currentProfile.id;
-            if (sameProfile && canSyncRef.current?.()) {
-                ApiService.saveProfile({ default_rest_time: defaultRestTime, default_work_time: defaultWorkTime })
-                    .catch(err => {
-                        console.warn('[settings-sync] timers:', err);
-                        SyncQueue.enqueue({
-                            type: 'profile_settings',
-                            key: 'timers',
-                            payload: { default_rest_time: defaultRestTime, default_work_time: defaultWorkTime }
-                        });
+        if (!currentProfile || timerHydratedFor !== currentProfile.id) return;
+        StorageService.saveDefaultTimers(currentProfile.id, defaultRestTime, defaultWorkTime);
+        // Best-effort backend sync — only on genuine user edits (same profile),
+        // not the login/profile-switch restore run. canSyncToBackend comes from
+        // WorkoutContext via prop (one-way dep: TimerContext can't import it).
+        const sameProfile = timersSyncedProfileRef.current === currentProfile.id;
+        timersSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current?.()) {
+            ApiService.saveProfile({ default_rest_time: defaultRestTime, default_work_time: defaultWorkTime })
+                .catch(err => {
+                    console.warn('[settings-sync] timers:', err);
+                    SyncQueue.enqueue({
+                        type: 'profile_settings',
+                        key: 'timers',
+                        payload: { default_rest_time: defaultRestTime, default_work_time: defaultWorkTime }
                     });
-            }
+                });
         }
-    }, [defaultRestTime, defaultWorkTime, currentProfile]);
+    }, [defaultRestTime, defaultWorkTime, currentProfile, timerHydratedFor]);
 
-    // --- Persist exercise preferences ---
-    const prefsMountRef = useRef(true);
+    // --- Persist exercise preferences — hydration gate, same rationale. ---
     useEffect(() => {
-        if (prefsMountRef.current) { prefsMountRef.current = false; return; }
-        if (currentProfile) {
-            StorageService.saveExercisePrefs(currentProfile.id, exercisePrefs);
-        }
-    }, [exercisePrefs, currentProfile]);
+        if (!currentProfile || timerHydratedFor !== currentProfile.id) return;
+        StorageService.saveExercisePrefs(currentProfile.id, exercisePrefs);
+    }, [exercisePrefs, currentProfile, timerHydratedFor]);
 
     // --- Bridge: expose imperative timer actions to WorkoutContext (Option A).
     // Re-populated every render so the closures (which read defaultRestTime)
