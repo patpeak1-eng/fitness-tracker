@@ -159,7 +159,7 @@
     width: calc(100% - 40px);
     margin: 10px 20px;
     padding: 12px;
-    background: rgba(0, 255, 136, 0.1);
+    background: var(--primary-dim);
     border: 1px dashed var(--primary);
     border-radius: 12px;
     color: var(--primary);
@@ -169,7 +169,7 @@
 }
 
 .create-custom-btn-list:hover {
-    background: rgba(0, 255, 136, 0.2);
+    background: rgba(var(--primary-rgb), 0.2);
 }
 
 .exercise-item {
