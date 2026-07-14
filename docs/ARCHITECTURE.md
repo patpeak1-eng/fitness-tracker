@@ -90,20 +90,30 @@ Deploy:    Railway, GitHub webhook triggers build — no `railway up`, ever
 
 ## 4. FRONTEND ARCHITECTURE
 
-### 4.1 Routing ⚠️ PROVISIONAL (confirmed routes only — full list needs T1 verification)
+### 4.1 Routing ✅ VERIFIED (read directly from App.jsx, S17 audit 2026-07-14)
 
-Confirmed to exist based on file access and session work:
+All route pages are lazy-loaded (`React.lazy`) so each compiles to its own chunk. Two routes render outside the auth gate so OAuth callback and login work with no profile; the rest nest under `/` inside `<Layout />` and redirect to `/login` when no `currentProfile` exists.
 
 | Route | Page | Notes |
 |---|---|---|
-| `/` | Dashboard | Central hub, active workout card if one exists |
-| `/track` | TrackWorkout | Active session view or template picker |
-| `/exercises` | Exercises (Exercise Library) | Search + category/muscle/equipment filters |
-| `/analytics` | Analytics / AnalyticsView | Charts, muscle volume distribution |
-| `/profile` | Profile | Settings, data export/import, profile switching |
+| `/login` | Login | Outside auth gate |
+| `/auth/callback` | AuthCallback | Google OAuth landing; outside auth gate |
+| `/` | Dashboard | Central hub; active-workout card with resume + cancel actions |
+| `/track` | TrackWorkout | Active session view (guided) or template picker |
+| `/history` | History | Completed workout list → WorkoutDetails |
+| `/timer` | Timer | Timer-defaults page (rest/work durations, per-exercise prefs) |
+| `/exercises` | Exercises (Exercise Library) | Read-only browsing/reference |
+| `/analytics` | Analytics | Charts, muscle volume distribution (recharts chunk) |
+| `/coach` | CoachView | AI Coach chat (SSE streaming) |
+| `/summary` | WorkoutSummary | Post-workout summary/confetti screen |
+| `/profile` | Profile | Stats, weight history, data export/import |
+| `/settings` | Settings | Theme/units/sound, AI Coach prefs, equipment profiles |
 | `/assessment` | Assessment | Onboarding wizard, recommendation engine |
+| `/help` | HelpView | Help/reference content |
 
-**Not yet confirmed:** exact route for template creation modal (may be a modal over `/track`, not a standalone route — `CreateTemplateModal.jsx` referenced in S11 work suggests modal pattern, not routed page).
+Template creation is a modal (`CreateTemplateModal.jsx` → `ExerciseSelector.jsx`) over `/track`, not a routed page. `ProfileSelector.jsx` exists in `src/pages/` but currently has **no route** (S17 Task 6 re-routes it).
+
+Provider nesting (App.jsx): `BrowserRouter > ErrorBoundary > WorkoutProvider > TimerProvider > Routes`. A shared `timerApiRef` bridges WorkoutContext → TimerContext imperative actions (WorkoutProvider can't `useTimer()` because TimerProvider is nested inside it).
 
 ### 4.2 State Management — WorkoutContext.jsx ✅ VERIFIED
 
@@ -125,9 +135,16 @@ User-specific state (reset on profile change):
   history          — completed workout array
   assessments      — assessment history
   theme, units, soundEnabled
+  coachPersonality, coachVoiceId          — AI Coach prefs (S13)
+  experienceLevel  — beginner/intermediate/advanced (S16, syncs to backend)
   defaultRestTime, defaultWorkTime
   userStats        — age, height, weight, goal, etc.
   weightHistory    — array of {date, weight}
+  activeEquipmentProfileId, customEquipmentItems — equipment system (S15, local-only)
+
+Hydration gates (S13/S15 — see pattern 7 below):
+  historyHydratedFor, activeWorkoutHydratedFor, settingsHydratedFor
+  (+ timerHydratedFor in TimerContext.jsx)
 
 Ephemeral session state:
   restTimer        — {timeLeft, isActive, duration}
@@ -154,6 +171,8 @@ Guided mode state:
 5. **Template sync-back:** editing a set's weight/reps during an active workout that came from a template (`sourceTemplateId`) syncs the change back into the template itself (`syncToTemplate()`), so future workouts from that template start with updated targets. This is a deliberate design choice — do not treat template mutation during a live workout as a bug.
 
 6. **Guided mode index persistence:** `currentExerciseIndex`/`currentSetIndex` are wrapped in custom setters that also write into `activeWorkout.currentExerciseIndex` so the position survives a page reload mid-workout.
+
+7. **Hydration-gate pattern (S13, swept app-wide S13 commit `040edd4`; the modern replacement for the older mount-guard refs):** every persist `useEffect` is gated on a `*HydratedFor` state variable holding the profile id whose data has actually been restored into React state — `if (!currentProfile || xHydratedFor !== currentProfile.id) return;`. `refreshProfileData(profile)` sets the gate to the profile's id only *after* loading that profile's stored values into state. This prevents the persist effect from writing initial/default state over stored data on mount, and — unlike the old `useRef` mount guards — survives React StrictMode's double-mount replay (mount-guard refs were proven insufficient in the S13 reload-persistence regression, commit `c70a32f`). Gates in use: `historyHydratedFor`, `activeWorkoutHydratedFor`, `settingsHydratedFor` (WorkoutContext) and `timerHydratedFor` (TimerContext, S15 — gates timer defaults and `exercisePrefs`). **Any new persist effect must be gated the same way — never use a bare mount-ref.**
 
 ### 4.3 ActiveWorkoutService.js ✅ VERIFIED
 
@@ -217,32 +236,77 @@ Exported calls (all via apiFetch unless noted):
 transports. Do not hand-roll a fetch without `credentials: 'include'`, and do
 not send an Authorization header when there is no token.
 
-### 4.6 Component Tree ⚠️ PROVISIONAL — Partial, Needs Full T1 Pass
-
-Confirmed to exist (from file references across S9-S11 sessions):
+### 4.6 Component Tree ✅ VERIFIED (full `src/` inventory, S17 audit 2026-07-14)
 
 ```
-App.jsx
-├── Dashboard.jsx
-├── TrackWorkout.jsx
-│   ├── GuidedWorkoutView.jsx
-│   │   └── ExerciseIllustration.jsx (S10, wired to 3 surfaces)
-│   ├── RestTimerOverlay.jsx
-│   └── ExerciseResult.jsx
-├── Exercises.jsx (Exercise Library)
-├── CreateTemplateModal.jsx
-│   └── ExerciseSelector.jsx (equipment filter, multi-select — S11)
-├── AnalyticsView.jsx
-├── Assessment.jsx
-├── Profile.jsx
-└── Timer.jsx (settings/timer defaults page)
-
-Contexts:
-├── WorkoutContext.jsx (the Brain)
-└── TimerContext.jsx (timer-default sync, separate from active session timers)
+src/
+├── App.jsx                      — router + provider nesting (see 4.1)
+├── main.jsx / index.css         — entry + global styles (design tokens)
+│
+├── pages/                       — one per route (all lazy-loaded)
+│   ├── Login.jsx / AuthCallback.jsx
+│   ├── Dashboard.jsx            — hub; resume/cancel active workout
+│   ├── TrackWorkout.jsx         — picker + active session shell
+│   ├── History.jsx
+│   ├── Timer.jsx                — timer-defaults page
+│   ├── Exercises.jsx            — exercise library (read-only)
+│   ├── Analytics.jsx            — (AnalyticsView.css is its stylesheet)
+│   ├── CoachView.jsx            — AI Coach chat
+│   ├── WorkoutSummary.jsx
+│   ├── Profile.jsx / Settings.jsx / Assessment.jsx / HelpView.jsx
+│   └── ProfileSelector.jsx      — local multi-profile management (no route until S17 Task 6)
+│
+├── components/
+│   ├── layout/    Layout.jsx (shell + <Outlet/>), BottomNavigation.jsx,
+│   │              SyncStatusBadge.jsx (SyncQueue state indicator)
+│   ├── common/    Card.jsx, Modal.jsx, CustomSelect.jsx, BackButton.jsx,
+│   │              ErrorBoundary.jsx, ExerciseIllustration.jsx
+│   ├── workout/   GuidedWorkoutView.jsx, ExerciseSelector.jsx,
+│   │              CreateTemplateModal.jsx, TemplateSelector.jsx,
+│   │              RestTimerOverlay.jsx, ExerciseResult.jsx,
+│   │              InstructionModal.jsx, WorkoutNotesModal.jsx,
+│   │              PlateCalculator.jsx, ExerciseMedia.jsx, BodyHighlightSVG.jsx
+│   ├── history/   WorkoutDetails.jsx
+│   └── analytics/ ProgressChart.jsx
+│
+├── context/
+│   ├── WorkoutContext.jsx       — the Brain (HIGH ZONE, ~2100 lines)
+│   └── TimerContext.jsx         — rest/work timers + timer-default persistence
+│
+├── services/
+│   ├── StorageService.js        — localStorage, profile-scoped keys
+│   ├── ApiService.js            — backend client (HIGH ZONE)
+│   ├── SyncQueue.js             — persistent retry queue for failed pushes (S12)
+│   └── ActiveWorkoutService.js  (+ .test.js) — pure reducers
+│
+├── constants/  storageKeys.js, coachPersonalities.js, voiceIds.js
+└── utils/      recommendationEngine.js, units.js, types.js
 ```
 
-**This tree is incomplete.** It reflects only components referenced during S9-S11 session work. A full component inventory (every file in `src/components/` and `src/pages/`) has not been compiled. First Fable 5 audit task should include generating a complete, verified version of this section.
+### 4.7 Settings Sync + SyncQueue ✅ VERIFIED (S12–S16)
+
+**Settings-sync, end to end:** `theme`, `units`, `soundEnabled`, `coachPersonality`, `coachVoiceId`, and `experienceLevel` each follow the identical path —
+
+```
+Settings UI change
+  → WorkoutContext state setter
+  → persist useEffect (gated on settingsHydratedFor === currentProfile.id)
+      1. StorageService.save*(uid, value)          ← always, synchronous
+      2. if (canSyncToBackend) ApiService.saveProfile({ field })  ← partial PUT /api/profile
+      3. on push failure → SyncQueue.enqueue({type, key, payload})
+```
+
+The backend `PUT /api/profile` handler is a generic `setattr` loop over Optional `ProfileUpdate` fields — adding a new synced setting needs a migration + `models.py` column + `schemas.py` field, but **no handler edit** (see memory: profile-sync field pattern). On login, a pull backfills local state from the server profile.
+
+**SyncQueue (`src/services/SyncQueue.js`, S12):** persistent localStorage-backed retry queue for failed cloud pushes. Ops carry a `(type, key)` dedupe key so only the latest value per item is held. Executors are registered at runtime from WorkoutContext (keeps SyncQueue dependency-free, no import cycles). The queue flushes on boot, on `online`, and on foreground; a 401 during replay stops flushing and raises `authExpired`, which surfaces a re-login banner via `SyncStatusBadge.jsx`. **Any new backend push path must enqueue on failure and register an executor.**
+
+### 4.8 Equipment Profile System ✅ VERIFIED (S15, local-only)
+
+`DEFAULT_EQUIPMENT_PROFILES` in WorkoutContext defines five tiers — `full_gym`, `home_gym`, `fire_station`, `bodyweight_only`, `custom` — each an equipment string list. `activeEquipmentProfileId` + `customEquipmentItems` are profile-scoped persisted state (hydration-gated, **local-only — deliberately not backend-synced**). `TrackWorkout.jsx` and `ExerciseSelector.jsx` consume the active profile to filter exercises by their `equipment` field.
+
+**Gotcha (from S15):** `exercise.equipment` uses `/` both as an OR-separator AND inside literal multi-word names (`"Parallel Bars/Bench"`). Matching logic must test the full string before slash-splitting.
+
+**Other S12–S16 UI changes worth knowing:** Dashboard's active-workout card gained a cancel action (S15/S16 — `cancelWorkout()` from WorkoutContext, confirm-guarded), alongside the existing cancel paths in TrackWorkout and GuidedWorkoutView.
 
 ---
 
@@ -320,6 +384,7 @@ Note the dual format — legacy templates store exercises as plain ID strings; c
           "time": 0,
           "completed": false,
           "isPR": false,
+          "setType": "normal | warmup",
           "lastPerformance": { /* object or null */ }
         }
       ]
@@ -329,7 +394,7 @@ Note the dual format — legacy templates store exercises as plain ID strings; c
 }
 ```
 
-**Known gap (flagged in Fable 5 brief, Section 3):** no `setType` field exists (warm-up/working/AMRAP/drop). All sets are currently treated identically in volume calculations. If this is built, it is a new field on the set object — add it here and update this doc in the same commit.
+**Set-type differentiation (SHIPPED S13):** `setType` exists on every set (`'normal'` default, `'warmup'`). Warm-up sets are excluded from progression judgment (working sets only), are never PR-eligible, and are surfaced distinctly in GuidedWorkoutView, Analytics, WorkoutSummary, and WorkoutDetails. Sets predating the field (`setType === undefined`) count as working sets. AMRAP/drop set types are **not** built — only normal/warm-up.
 
 ---
 
@@ -375,7 +440,10 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
   POST /login                    → Token
   GET  /google                   → OAuth redirect
   GET  /google/callback          → sets HttpOnly session_token cookie
-  GET  /me                       → session check (cookie or Bearer)
+  GET  /me                       → session check — dual-transport (cookie or
+                                    Bearer) since S14 (810c940); was cookie-only
+                                    before. Frontend getMe deliberately stays
+                                    cookie-only (see 4.5)
   POST /logout                   → clears session cookie
 
 /api/profile   (routers/profile.py)
@@ -459,28 +527,23 @@ Guardrails:   per-user rate limits on both coach and voice (app/rate_limit.py);
 
 ---
 
-## 9. DESIGN SYSTEM ✅ VERIFIED (built and implemented this session, S11)
+## 9. DESIGN SYSTEM ✅ VERIFIED — Design Tokens v2 "Ember on Graphite" (LOCKED, S12, shipped `8f03019`)
+
+**`docs/DESIGN_TOKENS.md` is the single source of truth.** It supersedes the S11 system (blue-violet canvas + neon green) that earlier revisions of this section described. Summary only — do not copy values from here into code, read the tokens doc:
 
 ```
-Canvas:          #0e0e18
-Surface 1:       #16162a  (cards)
-Surface 2:       #1e1e2e  (rows)
-Surface 3:       #28283c  (inputs/chips)
-Card border:     rgba(255, 255, 255, 0.07)
-Primary accent:  #bfff00  (neon green)
-Rest timer:      #3b82f6  (blue, unchanged from pre-S11)
-
-Card radius:     12px
-Input/row radius: 8px
-Pill/chip radius: 999px
-CTA button radius: 10px
-
-Typography:      font-feature-settings: "tnum" on all weight/rep/timer displays
-Completed set:   rgba(52,199,89,0.10) bg + rgba(52,199,89,0.6) left border
-                 (NOT a full opaque flood — deliberate choice per S11 research)
+Neutrals:   graphite scale — --bg-app #0D0D0F, --bg-card #161618,
+            --surface #1E1E21, --input-bg #28282C; hairline --border
+            rgba(255,255,255,0.06); text #F4F4F2 / #9C9CA3 / #5F5F66
+Accent:     --primary #FF5C2A "ember" (CTAs/active/selection ONLY, ≤10% of screen)
+Semantics:  --success #3DC96E, --pr-gold #E9B84C (PR + warm-up markers),
+            --danger #E5484D, --rest-blue #4C8DFF (rest timer only)
+Fonts:      Inter (body/UI) — self-hosted woff2, no CDN
+Rule:       one reserved purpose per token; numbers/data never accent-colored
+Themes:     light theme via data-theme attribute on root (S15)
 ```
 
-This is the token foundation referenced in Section 1 of FABLE5_SESSION12_BRIEF.md — carries forward into any visual redesign work.
+**Gotcha:** PowerShell bulk edits mojibake UTF-8 in these files — use Node for scripted edits.
 
 ---
 
@@ -488,12 +551,13 @@ This is the token foundation referenced in Section 1 of FABLE5_SESSION12_BRIEF.m
 
 | Item | Status | Notes |
 |---|---|---|
-| Profile switch race condition | Open, P3 | `activeWorkout` persist effect can fire before incoming profile's workout is restored. Fix pattern: `useRef` guard, same approach as existing mount guard. |
-| Set-type differentiation | Not built | All sets (warm-up/working/AMRAP) treated identically in volume calcs. Flagged in Fable 5 brief as P0. |
-| Component tree documentation | Incomplete | Section 4.6 above needs full audit pass. |
-| Backend architecture | Verified S12 | Section 7 read directly from backend source + live openapi.json, 2026-07-03. |
-| npm audit — workbox transitive deps | Open | Backlog item, not yet actioned. |
-| OAuth state/nonce/PKCE hardening | Open | Backlog item, not yet actioned. |
+| Profile switch race condition | Open, P3 — under investigation S17 Task 8 | `activeWorkout` persist effect could fire before incoming profile's workout is restored on a runtime profile *switch*. May already be closed by the hydration-gate pattern (4.2 pattern 7), which gates on the incoming profile's id — S17 Task 8 determines this. |
+| Set-type differentiation | ✅ Shipped S13 | `setType: 'normal' \| 'warmup'` on every set; warm-ups excluded from progression + PRs (see 5.4). AMRAP/drop not built. |
+| Component tree documentation | ✅ Resolved S17 | Section 4.6 is a full verified `src/` inventory as of 2026-07-14. |
+| Backend architecture | Verified S12 | Section 7 read directly from backend source + live openapi.json, 2026-07-03; /me dual-transport note added S17. |
+| npm audit — workbox transitive deps | Open — scheduled S17 Task 9 | Never actioned since early sessions. |
+| OAuth state/nonce/PKCE hardening | Open — spec being written S17 Task 11 | Session 8 notes claim a `state` param was added; actual current status of state/nonce/PKCE to be audited in the spec, implementation is a future HIGH-zone session. |
+| TimerContext mount-refs | ✅ Resolved S15 | Replaced by `timerHydratedFor` hydration gate. |
 
 ---
 
@@ -525,4 +589,4 @@ This is the token foundation referenced in Section 1 of FABLE5_SESSION12_BRIEF.m
 
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, package.json (all source-verified), FULL_APP_ASSESSMENT.md, PROJECT_CONTEXT.md, and session notes/memory across S9-S11. Backend sections require T1 verification before being treated as authoritative. Last updated: Session 11 close, 2026-07-03.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json (S12), docs/DESIGN_TOKENS.md, and session notes/memory across S9-S16. Full catch-up audit pass completed S17 — all PROVISIONAL flags cleared; routing (4.1) and component tree (4.6) verified directly against source. Last updated: Session 17, 2026-07-14.*
