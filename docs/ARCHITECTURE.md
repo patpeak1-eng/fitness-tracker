@@ -556,7 +556,7 @@ Themes:     light theme via data-theme attribute on root (S15)
 
 | Item | Status | Notes |
 |---|---|---|
-| Profile switch race condition | Open, P3 — under investigation S17 Task 8 | `activeWorkout` persist effect could fire before incoming profile's workout is restored on a runtime profile *switch*. May already be closed by the hydration-gate pattern (4.2 pattern 7), which gates on the incoming profile's id — S17 Task 8 determines this. |
+| Profile switch race condition | ✅ Resolved (verified S17 Task 8) | Closed as a side effect of the hydration-gate pattern (4.2 pattern 7): the persist gate compares `activeWorkoutHydratedFor` (whose data is in state) against `currentProfile.id` (whose key would be written), so on a runtime switch the effect is a no-op until `refreshProfileData` restores the incoming profile's data and flips the gate in the same batch. In-flight cloud pulls are separately guarded by `latestProfileIdRef`. Empirically confirmed during S17 Task 6 live profile-switch testing (no cross-profile writes). |
 | Set-type differentiation | ✅ Shipped S13 | `setType: 'normal' \| 'warmup'` on every set; warm-ups excluded from progression + PRs (see 5.4). AMRAP/drop not built. |
 | Component tree documentation | ✅ Resolved S17 | Section 4.6 is a full verified `src/` inventory as of 2026-07-14. |
 | Backend architecture | Verified S12 | Section 7 read directly from backend source + live openapi.json, 2026-07-03; /me dual-transport note added S17. |
