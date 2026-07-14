@@ -74,7 +74,7 @@
 .date-badge .day {
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--primary);
+    color: var(--text-primary);
     line-height: 1;
 }
 

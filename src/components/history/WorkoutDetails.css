@@ -44,7 +44,7 @@
     font-size: 1.5rem;
     margin: 0;
     font-weight: 700;
-    color: var(--primary-color);
+    color: var(--text-primary);
 }
 
 /* Exercise Timeline */
@@ -100,7 +100,7 @@
 .exercise-number {
     width: 20px;
     height: 20px;
-    background: var(--primary-color);
+    background: var(--primary);
     color: #000;
     border-radius: 50%;
     display: flex;
@@ -248,7 +248,7 @@
 }
 
 .rec-values .new {
-    color: var(--primary);
+    color: var(--text-primary);
     font-weight: bold;
 }
 
