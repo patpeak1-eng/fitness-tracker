@@ -606,9 +606,16 @@
     display: flex;
     gap: 12px;
     overflow-x: auto;
-    padding: 4px 2px 8px;
+    /* Right padding >= the mask fade width so the last card sits clear of
+       the fade once scrolled to the end. */
+    padding: 4px 36px 8px 2px;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
+    /* Scroll affordance: the scrollbar is hidden, so on non-touch devices
+       nothing signals more cards off-screen (row verified scrollable but
+       undiscoverable at 1440px, S16). Alpha-only fade — theme-agnostic. */
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 36px), transparent);
 }
 
 .profile-scroll-row::-webkit-scrollbar {
