@@ -43,8 +43,10 @@
 /* Category tabs */
 .ex-tabs {
     display: flex;
+    /* Wrap, don't scroll — "Cardio" was clipped at 375px (S21, same
+       no-scroll-dependency decision as the filter rows below). */
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
     margin-bottom: 16px;
     padding-bottom: 4px;
 }
@@ -181,16 +183,13 @@
     font-size: 0.95rem;
 }
 
-/* S17 — equipment-profile + muscle filter rows (shared .filter-chip style) */
+/* S17 — equipment-profile + muscle filter rows (shared .filter-chip style).
+   Wrapping, NOT a scroll strip: every chip fully visible with no horizontal
+   scroll/swipe on any input device (S21 decision, same as c58eec7). */
 .ex-filter-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
     padding-bottom: 4px;
     margin-bottom: 8px;
-    scrollbar-width: none;
-}
-
-.ex-filter-row::-webkit-scrollbar {
-    display: none;
 }
