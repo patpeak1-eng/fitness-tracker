@@ -450,6 +450,14 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
                                     before. Frontend getMe deliberately stays
                                     cookie-only (see 4.5)
   POST /logout                   → clears session cookie
+  DELETE /account                → permanently deletes user + ALL data (S18).
+                                    Requires typed confirm=="DELETE"; local
+                                    (email/password) users must also re-enter
+                                    their password (OAuth users can't — sentinel
+                                    hash). Single-transaction delete relies on
+                                    the ON DELETE CASCADE FKs (no per-table
+                                    cleanup); clears session cookie; 204.
+                                    Rate-limited per user like login.
 
 /api/profile   (routers/profile.py)
   GET  ""                        → ProfileResponse (UserResponse + UserStatsResponse)

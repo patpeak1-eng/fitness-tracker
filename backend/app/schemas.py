@@ -30,6 +30,14 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class AccountDeleteRequest(BaseModel):
+    # Typed confirmation required for every account (must equal "DELETE").
+    confirm: str
+    # Required for local email/password accounts (re-verified server-side);
+    # ignored for Google OAuth accounts, which have no usable password.
+    password: Optional[str] = None
+
+
 # --------------------------------------------------------------------------- #
 # Profile / user stats
 # --------------------------------------------------------------------------- #

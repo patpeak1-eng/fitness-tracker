@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, Check, Volume2, VolumeX, LogOut, Users } from 'lucide-react';
+import { Moon, Sun, Check, Volume2, VolumeX, LogOut, Users, Trash2 } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import { useTimer } from '../context/TimerContext';
 import Modal from '../components/common/Modal';
 import BackButton from '../components/common/BackButton';
 import StorageService from '../services/StorageService';
+import { deleteAccount } from '../services/ApiService';
 import { VOICE_IDS } from '../constants/voiceIds';
 import { COACH_PERSONALITIES } from '../constants/coachPersonalities';
 import './Settings.css';
@@ -67,6 +68,18 @@ const Settings = () => {
     const navigate = useNavigate();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+    // --- Account deletion (danger zone) ---
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [deletePassword, setDeletePassword] = useState('');
+    const [deleteError, setDeleteError] = useState('');
+    const [deleting, setDeleting] = useState(false);
+    // Email/password users hold a Bearer token in localStorage; Google OAuth
+    // users never do (cookie-only). This is the same discriminator apiFetch
+    // uses, and it decides whether we require password re-entry. The backend
+    // re-checks the real factor (sentinel hash) regardless.
+    const isPasswordUser = !!StorageService.loadAuthToken();
+
     const {
         theme, setTheme,
         units, setUnits,
@@ -124,6 +137,39 @@ const Settings = () => {
         setShowLogoutModal(false);
         switchProfile(null);
     };
+
+    const openDeleteModal = () => {
+        setDeleteConfirmText('');
+        setDeletePassword('');
+        setDeleteError('');
+        setShowDeleteModal(true);
+    };
+
+    const handleDeleteAccount = async () => {
+        setDeleteError('');
+        setDeleting(true);
+        try {
+            await deleteAccount({
+                confirm: deleteConfirmText.trim(),
+                password: isPasswordUser ? deletePassword : null,
+            });
+            // Server rows are gone and the session cookie is cleared. Do a full
+            // sign-out (same path as Profile's handleSignOut) WITHOUT deleting
+            // the local data blobs — hard-navigate to /login so the context
+            // re-initializes clean.
+            StorageService.clearAuthToken();
+            StorageService.setLoggedOut();
+            StorageService.saveProfiles([]);
+            StorageService.remove(StorageService.KEY.currentProfileId, { global: true });
+            window.location.href = '/login';
+        } catch (err) {
+            setDeleteError(err.message || 'Could not delete account. Please try again.');
+            setDeleting(false);
+        }
+    };
+
+    const deleteConfirmed = deleteConfirmText.trim() === 'DELETE';
+    const deleteReady = deleteConfirmed && (!isPasswordUser || deletePassword.length > 0);
 
     return (
         <div className="page settings-page">
@@ -350,6 +396,20 @@ const Settings = () => {
                 )}
             </Group>
 
+            {apiConnected && currentProfile?.email && (
+                <Group title="Danger zone">
+                    <button className="settings-row row-action danger" onClick={openDeleteModal}>
+                        <div className="setting-info">
+                            <span className="setting-label">Delete account…</span>
+                            <span className="setting-desc">
+                                Permanently delete your account and all cloud data. This cannot be undone.
+                            </span>
+                        </div>
+                        <Trash2 size={18} />
+                    </button>
+                </Group>
+            )}
+
             <div className="version-info">
                 <p>App: FitTrack v1.0</p>
                 <p>
@@ -374,6 +434,65 @@ const Settings = () => {
                 }
             >
                 <p>Are you sure you want to log out and switch profiles?</p>
+            </Modal>
+
+            <Modal
+                isOpen={showDeleteModal}
+                onClose={() => { if (!deleting) setShowDeleteModal(false); }}
+                title="Delete account"
+                showCloseButton={!deleting}
+                actions={
+                    <>
+                        <button
+                            className="secondary-btn"
+                            onClick={() => setShowDeleteModal(false)}
+                            disabled={deleting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="primary-btn danger-btn"
+                            onClick={handleDeleteAccount}
+                            disabled={deleting || !deleteReady}
+                        >
+                            {deleting ? 'Deleting…' : 'Delete forever'}
+                        </button>
+                    </>
+                }
+            >
+                <p>
+                    This permanently deletes your account and all its cloud data — workout
+                    history, assessments, weight log, custom templates and exercises, and your
+                    coach conversation. <strong>This cannot be undone.</strong>
+                </p>
+                {isPasswordUser && (
+                    <div className="delete-field">
+                        <label htmlFor="delete-password">Confirm your password</label>
+                        <input
+                            id="delete-password"
+                            type="password"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            autoComplete="current-password"
+                            disabled={deleting}
+                        />
+                    </div>
+                )}
+                <div className="delete-field">
+                    <label htmlFor="delete-confirm">Type DELETE to confirm</label>
+                    <input
+                        id="delete-confirm"
+                        type="text"
+                        value={deleteConfirmText}
+                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        placeholder="DELETE"
+                        disabled={deleting}
+                    />
+                </div>
+                {deleteError && <p className="delete-error" role="alert">{deleteError}</p>}
             </Modal>
         </div>
     );

@@ -318,6 +318,39 @@
     border-color: var(--danger);
 }
 
+/* Delete-account modal fields */
+.delete-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 16px;
+}
+
+.delete-field label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.delete-field input {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 1rem;
+}
+
+.delete-field input:focus {
+    outline: none;
+    border-color: var(--danger);
+}
+
+.delete-error {
+    margin-top: 12px;
+    color: var(--danger);
+    font-size: 0.9rem;
+}
+
 /* "Saved" confirmation toast — fades in when a setting changes, out after 2s. */
 .save-toast {
     position: fixed;

@@ -203,6 +203,24 @@ export const saveCustomExercise = async (exercise) => {
   return r.json();
 };
 
+// Permanently delete the current account and all its cloud data. Body carries
+// the typed "DELETE" confirmation and (for email/password users) the password
+// re-entry — both re-verified server-side. Surfaces the backend `detail` string
+// (like login/register) so the UI can show "Incorrect password" etc.
+export const deleteAccount = async ({ password = null, confirm }) => {
+  const r = await apiFetch('/api/auth/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ password, confirm })
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    const err = new Error(body.detail || `Account deletion failed (${r.status})`);
+    err.status = r.status;
+    throw err;
+  }
+  // 204 No Content on success — nothing to parse.
+};
+
 export { isAvailable };
 
 export const getGoogleAuthUrl = () => {

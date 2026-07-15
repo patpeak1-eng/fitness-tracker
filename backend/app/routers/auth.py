@@ -3,7 +3,7 @@ import os
 import secrets
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -24,9 +24,13 @@ from app.rate_limit import (
     REGISTER_WINDOW,
     rate_limit,
 )
-from app.schemas import Token, UserLogin, UserRegister
+from app.schemas import AccountDeleteRequest, Token, UserLogin, UserRegister
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Sentinel hash stored for Google OAuth users (they have no local password).
+# Must match the value written in google_callback below.
+GOOGLE_OAUTH_SENTINEL = "google_oauth_no_password"
 
 
 def _client_ip(request: Request) -> str:
@@ -227,7 +231,7 @@ async def google_callback(
     if user is None:
         user = User(
             email=google_email,
-            hashed_password="google_oauth_no_password",
+            hashed_password=GOOGLE_OAUTH_SENTINEL,
             name=google_name,
             avatar=(google_name[:1].upper() or "U"),
         )
@@ -281,6 +285,56 @@ async def get_current_user_info(user: User = Depends(get_current_user)):
         "color": user.color or "#bfff00",
         "avatar": user.avatar or (user.name[0].upper() if user.name else "U"),
     }
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    payload: AccountDeleteRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Permanently delete the authenticated user and ALL their data.
+
+    Irreversible. Re-confirmation is enforced server-side, not just in the UI:
+
+    - Every account must send the literal typed string ``confirm == "DELETE"``.
+    - Local (email/password) accounts must additionally re-enter their
+      ``password``, verified here — a stolen session alone cannot delete them.
+    - Google OAuth accounts have no usable password (sentinel hash), so the
+      typed confirmation is the strongest server-checkable factor available.
+
+    Deletion is a single transaction: every table with a ``user_id`` FK has
+    DB-level ``ON DELETE CASCADE`` (migrations 0001/0003), so removing the user
+    row removes all child rows (stats, workouts, active workout, assessments,
+    weight history, custom templates/exercises, coach messages) atomically.
+    """
+    # Rate-limit per user, like login, to blunt abuse of the password oracle.
+    await rate_limit("delete_account", LOGIN_LIMIT, LOGIN_WINDOW, current_user=user)
+
+    if payload.confirm != "DELETE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Type DELETE to confirm',
+        )
+
+    is_oauth = user.hashed_password == GOOGLE_OAUTH_SENTINEL
+    if not is_oauth:
+        if not payload.password or not verify_password(
+            payload.password, user.hashed_password
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect password",
+            )
+
+    await db.delete(user)
+    await db.commit()
+
+    # 204 with no body; clear the OAuth session cookie (match set attributes so
+    # the browser actually drops it). Bearer users just discard their token.
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.delete_cookie(key="session_token", samesite="none", secure=True)
+    return response
 
 
 @router.post("/logout")
