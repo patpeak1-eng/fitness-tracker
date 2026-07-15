@@ -255,12 +255,17 @@ session **regardless** of what any AI tool claims to remember internally — the
 tool's memory may be absent, partial, or from a different machine, but this file
 is in the repository and is authoritative. The session-start brief itself
 instructs the reader to begin by reading `docs/ARCHITECTURE.md`,
-`docs/DESIGN_TOKENS.md`, and a session-operations reference.
+`docs/DESIGN_TOKENS.md`, and two session-operations references (see note below).
 
-> **Verified caveat:** `SESSION_START.md` points to a file `MASTER_CONTEXT.md`
-> for "how sessions operate." That file is **not present in the repository** as
-> of this writing (this document, `PROJECT_OPERATING_MODEL.md`, is intended to
-> serve that role). The dangling reference should be repointed to this file.
+> **Note on `MASTER_CONTEXT.md`:** `SESSION_START.md` points to a file
+> `MASTER_CONTEXT.md` for "how sessions operate." It is **not** in this
+> repository by design — it is a real, intentionally separate document living in
+> a different repo (`patpeak1-eng/peak-ops-standards`) and shared cross-project
+> with Mission Control, covering **generic** cross-project rules. It is read via
+> its raw URL. `docs/PROJECT_OPERATING_MODEL.md` (this document) is a **second,
+> complementary** required read covering **this project's specific** operating
+> history and process. The two do not overlap and both are needed;
+> `SESSION_START.md` now references both.
 
 ---
 
@@ -385,14 +390,17 @@ Plain definitions of the recurring terms, as used on this project:
 
 Stated explicitly, per the project's own "verify or flag, don't guess" rule:
 
-1. **`MASTER_CONTEXT.md` is referenced but absent.** `SESSION_START.md` directs
-   readers to it for session-operations guidance; the file does not exist in the
-   repository. This document is intended to fill that role; the reference should
-   be repointed here (Section 7).
-2. **The ARCHITECTURE.md completion-report field is newly formalized here** and
-   is **not yet reflected** in the `CLAUDE.md` `COMPLETION_REPORT_FORMAT`
-   template. Until `CLAUDE.md` is updated, the two are momentarily out of step
-   (Sections 6, 10).
+1. **`MASTER_CONTEXT.md` lives in a separate repo (resolved).** It is not missing
+   — it is an intentionally separate, cross-project document in
+   `patpeak1-eng/peak-ops-standards`, shared with Mission Control, covering
+   generic rules. It simply lacked a resolvable path from this repo.
+   `SESSION_START.md` now references it by raw URL and lists this document
+   alongside it as the project-specific complement (Section 7). No longer an open
+   gap.
+2. **The ARCHITECTURE.md completion-report field is now in the template
+   (resolved).** It was formalized in this document (Sections 6, 10) and added to
+   the `CLAUDE.md` `COMPLETION_REPORT_FORMAT` template in the same commit, so the
+   two now agree. No longer an open gap.
 3. **Isolated-worktree parallelism is a stated requirement, not yet a guaranteed
    practice** — S18 ran in a shared checkout and relied on discipline (Section 8).
 4. Role assignments ("currently an AI coding agent running such-and-such model")

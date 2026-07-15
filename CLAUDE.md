@@ -133,6 +133,7 @@ Every completed task must return this exact format:
 
 TASK COMPLETE — [Task Name]
 Files modified: [list with line delta]
+ARCHITECTURE.md: [updated — <what changed> / no architectural change this task]
 Zero regressions: [CONFIRMED / issues found]
 Verification method: [how it was checked — Chrome MCP, build, lint, endpoint probe]
 Commit SHA: [sha]

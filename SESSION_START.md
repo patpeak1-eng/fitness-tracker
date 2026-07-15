@@ -2,8 +2,14 @@ FITNESS TRACKER — SESSION START BRIEF
 Paste this into Claude Chat at the start of every session.
 
 Before any work: read docs/ARCHITECTURE.md (how the app is built),
-docs/DESIGN_TOKENS.md (the locked visual system), and MASTER_CONTEXT.md
-(how sessions operate).
+docs/DESIGN_TOKENS.md (the locked visual system), MASTER_CONTEXT.md
+(generic cross-project rules, shared with Mission Control — lives in the
+peak-ops-standards repo:
+https://raw.githubusercontent.com/patpeak1-eng/peak-ops-standards/main/MASTER_CONTEXT.md),
+and docs/PROJECT_OPERATING_MODEL.md (this project's specific operating
+history and process). Both context docs are required reads — they don't
+overlap: MASTER_CONTEXT.md is the generic ruleset, PROJECT_OPERATING_MODEL.md
+is Fitness-Tracker-specific.
 
 ## Tools Available to Claude Chat
 - Chrome extension connected (Claude in Chrome) — use for reading GitHub
