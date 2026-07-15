@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Play, TrendingUp, User, ChevronDown, MoreHorizontal, Timer as TimerIcon, Dumbbell, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Play, TrendingUp, User, ChevronDown, MoreHorizontal, Timer as TimerIcon, Dumbbell, MessageSquare, UtensilsCrossed } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import './BottomNavigation.css';
 
@@ -10,7 +10,7 @@ const BottomNavigation = () => {
     const location = useLocation();
 
     // Highlight "More" when one of its routes is active.
-    const moreActive = ['/timer', '/exercises', '/coach'].includes(location.pathname);
+    const moreActive = ['/timer', '/exercises', '/coach', '/nutrition'].includes(location.pathname);
 
     const toggleNav = () => {
         setIsMinimized(!isMinimized);
@@ -94,6 +94,14 @@ const BottomNavigation = () => {
                         >
                             <MessageSquare size={20} />
                             <span>Coach</span>
+                        </NavLink>
+                        <NavLink
+                            to="/nutrition"
+                            className={({ isActive }) => `nav-more-item ${isActive ? 'active' : ''}`}
+                            onClick={() => setShowMore(false)}
+                        >
+                            <UtensilsCrossed size={20} />
+                            <span>Nutrition</span>
                         </NavLink>
                     </div>
                 )}

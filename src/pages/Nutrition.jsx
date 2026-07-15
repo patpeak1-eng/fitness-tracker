@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
     Camera, ChevronDown, ChevronRight, Pencil, Plus, ScanLine, Target,
     Trash2, UtensilsCrossed, Tag
@@ -41,7 +42,18 @@ const Nutrition = () => {
         deleteFoodLogEntry, updateFoodLogEntry
     } = useWorkout();
 
+    const location = useLocation();
     const [showLog, setShowLog] = useState(false);
+
+    // Dashboard quick-log "+" lands here with openLog state — open the flow
+    // once, then strip the state so back/refresh doesn't re-open it.
+    useEffect(() => {
+        if (location.state?.openLog) {
+            setShowLog(true);
+            window.history.replaceState({}, '');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [editEntry, setEditEntry] = useState(null);
     const [rangeDays, setRangeDays] = useState(7);
     const [expandedDays, setExpandedDays] = useState(() => new Set([dayKey(new Date())]));

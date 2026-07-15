@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
-import { Activity, Settings, HelpCircle, Flame } from 'lucide-react';
+import { Activity, Settings, HelpCircle, Flame, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkout } from '../context/WorkoutContext';
 import { format } from 'date-fns';
@@ -9,7 +9,7 @@ import './Dashboard.css';
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    const { history, currentProfile, activeWorkout, cancelWorkout } = useWorkout();
+    const { history, currentProfile, activeWorkout, cancelWorkout, foodLog } = useWorkout();
 
     // Require confirmation before discarding an in-progress session (same
     // pattern as GuidedWorkoutView's showCancelConfirm modal).
@@ -44,6 +44,10 @@ const Dashboard = () => {
         return streak;
     };
     const currentStreak = calculateStreak();
+
+    const todayCalories = foodLog
+        .filter(e => new Date(e.logged_at).toDateString() === new Date().toDateString())
+        .reduce((sum, e) => sum + (e.calories || 0), 0);
 
     // Simple Goal: 4 workouts/week
     const weeklyGoal = 4;
@@ -131,6 +135,43 @@ const Dashboard = () => {
                         </p>
                     </div>
                     <Flame size={32} strokeWidth={1.75} style={{ color: currentStreak > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }} />
+                </Card>
+
+                {/* 1c. NUTRITION QUICK-LOG — same card shape as the streak card;
+                    tap navigates to the dashboard, the + jumps straight into
+                    the logging flow (Option C placement, S19). */}
+                <Card
+                    onClick={() => navigate('/nutrition')}
+                    style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                >
+                    <div>
+                        <p style={{
+                            margin: 0,
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            color: 'var(--text-muted)'
+                        }}>Nutrition Today</p>
+                        {/* Data value: text/primary, never accent (token rule). */}
+                        <p style={{
+                            margin: 0,
+                            fontSize: '1.8rem',
+                            fontWeight: 700,
+                            color: 'var(--text-primary)',
+                            fontFeatureSettings: '"tnum"'
+                        }}>
+                            {todayCalories} <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>kcal</span>
+                        </p>
+                    </div>
+                    <button
+                        className="primary-btn"
+                        aria-label="Log food"
+                        onClick={(e) => { e.stopPropagation(); navigate('/nutrition', { state: { openLog: true } }); }}
+                        style={{ width: '44px', height: '44px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px' }}
+                    >
+                        <Plus size={22} />
+                    </button>
                 </Card>
 
                 {/* 2. ACTIVE WORKOUT BANNER (If Active) */}
