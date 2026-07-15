@@ -151,6 +151,14 @@ P2 - OAuth PKCE spec (docs/oauth_hardening_spec_s17.md) awaiting
 P3 - Nutrition build: write the real SPEC_FIRST document (see
      docs/nutrition_research_synthesis.md §6) before ANY code — HIGH
      zone (new tables). Re-run 2026 pricing comparison first.
+P3 - Cloud login/register silently orphans local profiles (found S18,
+     coordinator-confirmed): Login.jsx activateProfileAndGo AND the OAuth
+     boot path both call saveProfiles([cloudProfile]) — unconditionally
+     REPLACING the profiles list, wiping any local profiles created via
+     the S17 /profiles re-route (their scoped data blobs survive in
+     localStorage but nothing lists them). Investigate merging with the
+     existing profiles list instead of replacing. Do NOT fix ad hoc —
+     touches login flow + profile identity, needs its own scoped task.
 P3 - Historical warmup sets still seed the PR baseline (S13 c40750a
      note) — product decision pending.
 P3 - Dedupe equipment-compat predicate: WorkoutContext's internal
