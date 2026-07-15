@@ -601,32 +601,17 @@
     gap: 10px;
 }
 
-/* ZONE 1 — Equipment profile selector */
+/* ZONE 1 — Equipment profile selector.
+   Wrapping grid, NOT a scroll strip: every card must be fully visible
+   with no horizontal scroll/swipe on any input device (S21 decision). */
 .profile-scroll-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
-    overflow-x: auto;
-    /* Right padding >= the mask fade width so the last card sits clear of
-       the fade once scrolled to the end. */
-    padding: 4px 36px 8px 2px;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    /* Scroll affordance: the scrollbar is hidden, so on non-touch devices
-       nothing signals more cards off-screen (row verified scrollable but
-       undiscoverable at 1440px, S16). Alpha-only fade — theme-agnostic. */
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent);
-    mask-image: linear-gradient(to right, black calc(100% - 36px), transparent);
-}
-
-.profile-scroll-row::-webkit-scrollbar {
-    height: 0;
-    display: none;
+    padding: 4px 2px 8px;
 }
 
 .profile-card {
-    flex: 0 0 auto;
-    width: 140px;
-    scroll-snap-align: start;
     text-align: left;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
