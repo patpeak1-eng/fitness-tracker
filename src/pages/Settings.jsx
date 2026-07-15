@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, Check, Volume2, VolumeX, LogOut, Users, Trash2 } from 'lucide-react';
+import { Moon, Sun, Check, Volume2, VolumeX, LogOut, Users, Trash2, Share2 } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import { useTimer } from '../context/TimerContext';
 import Modal from '../components/common/Modal';
@@ -132,6 +132,44 @@ const Settings = () => {
         smartProgressionEnabled, progressionMode, progressionType, progressionIncrement,
         coachEnabled, coachPersonality, coachVoiceId, coachVoiceInput, coachAutoplay
     ]);
+
+    // --- Share this app (Web Share API with clipboard + manual fallbacks) ---
+    // 'idle' | 'copied' | 'manual' — 'copied' swaps the row label for ~2s,
+    // 'manual' shows the URL as selectable text when clipboard is denied too.
+    const [shareFeedback, setShareFeedback] = useState('idle');
+    const shareTimerRef = useRef(null);
+    useEffect(() => () => clearTimeout(shareTimerRef.current), []);
+    const shareUrl = window.location.origin;
+
+    const copyShareLink = async () => {
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setShareFeedback('copied');
+            clearTimeout(shareTimerRef.current);
+            shareTimerRef.current = setTimeout(() => setShareFeedback('idle'), 2000);
+        } catch {
+            // Clipboard unavailable/denied — never silently no-op: show the
+            // URL as plain selectable text instead.
+            setShareFeedback('manual');
+        }
+    };
+
+    const handleShare = async () => {
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'Fitness Tracker',
+                    text: 'Check out this workout tracker',
+                    url: shareUrl,
+                });
+            } catch (err) {
+                // AbortError = user closed the share sheet — normal, silent.
+                if (err?.name !== 'AbortError') copyShareLink();
+            }
+            return;
+        }
+        copyShareLink();
+    };
 
     const handleSwitchProfile = () => {
         setShowLogoutModal(false);
@@ -393,6 +431,21 @@ const Settings = () => {
                             <Toggle checked={coachAutoplay} onChange={handleCoachAutoplay} label="Auto-play voice" />
                         </Row>
                     </>
+                )}
+            </Group>
+
+            <Group title="About">
+                <button className="settings-row row-action" onClick={handleShare}>
+                    <div className="setting-info">
+                        <span className="setting-label" aria-live="polite">
+                            {shareFeedback === 'copied' ? 'Link copied' : 'Share this app'}
+                        </span>
+                        <span className="setting-desc">Send the app link to family and friends</span>
+                    </div>
+                    {shareFeedback === 'copied' ? <Check size={18} /> : <Share2 size={18} />}
+                </button>
+                {shareFeedback === 'manual' && (
+                    <div className="settings-help">Copy this link: {shareUrl}</div>
                 )}
             </Group>
 
