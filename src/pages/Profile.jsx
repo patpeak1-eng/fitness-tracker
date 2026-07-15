@@ -101,6 +101,7 @@ const Profile = () => {
                 await ApiService.saveProfile({
                     stats: {
                         age: userStats.age || null,
+                        date_of_birth: userStats.dateOfBirth || null,
                         height: userStats.height || null,
                         current_weight: userStats.currentWeight || null,
                         target_weight: userStats.targetWeight || null,
@@ -179,6 +180,30 @@ const Profile = () => {
             });
         }
         setConfirmImport({ isOpen: false, file: null });
+    };
+
+    // Age from date of birth: year difference, minus one if this year's
+    // birthday hasn't happened yet. DOB wins over the manual age string
+    // whenever it is set (spec: docs/dob_age_spec_s21.md).
+    const computeAge = (dobStr) => {
+        const dob = new Date(dobStr + 'T00:00:00');
+        const now = new Date();
+        let age = now.getFullYear() - dob.getFullYear();
+        // Subtract one if this year's birthday hasn't happened yet
+        if (now.getMonth() < dob.getMonth() ||
+            (now.getMonth() === dob.getMonth() && now.getDate() < dob.getDate())) {
+            age--;
+        }
+        return age;
+    };
+
+    // Desktop browsers only open the calendar from the field's icon by
+    // default; showPicker() opens it from anywhere in the box. Mobile opens
+    // natively on tap without it.
+    const openDobPicker = (e) => {
+        if (typeof e.target.showPicker === 'function') {
+            try { e.target.showPicker(); } catch (err) { /* needs gesture; focus is enough */ }
+        }
     };
 
     const handleChange = (e) => {
@@ -324,13 +349,31 @@ const Profile = () => {
                 <div className="form-card">
                     <div className="form-group">
                         <label>Age</label>
-                        <input
-                            type="number"
-                            name="age"
-                            value={userStats.age}
-                            onChange={handleChange}
-                            placeholder="Years"
-                        />
+                        {/* The visible box shows just a number (computed from
+                            DOB when set, else the legacy manual age). The
+                            transparent native date input overlays it and owns
+                            all interaction: tap → native date picker. */}
+                        <div className="dob-age-field">
+                            <input
+                                type="text"
+                                readOnly
+                                tabIndex={-1}
+                                aria-hidden="true"
+                                value={userStats.dateOfBirth
+                                    ? computeAge(userStats.dateOfBirth)
+                                    : userStats.age}
+                                placeholder="Years"
+                            />
+                            <input
+                                type="date"
+                                name="dateOfBirth"
+                                aria-label="Age — set from date of birth"
+                                value={userStats.dateOfBirth}
+                                max={format(new Date(), 'yyyy-MM-dd')}
+                                onChange={handleChange}
+                                onClick={openDobPicker}
+                            />
+                        </div>
                     </div>
                     <div className="form-group">
                         <label>Height ({unitLabels.height})</label>

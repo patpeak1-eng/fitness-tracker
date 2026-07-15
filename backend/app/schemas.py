@@ -4,7 +4,7 @@ Response models set ``from_attributes=True`` so they can be built directly
 from SQLAlchemy ORM instances. JSONB payloads are typed as ``Any`` because the
 frontend owns their internal shape.
 """
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, List, Literal, Optional
 from uuid import UUID
 
@@ -43,6 +43,7 @@ class AccountDeleteRequest(BaseModel):
 # --------------------------------------------------------------------------- #
 class UserStatsUpdate(BaseModel):
     age: Optional[str] = None
+    date_of_birth: Optional[date] = None
     height: Optional[str] = None
     current_weight: Optional[str] = None
     target_weight: Optional[str] = None

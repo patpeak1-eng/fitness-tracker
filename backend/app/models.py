@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -110,6 +111,7 @@ class UserStats(Base):
         index=True,
     )
     age = Column(String)
+    date_of_birth = Column(Date)  # nullable; NULL = user still on manual age
     height = Column(String)
     current_weight = Column(String)
     target_weight = Column(String)

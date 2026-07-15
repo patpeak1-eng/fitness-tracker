@@ -247,6 +247,27 @@
     font-feature-settings: "tnum";
 }
 
+/* Age box (S21 DOB feature): visible read-only number + transparent native
+   date input overlaying it — tapping anywhere in the box opens the OS date
+   picker; the picker chrome itself is deliberately OS-native. */
+.dob-age-field {
+    position: relative;
+}
+
+.dob-age-field input[type="date"] {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* Keyboard focus lands on the invisible date input — surface it on the
+   visible box so focus isn't lost to the eye. */
+.dob-age-field:focus-within input[type="text"] {
+    border-color: var(--primary);
+}
+
 .form-group textarea {
     padding: 10px 12px;
     resize: vertical;

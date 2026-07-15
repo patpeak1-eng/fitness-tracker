@@ -302,6 +302,7 @@ const StorageService = {
             ),
             userStats: readJSON(KEY.stats, {
                 age: '',
+                dateOfBirth: '',
                 height: '',
                 currentWeight: '',
                 targetWeight: '',

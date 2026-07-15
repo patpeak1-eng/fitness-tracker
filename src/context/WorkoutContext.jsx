@@ -403,6 +403,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [experienceLevel, setExperienceLevel] = useState('intermediate');
     const [userStats, setUserStats] = useState({
         age: '',
+        dateOfBirth: '',
         height: '',
         currentWeight: '',
         targetWeight: '',
@@ -658,6 +659,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         const s = profileData.stats;
                         const backendStats = {
                             age: s.age || '',
+                            dateOfBirth: s.date_of_birth || '',
                             height: s.height || '',
                             currentWeight: s.current_weight || '',
                             targetWeight: s.target_weight || '',
