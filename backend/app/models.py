@@ -88,6 +88,12 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    food_entries = relationship(
+        "FoodLog",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class UserStats(Base):
@@ -234,6 +240,49 @@ class CustomExercise(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="exercises")
+
+
+class FoodLog(Base):
+    __tablename__ = "food_log"
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_id", name="uq_food_log_user_client_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Frontend-generated id — same duplicate-prevention pattern as
+    # workout_history.client_id (offline-first sync replays stay idempotent).
+    client_id = Column(String, nullable=True, index=True)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    logged_at = Column(DateTime(timezone=True), nullable=False)  # when eaten
+    description = Column(String, nullable=False)
+    calories = Column(Integer, nullable=False)
+    protein_g = Column(Float)  # macros nullable — manual quick-log may be
+    carbs_g = Column(Float)    # calories-only
+    fat_g = Column(Float)
+    source = Column(String(20), nullable=False, server_default="manual")
+    # "manual" | "photo" | "barcode" | "label"
+    confidence = Column(String(10))  # "low"|"medium"|"high"; NULL for manual/barcode
+    barcode = Column(String(32))     # EAN/UPC when source="barcode"
+    items = Column(JSONB)            # per-item breakdown from vision analysis
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="food_entries")
+
+
+class OffProductCache(Base):
+    """Shared (no user_id) cache of normalized Open Food Facts products so the
+    15 req/min/IP read budget is never spent twice on the same barcode."""
+
+    __tablename__ = "off_product_cache"
+
+    barcode = Column(String(32), primary_key=True)
+    product = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class CoachMessage(Base):

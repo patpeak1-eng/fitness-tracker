@@ -9,7 +9,7 @@ voice (block 1) are each prompt-cached, while the per-request user context
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import CoachMessage, User, UserStats, WorkoutHistory
+from app.models import CoachMessage, FoodLog, User, UserStats, WorkoutHistory
 from app.rate_limit import COACH_LIMIT, COACH_WINDOW, rate_limit
 
 router = APIRouter(prefix="/api/coach", tags=["coach"])
@@ -67,6 +67,12 @@ WHAT YOU CAN SEE (provided in user context block):
 - User's recent workout history (last 10 workouts)
 - Current active workout if in session
 - User stats and goals from their profile
+- A 7-day nutrition summary (daily calorie/protein averages) when the
+  user has logged food
+
+NUTRITION BOUNDARY: for questions about nutrition trends or history, give
+at most a one-line observation and direct the user to the Nutrition
+dashboard — never recite logged data or act as a trend-retrieval interface.
 
 EXPERIENCE CALIBRATION — the user context includes an EXPERIENCE LEVEL;
 calibrate every response's depth to it:
@@ -123,11 +129,44 @@ class CoachMessageResponse(BaseModel):
     created_at: Optional[datetime] = None
 
 
+def _summarize_nutrition(entries: List[FoodLog]) -> Optional[str]:
+    """Collapse the last 7 days of food_log rows into one summary line.
+
+    Plain averages only — no per-entry data the model could recite (the
+    NUTRITION BOUNDARY in the system prompt keeps trends chart-only, and
+    what isn't in context can't leak into chat). Returns None when the
+    user has never logged food, so the block is omitted entirely.
+    """
+    if not entries:
+        return None
+    by_day: dict = {}
+    for e in entries:
+        day = e.logged_at.astimezone(timezone.utc).date()
+        agg = by_day.setdefault(day, {"calories": 0, "protein_g": 0.0})
+        agg["calories"] += e.calories
+        agg["protein_g"] += e.protein_g or 0.0
+    days = len(by_day)
+    avg_cal = round(sum(d["calories"] for d in by_day.values()) / days)
+    avg_pro = round(sum(d["protein_g"] for d in by_day.values()) / days, 1)
+    today = by_day.get(datetime.now(timezone.utc).date())
+    today_str = (
+        f"calories={today['calories']}, protein_g={round(today['protein_g'], 1)}"
+        if today
+        else "nothing logged yet"
+    )
+    return (
+        f"NUTRITION (last 7 days): entries={len(entries)}, "
+        f"avg_daily_calories={avg_cal}, avg_daily_protein_g={avg_pro}, "
+        f"today: {today_str}"
+    )
+
+
 def _build_user_context(
     user: User,
     stats: Optional[UserStats],
     workouts: List[WorkoutHistory],
     workout_context: Optional[dict],
+    nutrition_summary: Optional[str] = None,
 ) -> str:
     """Assemble the dynamic (block 1) context string from the user's data."""
     parts: List[str] = []
@@ -180,6 +219,11 @@ def _build_user_context(
             "CURRENT WORKOUT CONTEXT (active session):\n"
             + json.dumps(workout_context, default=str)
         )
+
+    # Nutrition summary line (S19) — omitted entirely when the user has no
+    # food_log rows, same drop-empty-fields discipline as the stats dict.
+    if nutrition_summary:
+        parts.append(nutrition_summary)
 
     # The experience line is always present, so "no data" now means
     # exactly one part — keep telling the model when history/stats are empty.
@@ -248,8 +292,18 @@ async def coach_chat(
         )
     ).scalars().first()
 
+    # Last 7 days of food_log for the NUTRITION summary line (same cost class
+    # as the workout-history query; empty result → block omitted).
+    food_result = await db.execute(
+        select(FoodLog).where(
+            FoodLog.user_id == current_user.id,
+            FoodLog.logged_at >= datetime.now(timezone.utc) - timedelta(days=7),
+        )
+    )
+    nutrition_summary = _summarize_nutrition(list(food_result.scalars().all()))
+
     user_context = _build_user_context(
-        current_user, stats, workouts, payload.workout_context
+        current_user, stats, workouts, payload.workout_context, nutrition_summary
     )
 
     # 4. Select the requested coach voice (fall back to "apex"), then build the

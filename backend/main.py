@@ -7,6 +7,7 @@ from app.routers import (
     auth,
     coach,
     exercises,
+    nutrition,
     profile,
     templates,
     voice,
@@ -40,6 +41,7 @@ app.include_router(templates.router)
 app.include_router(exercises.router)
 app.include_router(coach.router)
 app.include_router(voice.router)
+app.include_router(nutrition.router)
 
 
 @app.get("/health")

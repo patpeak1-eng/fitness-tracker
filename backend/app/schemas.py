@@ -5,10 +5,10 @@ from SQLAlchemy ORM instances. JSONB payloads are typed as ``Any`` because the
 frontend owns their internal shape.
 """
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # --------------------------------------------------------------------------- #
@@ -201,6 +201,96 @@ class TemplateResponse(BaseModel):
     name: str
     template_data: Any
     created_at: Optional[datetime] = None
+
+
+# --------------------------------------------------------------------------- #
+# Nutrition (spec: docs/nutrition_spec_s18.md Section 3)
+# --------------------------------------------------------------------------- #
+class FoodLogCreate(BaseModel):
+    client_id: Optional[str] = None
+    logged_at: datetime
+    description: str = Field(..., min_length=1)
+    calories: int = Field(..., ge=0)
+    protein_g: Optional[float] = Field(None, ge=0)
+    carbs_g: Optional[float] = Field(None, ge=0)
+    fat_g: Optional[float] = Field(None, ge=0)
+    # Literal types keep junk out of the String(20)/(10)/(32) columns —
+    # an over-length or unknown value 422s here instead of 500ing at the DB.
+    source: Literal["manual", "photo", "barcode", "label"] = "manual"
+    confidence: Optional[Literal["low", "medium", "high"]] = None  # AI paths only
+    barcode: Optional[str] = Field(None, max_length=32)
+    items: Optional[Any] = None
+
+
+class FoodLogUpdate(BaseModel):
+    # All optional — AI-estimated entries stay user-correctable after save.
+    logged_at: Optional[datetime] = None
+    description: Optional[str] = None
+    calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+
+
+class FoodLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    client_id: Optional[str] = None
+    user_id: UUID
+    logged_at: datetime
+    description: str
+    calories: int
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    source: str
+    confidence: Optional[str] = None
+    barcode: Optional[str] = None
+    items: Optional[Any] = None
+    created_at: Optional[datetime] = None
+
+
+class PhotoAnalyzeRequest(BaseModel):
+    image: str  # base64-encoded image data (no data: URI prefix)
+    media_type: str = "image/jpeg"
+    hint: Optional[str] = None  # optional user hint, e.g. "half portion"
+
+
+class PhotoAnalyzeResponse(BaseModel):
+    # One endpoint for BOTH meal photos and nutrition labels — the model
+    # classifies the image and sets source accordingly. Never persisted here;
+    # the client reviews/edits, then POSTs /log.
+    description: str
+    calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    items: Optional[Any] = None
+    confidence: str  # "low" | "medium" | "high"
+    source: str  # "photo" (plate) | "label" (nutrition label)
+
+
+class BarcodeProductResponse(BaseModel):
+    barcode: str
+    name: Optional[str] = None
+    brand: Optional[str] = None
+    serving_size: Optional[str] = None
+    # Per 100 g/ml, straight from the label data (exact, not estimated).
+    calories_per_100g: Optional[float] = None
+    protein_g_per_100g: Optional[float] = None
+    carbs_g_per_100g: Optional[float] = None
+    fat_g_per_100g: Optional[float] = None
+    cached: bool = False  # served from off_product_cache (no OFF call made)
+
+
+class DailyNutritionSummary(BaseModel):
+    date: str  # ISO date (UTC)
+    calories: int
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    entries: int
 
 
 # --------------------------------------------------------------------------- #

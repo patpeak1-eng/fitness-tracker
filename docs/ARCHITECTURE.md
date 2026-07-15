@@ -433,7 +433,7 @@ StorageService.saveActiveWorkout(uid, workout)  ← localStorage write
 
 ## 7. BACKEND ARCHITECTURE ✅ VERIFIED (read directly from backend source, S12 audit)
 
-**Verified against `backend/main.py`, every router in `backend/app/routers/`, and the live `/openapi.json` (2026-07-03). All nine routers are registered in `main.py`; none use `include_in_schema=False`. The live schema matches source exactly.**
+**Verified against `backend/main.py`, every router in `backend/app/routers/`, and the live `/openapi.json` (2026-07-03; nutrition router added S19). All ten routers are registered in `main.py`; none use `include_in_schema=False`. The live schema matches source exactly.**
 
 **Complete route inventory (from source decorators):**
 
@@ -495,11 +495,41 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
   WS   /stream                   → streaming TTS bridge to ElevenLabs
                                     (WebSocket — never appears in openapi.json;
                                     auths via session_token cookie or ?token=)
+
+/api/nutrition (routers/nutrition.py)  — S19, spec: docs/nutrition_spec_s18.md
+  POST /log                      → FoodLogResponse (201). client_id idempotent
+                                    upsert (same IntegrityError pattern as
+                                    workouts). All sources funnel here — the
+                                    AI/barcode paths analyze first, user
+                                    reviews/edits, THEN posts.
+  GET  /log?start=&end=          → entries in range (default last 30 days)
+  PUT  /log/{id}                 → edit own entry (404 on others'); keeps
+                                    AI-estimated values user-correctable
+  DELETE /log/{id}               → 204, own rows only
+  POST /analyze                  → Claude Vision (claude-sonnet-4-6): ONE
+                                    endpoint for meal photos AND nutrition
+                                    labels (model classifies, returns strict
+                                    JSON estimate + confidence). NEVER
+                                    persists; rate-limited per user
+                                    (NUTRITION_ANALYZE_LIMIT); 503 without
+                                    ANTHROPIC_API_KEY; ~5 MB image cap.
+  GET  /barcode/{code}           → Open Food Facts lookup, cache-first
+                                    (off_product_cache table, 90-day
+                                    freshness). GLOBAL outbound throttle
+                                    (OFF_OUTBOUND_LIMIT — OFF's 15/min limit
+                                    is per-IP, all users share the backend
+                                    IP). Stale cache served on throttle/OFF
+                                    outage; 503+Retry-After only when there
+                                    is no cache at all; 404 unknown barcode.
+  GET  /summary?days=N           → daily calorie/macro totals (coach context
+                                    + future consumers; frontend dashboard
+                                    computes its own totals/EMA from local
+                                    data per spec Section 5)
 ```
 
-**Database:** PostgreSQL on Railway. Migrations via Alembic (5 revisions in `alembic/versions/`), revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9).
+**Database:** PostgreSQL on Railway. Migrations via Alembic (7 revisions in `alembic/versions/`), revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9).
 
-**Known table:** `CoachMessage` — stores AI Coach conversation history, CASCADE delete tied to user.
+**Known tables beyond the 0001 core eight:** `coach_messages` (0003 — AI Coach conversation history, CASCADE delete tied to user); `food_log` (0007/S19 — nutrition entries, user-scoped, CASCADE, per-user-unique `client_id` like workout_history); `off_product_cache` (0007/S19 — shared no-user-id barcode→product cache for Open Food Facts, 90-day freshness). `food_log` keeps the account-deletion "single-transaction, no per-table cleanup" invariant intact (standard cascade shape on `User.food_entries`).
 
 **Auth (✅ VERIFIED from `app/auth.py` `get_current_user`):** dual-transport, one dependency:
 - `Authorization: Bearer <JWT>` header — email/password users (JWT in localStorage). Takes **precedence** when present (`HTTPBearer(auto_error=False)`).
@@ -508,7 +538,7 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
 - This is why openapi.json shows an HTTPBearer security scheme while the app also works cookie-only — **both documents were right; the patterns coexist by design.** Any new authenticated endpoint just takes `Depends(get_current_user)` and gets both transports for free.
 - WebSocket routes can't carry the header from a browser — `/api/voice/stream` mirrors the contract via cookie or `?token=` query param (`voice._authenticate_ws`).
 
-**Rate limiting:** `app/rate_limit.py` caps per-user coach and voice calls (cost guardrail on Anthropic/ElevenLabs spend).
+**Rate limiting:** `app/rate_limit.py` caps per-user coach, voice, and nutrition-analyze calls (cost guardrail on Anthropic/ElevenLabs spend), plus a GLOBAL (not per-user) `off_outbound` throttle on Open Food Facts calls — OFF's 15 req/min limit is per-IP and all users share the backend's IP (S19).
 
 **Pinned dependency:** `bcrypt==4.0.1` — passlib incompatibility with bcrypt 5.0+, never upgrade.
 
@@ -521,7 +551,11 @@ Model:        claude-sonnet-4-6 (COACH_MODEL in routers/coach.py, max_tokens 102
 Personas:     apex (default) / hype / zen — persona prompt is system block 1,
               static app-knowledge prompt is block 0, both prompt-cached;
               per-request user context (experience level + stats + last 10
-              workouts + active session) is block 2, uncached
+              workouts + active session + 7-day NUTRITION summary line when
+              food_log rows exist — plain averages only, never per-entry
+              data; trend questions are deflected to the dashboard by the
+              NUTRITION BOUNDARY block in the system prompt, S19) is
+              block 2, uncached
 Calibration:  users.experience_level (beginner/intermediate/advanced, default
               intermediate, migration 0006) controls response DEPTH — the
               EXPERIENCE CALIBRATION block in COACH_SYSTEM_PROMPT tells the

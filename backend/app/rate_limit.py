@@ -51,6 +51,10 @@ LOGIN_LIMIT = 10
 LOGIN_WINDOW = 60
 REGISTER_LIMIT = 5
 REGISTER_WINDOW = 60
+NUTRITION_ANALYZE_LIMIT = 10   # per-user Claude Vision calls (cost guardrail)
+NUTRITION_ANALYZE_WINDOW = 60
+OFF_OUTBOUND_LIMIT = 10        # GLOBAL outbound Open Food Facts calls —
+OFF_OUTBOUND_WINDOW = 60       # headroom under OFF's 15 req/min/IP read limit
 
 
 def _scoped_key(key: str, current_user) -> str:
