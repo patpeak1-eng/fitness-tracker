@@ -151,6 +151,12 @@ P2 - OAuth PKCE spec (docs/oauth_hardening_spec_s17.md) awaiting
 P3 - Nutrition build: write the real SPEC_FIRST document (see
      docs/nutrition_research_synthesis.md §6) before ANY code — HIGH
      zone (new tables). Re-run 2026 pricing comparison first.
+P3 - Two S16 disposable coach-test accounts (s16-coach-test-*@example.com)
+     remain on the live backend PERMANENTLY: account deletion shipped S18
+     (5c3e52c) but requires the account's password, and nobody retained
+     the S16 test credentials. Coordinator-accepted tech debt — do NOT
+     reach for a direct DB op. They hold only a few coach-calibration
+     rows; harmless.
 P3 - Cloud login/register silently orphans local profiles (found S18,
      coordinator-confirmed): Login.jsx activateProfileAndGo AND the OAuth
      boot path both call saveProfiles([cloudProfile]) — unconditionally
