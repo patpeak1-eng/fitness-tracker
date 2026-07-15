@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction B — Training Block</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62,700;62,900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mockup only — Google Fonts CDN for convenience; production self-hosts. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0D0D0F;
+    color: #F4F4F2;
+    font-family: 'Inter', sans-serif;
+    max-width: 375px;
+    margin: 0 auto;
+    padding: 28px 20px 90px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .block {
+    font-family: 'Archivo', sans-serif;
+    font-stretch: 62%;
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 0.92;
+    letter-spacing: 0.005em;
+    word-spacing: 0.18em;
+  }
+  .foil { font-size: 13px; color: #9C9CA3; font-weight: 400; text-transform: none; font-family: 'Inter', sans-serif; }
+
+  header { margin-bottom: 36px; }
+  header .kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #5F5F66; margin-bottom: 8px; }
+  header h1.block { font-size: 44px; }
+  header h1 .accent-bar { display: inline-block; width: 34px; height: 8px; background: #FF5C2A; margin-left: 6px; }
+
+  /* SIGNATURE DEVICE: stacked flush-left poster lockups — the stat IS the typography */
+  .lockup { margin-bottom: 36px; }
+  .lockup .num { font-size: 84px; display: block; }
+  .lockup .word { font-size: 30px; display: block; color: #5F5F66; }
+  .lockup .foil { display: block; margin-top: 10px; }
+  .lockup.rule { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 28px; }
+
+  .duo { display: flex; gap: 24px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 28px; margin-bottom: 36px; }
+  .duo .lockup { margin: 0; flex: 1; }
+  .duo .num { font-size: 56px; }
+  .duo .word { font-size: 17px; }
+
+  section.recent { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 24px; }
+  section.recent h2.block { font-size: 20px; color: #5F5F66; margin-bottom: 18px; }
+  .entry { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
+  .entry .name { font-family: 'Archivo', sans-serif; font-stretch: 62%; font-weight: 700; text-transform: uppercase; font-size: 19px; word-spacing: 0.18em; }
+  .entry .when { font-size: 11px; color: #5F5F66; margin-top: 3px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .entry .badge { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .entry .badge.done { color: #3DC96E; }
+  .entry .badge.pr { color: #E9B84C; }
+
+  .cta {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    width: 335px; padding: 16px; border: none; border-radius: 0;
+    background: #FF5C2A; color: #0D0D0F;
+    font-family: 'Archivo', sans-serif; font-stretch: 62%; font-weight: 900;
+    font-size: 18px; letter-spacing: 0.04em; word-spacing: 0.18em; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="kicker">Tue · Jul 15 · Patrick</div>
+    <h1 class="block">Week 29<span class="accent-bar"></span></h1>
+  </header>
+
+  <!-- Hero lockup: deliberate scale contrast inside one block -->
+  <div class="lockup">
+    <span class="num block">12,450</span>
+    <span class="word block">Pounds Moved</span>
+    <span class="foil">this week — 3 of 4 sessions banked.</span>
+  </div>
+
+  <div class="duo">
+    <div class="lockup">
+      <span class="num block">5</span>
+      <span class="word block">Day Streak</span>
+    </div>
+    <div class="lockup">
+      <span class="num block">4</span>
+      <span class="word block">PRs · July</span>
+    </div>
+  </div>
+
+  <section class="recent">
+    <h2 class="block">On The Board</h2>
+    <div class="entry">
+      <div>
+        <div class="name">Upper Body Push</div>
+        <div class="when">Mon Jul 14</div>
+      </div>
+      <div class="badge pr">1 PR</div>
+    </div>
+    <div class="entry">
+      <div>
+        <div class="name">Fire Station Circuit</div>
+        <div class="when">Sat Jul 12</div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+    <div class="entry">
+      <div>
+        <div class="name">Leg Day</div>
+        <div class="when">Thu Jul 10</div>
+      </div>
+      <div class="badge pr">2 PR</div>
+    </div>
+  </section>
+
+  <button class="cta">Start Session 4</button>
+</body>
+</html>

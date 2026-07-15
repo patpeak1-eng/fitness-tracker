@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction D — Signal Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Mockup only — Google Fonts CDN for convenience; production self-hosts. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --canvas: #010102;
+    --s1: #0F1011;
+    --s2: #141516;
+    --s3: #18191A;
+    --hair: #232529;
+    --hair-hi: #34343A;
+  }
+  body {
+    background: var(--canvas);
+    color: #F7F8F8;
+    font-family: 'Inter', sans-serif;
+    max-width: 375px;
+    margin: 0 auto;
+    padding: 24px 16px 90px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .label { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: #62666D; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; padding: 0 2px; }
+  /* Negative tracking scales with size; weights stay 400–600 */
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+  header .mono { font-size: 11px; color: #62666D; }
+
+  /* SIGNATURE DEVICE: hairline grid; ember appears ONLY as a signal glow
+     bleeding through the border of the ONE element that wants attention. */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cell {
+    background: var(--s1); border: 1px solid var(--hair); border-radius: 10px;
+    padding: 14px;
+  }
+  .cell.wide { grid-column: span 2; }
+  .cell .val { font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 500; letter-spacing: -1px; font-variant-numeric: tabular-nums; margin-top: 10px; }
+  .cell .val .unit { font-size: 13px; color: #8A8F98; letter-spacing: 0; }
+  .cell .sub { font-size: 11px; color: #62666D; margin-top: 4px; }
+  .cell .sub .up { color: #27A644; }
+
+  /* the live/attention cell — ember signal glow through the hairline */
+  .cell.signal {
+    background: var(--s2);
+    border-color: rgba(255,92,42,0.45);
+    box-shadow: 0 0 22px rgba(255,92,42,0.16), inset 0 1px 0 rgba(255,92,42,0.18);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .cell.signal .status { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: #FF5C2A; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #FF5C2A; box-shadow: 0 0 8px rgba(255,92,42,0.8); }
+  .cell.signal .name { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; margin-top: 7px; }
+  .cell.signal .resume {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #F7F8F8;
+    border: 1px solid var(--hair-hi); border-radius: 7px; padding: 8px 14px; background: var(--s3);
+  }
+
+  /* progress bar strip inside a cell */
+  .bar { height: 3px; background: var(--s3); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 75%; background: #FF5C2A; border-radius: 2px; }
+
+  section h2 { margin: 22px 2px 8px; }
+  .table { border: 1px solid var(--hair); border-radius: 10px; overflow: hidden; background: var(--s1); }
+  .trow {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 13px 14px;
+  }
+  .trow + .trow { border-top: 1px solid var(--hair); }
+  .trow .name { font-size: 13.5px; font-weight: 500; letter-spacing: -0.1px; }
+  .trow .mono { font-size: 10.5px; color: #62666D; margin-top: 3px; }
+  .trow .right { text-align: right; }
+  .trow .vol { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #8A8F98; }
+  .trow .pr { font-size: 9.5px; letter-spacing: 0.1em; color: #E9B84C; margin-top: 3px; text-transform: uppercase; }
+
+  .cta {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    width: 343px; padding: 14px; border: 1px solid var(--hair-hi); border-radius: 10px;
+    background: var(--s2); color: #F7F8F8;
+    font-family: 'Inter', sans-serif; font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px;
+  }
+  .cta span { color: #FF5C2A; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Patrick</h1>
+    <div class="mono">TUE 07-15</div>
+  </header>
+
+  <div class="grid">
+    <!-- The ONE attention element: live session, ember glow through the hairline -->
+    <div class="cell wide signal">
+      <div>
+        <div class="status"><span class="dot"></span>Paused Session</div>
+        <div class="name">Fire Station Circuit — Rd 2</div>
+      </div>
+      <button class="resume">RESUME</button>
+    </div>
+
+    <div class="cell wide">
+      <span class="label">Weekly Sessions</span>
+      <div class="val">3<span class="unit"> / 4</span></div>
+      <div class="bar"><i></i></div>
+    </div>
+
+    <div class="cell">
+      <span class="label">Volume · Wk</span>
+      <div class="val">12.4<span class="unit">k</span></div>
+      <div class="sub"><span class="up">▲ 8%</span> vs last wk</div>
+    </div>
+    <div class="cell">
+      <span class="label">Streak</span>
+      <div class="val">5<span class="unit">d</span></div>
+      <div class="sub">best: 11d</div>
+    </div>
+    <div class="cell">
+      <span class="label">PRs · July</span>
+      <div class="val">4</div>
+      <div class="sub">last: leg press</div>
+    </div>
+    <div class="cell">
+      <span class="label">Avg Session</span>
+      <div class="val">45<span class="unit">m</span></div>
+      <div class="sub">last 30 days</div>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="label">Log</h2>
+    <div class="table">
+      <div class="trow">
+        <div>
+          <div class="name">Upper Body Push</div>
+          <div class="mono">07-14 · 46:12</div>
+        </div>
+        <div class="right">
+          <div class="vol">4,820 lb</div>
+          <div class="pr">1 PR</div>
+        </div>
+      </div>
+      <div class="trow">
+        <div>
+          <div class="name">Fire Station Circuit</div>
+          <div class="mono">07-12 · 38:04</div>
+        </div>
+        <div class="right">
+          <div class="vol">3,110 lb</div>
+        </div>
+      </div>
+      <div class="trow">
+        <div>
+          <div class="name">Leg Day</div>
+          <div class="mono">07-10 · 52:40</div>
+        </div>
+        <div class="right">
+          <div class="vol">4,520 lb</div>
+          <div class="pr">2 PR</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <button class="cta">New session <span>→</span></button>
+</body>
+</html>

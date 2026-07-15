@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction A — Instrument Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* Mockup only — Google Fonts CDN for convenience; production self-hosts. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0B0B0D;
+    color: #F4F4F2;
+    font-family: 'Inter', sans-serif;
+    max-width: 375px;
+    margin: 0 auto;
+    padding: 28px 20px 90px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .label {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #5F5F66;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 34px; }
+  header .day { font-size: 13px; color: #9C9CA3; font-weight: 500; }
+  header .date { font-size: 11px; color: #5F5F66; }
+
+  /* ONE hero per screen: the gauge cluster */
+  .gauge-wrap { position: relative; width: 260px; height: 230px; margin: 0 auto; }
+  .gauge-wrap svg { display: block; }
+  .gauge-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding-top: 14px;
+  }
+  .hero-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 72px; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.04em;
+  }
+  .hero-num .of { font-size: 26px; color: #5F5F66; font-weight: 400; }
+  .gauge-center .label { margin-top: 10px; }
+  .gauge-status { margin-top: 4px; font-size: 11px; color: #3DC96E; letter-spacing: 0.14em; font-weight: 500; }
+
+  /* Engraved mono readout strip — the signature device, part 2 */
+  .readout {
+    display: flex; border-top: 1px solid rgba(255,255,255,0.07);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    margin: 30px -20px 0; padding: 16px 20px;
+  }
+  .readout .cell { flex: 1; text-align: center; }
+  .readout .cell + .cell { border-left: 1px solid rgba(255,255,255,0.07); }
+  .readout .val { font-family: 'JetBrains Mono', monospace; font-size: 21px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .readout .val .unit { font-size: 11px; color: #9C9CA3; }
+  .readout .label { display: block; margin-top: 6px; font-size: 9px; }
+
+  section h2 { margin: 34px 0 12px; }
+  .rows { border-top: 1px solid rgba(255,255,255,0.07); }
+  .row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 15px 2px; border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .row .name { font-size: 14px; font-weight: 600; }
+  .row .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5F5F66; margin-top: 4px; letter-spacing: 0.06em; }
+  .row .stat { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9C9CA3; font-variant-numeric: tabular-nums; }
+  /* Shadow reserved for the selected/active element only (T3) */
+  .row.selected {
+    background: #1B1B1F; margin: 0 -12px; padding: 15px 14px;
+    border-radius: 8px; border-bottom-color: transparent;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  }
+  .row.selected .meta { color: #FF5C2A; }
+
+  .cta {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    width: 335px; padding: 15px; border: none; border-radius: 10px;
+    background: #FF5C2A; color: #0B0B0D;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="day">Tuesday</div>
+      <div class="date mono">2026·07·15</div>
+    </div>
+    <div class="label">Patrick</div>
+  </header>
+
+  <!-- SIGNATURE DEVICE: 270° tick-marked arc gauge around the single hero number -->
+  <div class="gauge-wrap">
+    <svg width="260" height="230" viewBox="0 0 260 230">
+      <g transform="translate(130,125)">
+        <!-- tick marks -->
+        <g id="ticks"></g>
+        <!-- track: 270° from 135° to 405° -->
+        <path d="M -74.25 74.25 A 105 105 0 1 1 74.25 74.25" fill="none"
+              stroke="rgba(255,255,255,0.08)" stroke-width="3" stroke-linecap="round"/>
+        <!-- fill: 75% of 270° -->
+        <path id="arcFill" fill="none" stroke="#FF5C2A" stroke-width="3" stroke-linecap="round"/>
+      </g>
+    </svg>
+    <div class="gauge-center">
+      <div class="hero-num">3<span class="of">/4</span></div>
+      <div class="label">Weekly Sessions</div>
+      <div class="gauge-status mono">ON PACE</div>
+    </div>
+  </div>
+
+  <!-- SIGNATURE DEVICE pt2: engraved instrument readout strip -->
+  <div class="readout">
+    <div class="cell">
+      <span class="val">12,450<span class="unit"> lb</span></span>
+      <span class="label">Volume · Wk</span>
+    </div>
+    <div class="cell">
+      <span class="val">5<span class="unit"> d</span></span>
+      <span class="label">Streak</span>
+    </div>
+    <div class="cell">
+      <span class="val">4</span>
+      <span class="label">PRs · Mo</span>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="label">Recent Sessions</h2>
+    <div class="rows">
+      <div class="row selected">
+        <div>
+          <div class="name">Upper Body Push</div>
+          <div class="meta">MON 07·14 &nbsp;·&nbsp; 46:12 &nbsp;·&nbsp; 1 PR</div>
+        </div>
+        <div class="stat">4,820 lb</div>
+      </div>
+      <div class="row">
+        <div>
+          <div class="name">Fire Station Circuit</div>
+          <div class="meta">SAT 07·12 &nbsp;·&nbsp; 38:04</div>
+        </div>
+        <div class="stat">3,110 lb</div>
+      </div>
+      <div class="row">
+        <div>
+          <div class="name">Leg Day</div>
+          <div class="meta">THU 07·10 &nbsp;·&nbsp; 52:40 &nbsp;·&nbsp; 2 PR</div>
+        </div>
+        <div class="stat">4,520 lb</div>
+      </div>
+    </div>
+  </section>
+
+  <button class="cta">Begin Session</button>
+
+<script>
+  // Ticks every 6.75° across the 270° sweep (41 ticks), majors every 5th
+  const g = document.getElementById('ticks');
+  const NS = 'http://www.w3.org/2000/svg';
+  for (let i = 0; i <= 40; i++) {
+    const a = (135 + i * 6.75) * Math.PI / 180;
+    const major = i % 5 === 0;
+    const r1 = major ? 88 : 92, r2 = 96;
+    const t = document.createElementNS(NS, 'line');
+    t.setAttribute('x1', Math.cos(a) * r1); t.setAttribute('y1', Math.sin(a) * r1);
+    t.setAttribute('x2', Math.cos(a) * r2); t.setAttribute('y2', Math.sin(a) * r2);
+    t.setAttribute('stroke', major ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)');
+    t.setAttribute('stroke-width', major ? 1.5 : 1);
+    g.appendChild(t);
+  }
+  // 75% fill arc
+  const pct = 0.75, start = 135, sweep = 270 * pct;
+  const rad = d => d * Math.PI / 180, R = 105;
+  const x1 = Math.cos(rad(start)) * R, y1 = Math.sin(rad(start)) * R;
+  const x2 = Math.cos(rad(start + sweep)) * R, y2 = Math.sin(rad(start + sweep)) * R;
+  document.getElementById('arcFill').setAttribute('d',
+    `M ${x1} ${y1} A ${R} ${R} 0 ${sweep > 180 ? 1 : 0} 1 ${x2} ${y2}`);
+</script>
+</body>
+</html>
