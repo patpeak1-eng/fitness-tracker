@@ -1,0 +1,129 @@
+/* Nutrition page — Design Tokens v2. Mobile-first, no >600px layouts. */
+
+.nutrition-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+}
+
+.nutrition-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nutrition-header h1 {
+    font-family: 'Archivo SemiExpanded', 'Inter', sans-serif;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Today band — filled card, hero numeral */
+.nutrition-today-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.nutrition-today-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.nutrition-today-value {
+    font-family: 'Archivo SemiExpanded', 'Inter', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+}
+
+.nutrition-today-unit {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Entry list — grouped rows in one container */
+.nutrition-entry-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.nutrition-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+}
+
+.nutrition-entry-row + .nutrition-entry-row {
+    border-top: 1px solid var(--border);
+}
+
+.nutrition-entry-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.nutrition-entry-desc {
+    font-size: 1rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nutrition-entry-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.nutrition-entry-cal {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+}
+
+.nutrition-entry-delete {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.nutrition-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    padding: 32px 16px;
+    text-align: center;
+}
+
+.nutrition-empty p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 260px;
+}

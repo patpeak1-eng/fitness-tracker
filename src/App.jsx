@@ -23,6 +23,7 @@ const Assessment = lazy(() => import('./pages/Assessment'));
 const HelpView = lazy(() => import('./pages/HelpView'));
 const ProfileSelector = lazy(() => import('./pages/ProfileSelector'));
 const CoachView = lazy(() => import('./pages/CoachView'));
+const Nutrition = lazy(() => import('./pages/Nutrition'));
 
 // Inner component to check profile status
 const AppRoutes = ({ timerApiRef }) => {
@@ -56,6 +57,7 @@ const AppRoutes = ({ timerApiRef }) => {
                     <Route path="exercises" element={<Exercises />} />
                     <Route path="analytics" element={<Analytics />} />
                     <Route path="coach" element={<CoachView />} />
+                    <Route path="nutrition" element={<Nutrition />} />
                     <Route path="summary" element={<WorkoutSummary />} />
                     <Route path="profile" element={<Profile />} />
                     <Route path="settings" element={<Settings />} />
