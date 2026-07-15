@@ -127,3 +127,210 @@
     margin: 0;
     max-width: 260px;
 }
+
+/* Today band extras */
+.nutrition-today-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.targets-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.nutrition-today-target {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.macro-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.macro-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.macro-value {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+}
+
+.macro-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+/* Trend chart card */
+.nutrition-chart-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.nutrition-chart-card h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.chart-sub {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.nutrition-chart-wrapper {
+    height: 200px;
+}
+
+.chart-empty {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+    padding: 12px 0;
+}
+
+/* Entry row extras */
+.entry-estimated-chip {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: 999px;
+    padding: 0 6px;
+    vertical-align: middle;
+}
+
+.entry-source-icon {
+    margin-left: 5px;
+    vertical-align: -1px;
+}
+
+.entry-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 6px;
+    cursor: pointer;
+    display: inline-flex;
+}
+
+.entry-icon-btn.danger:hover,
+.entry-icon-btn.danger:active {
+    color: var(--danger);
+}
+
+/* History */
+.nutrition-history-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nutrition-history h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.range-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px;
+}
+
+.range-tab {
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    cursor: pointer;
+}
+
+.range-tab.active {
+    background: var(--primary-dim);
+    color: var(--primary);
+}
+
+.history-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.history-group {
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.history-day-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 12px 14px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.history-day-date {
+    flex: 1;
+    text-align: left;
+}
+
+.history-day-total {
+    font-weight: 600;
+    font-feature-settings: "tnum";
+}
+
+.nutrition-entry-list.nested {
+    border-radius: 0;
+    border-top: 1px solid var(--border);
+}

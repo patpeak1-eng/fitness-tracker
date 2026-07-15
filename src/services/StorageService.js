@@ -35,7 +35,8 @@ const KEY = {
     equipmentProfile: 'fitness_equipment_profile',
     customEquipment: 'fitness_custom_equipment',
     experienceLevel: 'fitness_experience_level',
-    foodLog: 'fitness_food_log'
+    foodLog: 'fitness_food_log',
+    nutritionTargets: 'fitness_nutrition_targets'
 };
 
 const PROFILE_SCOPED_BASE_KEYS = [
@@ -60,7 +61,8 @@ const PROFILE_SCOPED_BASE_KEYS = [
     KEY.equipmentProfile,
     KEY.customEquipment,
     KEY.experienceLevel,
-    KEY.foodLog
+    KEY.foodLog,
+    KEY.nutritionTargets
 ];
 
 const safeParse = (raw, fallback) => {
@@ -344,6 +346,10 @@ const StorageService = {
     saveUserStats(uid, stats) { writeJSON(KEY.stats, stats, { uid }); },
     saveWeightHistory(uid, weightHistory) { writeJSON(KEY.weightHistory, weightHistory, { uid }); },
     saveFoodLog(uid, foodLog) { writeJSON(KEY.foodLog, foodLog, { uid }); },
+    // Optional manual daily targets (spec: no TDEE calculator in v1) —
+    // page-local read/write, deliberately not WorkoutContext state.
+    loadNutritionTargets(uid) { return readJSON(KEY.nutritionTargets, null, { uid }); },
+    saveNutritionTargets(uid, targets) { writeJSON(KEY.nutritionTargets, targets, { uid }); },
     saveExercisePrefs(uid, prefs) { writeJSON(KEY.exercisePrefs, prefs, { uid }); },
     saveExperienceLevel(uid, level) { writeRaw(KEY.experienceLevel, level, { uid }); },
     saveProgressionSettings(uid, s) {
