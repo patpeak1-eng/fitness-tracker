@@ -22,6 +22,12 @@ const BarcodeEntry = ({ onSave, onCancel }) => {
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const scanLoopRef = useRef(null);
+    // Async-cancellation flag: getUserMedia can resolve AFTER this component
+    // is gone (user closes the modal while the permission prompt is open).
+    // Without this check the stream's tracks would never be stopped and the
+    // camera would stay on. (Not a persist-effect mount guard — different
+    // hazard class; StrictMode remounts re-set it before any user action.)
+    const mountedRef = useRef(true);
 
     const stopScan = () => {
         if (scanLoopRef.current) { clearInterval(scanLoopRef.current); scanLoopRef.current = null; }
@@ -32,7 +38,40 @@ const BarcodeEntry = ({ onSave, onCancel }) => {
         setScanning(false);
     };
 
-    useEffect(() => stopScan, []); // release the camera on unmount
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; stopScan(); }; // release the camera on unmount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Attach the stream and start the detect loop only AFTER React has
+    // committed the scanning=true render (the <video> exists). The previous
+    // requestAnimationFrame attach raced the commit: on a slow device the
+    // callback could run first, silently leaving a live camera with a dead
+    // viewport. An effect keyed on `scanning` is deterministic.
+    useEffect(() => {
+        if (!scanning || !streamRef.current || !videoRef.current) return undefined;
+        const video = videoRef.current;
+        video.srcObject = streamRef.current;
+        video.play().catch(() => {});
+        const detector = new window.BarcodeDetector({ formats: BARCODE_FORMATS });
+        scanLoopRef.current = setInterval(async () => {
+            if (!videoRef.current || videoRef.current.readyState < 2) return;
+            try {
+                const codes = await detector.detect(videoRef.current);
+                if (codes.length > 0) {
+                    const value = codes[0].rawValue;
+                    stopScan();
+                    setManualCode(value);
+                    lookup(value);
+                }
+            } catch { /* per-frame detect errors are non-fatal */ }
+        }, 300);
+        return () => {
+            if (scanLoopRef.current) { clearInterval(scanLoopRef.current); scanLoopRef.current = null; }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scanning]);
 
     const lookup = async (code) => {
         const trimmed = String(code || '').trim();
@@ -50,35 +89,25 @@ const BarcodeEntry = ({ onSave, onCancel }) => {
     };
 
     const startScan = async () => {
+        if (streamRef.current || scanning) return; // guard rapid double-taps
         setScanError(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'environment' }
             });
+            if (!mountedRef.current) {
+                // Component closed while the permission prompt was open —
+                // stop the tracks NOW or the camera stays on with no owner.
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
             streamRef.current = stream;
-            setScanning(true);
-            // Wait a tick for the video element to mount, then attach.
-            requestAnimationFrame(() => {
-                if (!videoRef.current) return;
-                videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(() => {});
-                const detector = new window.BarcodeDetector({ formats: BARCODE_FORMATS });
-                scanLoopRef.current = setInterval(async () => {
-                    if (!videoRef.current || videoRef.current.readyState < 2) return;
-                    try {
-                        const codes = await detector.detect(videoRef.current);
-                        if (codes.length > 0) {
-                            const value = codes[0].rawValue;
-                            stopScan();
-                            setManualCode(value);
-                            lookup(value);
-                        }
-                    } catch { /* per-frame detect errors are non-fatal */ }
-                }, 300);
-            });
+            setScanning(true); // the scanning effect attaches after commit
         } catch (err) {
-            setScanError('Camera unavailable — enter the barcode below instead.');
-            setScanning(false);
+            if (mountedRef.current) {
+                setScanError('Camera unavailable — enter the barcode below instead.');
+                setScanning(false);
+            }
         }
     };
 
