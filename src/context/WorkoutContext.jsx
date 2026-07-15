@@ -496,6 +496,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         StorageService.saveProfiles([cloudProfile]);
                         StorageService.saveCurrentProfileId(cloudProfile.id);
                         StorageService.clearLoggedOut();
+                    } else if (['name', 'color', 'avatar', 'email']
+                        .some(f => currentProfile[f] !== cloudProfile[f])) {
+                        // Same user: server wins for its owned fields, so a
+                        // server-side change (e.g. the S21 #bfff00→#ff5c2a
+                        // color backfill) reaches devices that cached their
+                        // profile before it. Skipped entirely when nothing
+                        // differs — no needless re-render on every boot.
+                        const refreshed = { ...currentProfile, ...cloudProfile };
+                        setCurrentProfile(refreshed);
+                        StorageService.saveProfiles([refreshed]);
                     }
                     // Session confirmed valid — clear any stale expiry banner
                     // and replay pushes that failed while auth was down.
