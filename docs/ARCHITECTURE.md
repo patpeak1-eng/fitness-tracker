@@ -443,8 +443,13 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
 /api/auth      (routers/auth.py)
   POST /register                 → Token (201)
   POST /login                    → Token
-  GET  /google                   → OAuth redirect
-  GET  /google/callback          → sets HttpOnly session_token cookie
+  GET  /google                   → OAuth redirect — CSRF state cookie (S8) +
+                                    PKCE S256 challenge/verifier cookie (S18)
+  GET  /google/callback          → validates state + PKCE verifier (missing
+                                    verifier fails closed → /login?error=
+                                    auth_failed), sends code_verifier in the
+                                    token exchange, sets HttpOnly
+                                    session_token cookie
   GET  /me                       → session check — dual-transport (cookie or
                                     Bearer) since S14 (810c940); was cookie-only
                                     before. Frontend getMe deliberately stays
@@ -569,7 +574,7 @@ Themes:     light theme via data-theme attribute on root (S15)
 | Component tree documentation | ✅ Resolved S17 | Section 4.6 is a full verified `src/` inventory as of 2026-07-14. |
 | Backend architecture | Verified S12 | Section 7 read directly from backend source + live openapi.json, 2026-07-03; /me dual-transport note added S17. |
 | npm audit — workbox transitive deps | ✅ Resolved (verified S17 Task 9) | `npm audit` reports 0 vulnerabilities (686 deps); workbox-build 7.4.1 via vite-plugin-pwa 1.3.0. The early-session findings were resolved upstream by interim dependency upgrades — no change was needed. |
-| OAuth state/nonce/PKCE hardening | Open — spec being written S17 Task 11 | Session 8 notes claim a `state` param was added; actual current status of state/nonce/PKCE to be audited in the spec, implementation is a future HIGH-zone session. |
+| OAuth state/nonce/PKCE hardening | ✅ Resolved (S18) | state ✅ implemented+validated since S8 (audit confirmed S17); PKCE ✅ S256 added S18 (`code_challenge` on the auth URL, verifier in an `oauth_verifier` HttpOnly cookie with attributes identical to `oauth_state`, `code_verifier` in the token exchange, missing verifier fails closed like a state mismatch); nonce documented-N/A — the flow never consumes the id_token, so there is nothing for a nonce to bind (becomes REQUIRED if id_token validation is ever added; see docs/oauth_hardening_spec_s17.md §2). |
 | TimerContext mount-refs | ✅ Resolved S15 | Replaced by `timerHydratedFor` hydration gate. |
 
 ---

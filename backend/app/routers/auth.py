@@ -1,4 +1,6 @@
 """Authentication routes: register, login, Google OAuth, session (/me), logout."""
+import base64
+import hashlib
 import os
 import secrets
 
@@ -140,6 +142,17 @@ async def google_login() -> RedirectResponse:
 
     state = secrets.token_hex(32)
 
+    # PKCE (S256): bind the authorization code to this login attempt so an
+    # intercepted code is useless without the verifier (RFC 7636 / RFC 9700
+    # recommends PKCE even for confidential clients like this one).
+    # token_urlsafe(64) yields ~86 chars — inside the RFC's 43-128 range.
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest())
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+
     google_auth_url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
         f"?client_id={client_id}"
@@ -148,6 +161,8 @@ async def google_login() -> RedirectResponse:
         "&scope=openid%20email%20profile"
         "&access_type=offline"
         f"&state={state}"
+        f"&code_challenge={code_challenge}"
+        "&code_challenge_method=S256"
     )
 
     response = RedirectResponse(url=google_auth_url)
@@ -157,6 +172,16 @@ async def google_login() -> RedirectResponse:
         httponly=True,
         max_age=600,        # 10 minutes — more than enough for a login flow
         samesite="lax",     # same-origin redirect chain, lax is correct here
+        secure=True,
+    )
+    # Verifier rides its own cookie with attributes IDENTICAL to oauth_state —
+    # that exact pair is proven to survive the Google redirect chain in prod.
+    response.set_cookie(
+        key="oauth_verifier",
+        value=code_verifier,
+        httponly=True,
+        max_age=600,
+        samesite="lax",
         secure=True,
     )
     return response
@@ -182,6 +207,13 @@ async def google_callback(
     if not state or not cookie_state or state != cookie_state:
         return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
 
+    # PKCE — the verifier cookie must have survived the redirect chain; a
+    # missing verifier is treated exactly like a state mismatch. (A *wrong*
+    # verifier fails closed at Google's token endpoint below.)
+    code_verifier = request.cookies.get("oauth_verifier")
+    if not code_verifier:
+        return RedirectResponse(url=f"{frontend_url}/login?error=auth_failed")
+
     # Google redirects here with ?error=... and no code when the user cancels
     # or denies consent; handle it gracefully instead of returning a 422.
     if error or not code:
@@ -200,6 +232,7 @@ async def google_callback(
                 "client_secret": client_secret,
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
+                "code_verifier": code_verifier,
             },
         )
     token_data = token_response.json()
@@ -267,6 +300,7 @@ async def google_callback(
         secure=True,
     )
     response.delete_cookie(key="oauth_state", samesite="lax", secure=True)
+    response.delete_cookie(key="oauth_verifier", samesite="lax", secure=True)
     return response
 
 
