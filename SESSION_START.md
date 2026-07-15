@@ -85,84 +85,91 @@ duplicate-nav-cards removal, equipment-row scroll affordance,
 experience-level coach calibration end to end (migration 0006, HIGH zone,
 deploy + live A/B verified). Full commit list: git log f8a09fe..5af7bbf.
 
-## Session 17 Final State
-S17 was the backlog-clearing session (12-task mega-prompt). Commits:
-1.  bf1454c - docs(architecture): FULL CATCH-UP S12-S16. ARCHITECTURE.md
-    is now GENUINELY CURRENT and authoritative again: routing (4.1) and
-    component tree (4.6) verified against source, PROVISIONAL flags
-    cleared, settings-sync/SyncQueue (4.7) + equipment profiles (4.8) +
-    hydration-gate pattern documented, set-type "not built" error
-    corrected (shipped S13), Tokens v2 replaces stale S11 palette in §9,
-    tech-debt table re-audited row by row. Future sessions can trust it.
-2.  ab4c18c - docs: nutrition research synthesis now lives in the repo
-    (docs/nutrition_research_synthesis.md — S9/S12 findings, locked
-    product decisions). It is NOT build-ready: a real SPEC_FIRST document
-    (data model/migrations/screens/API) is still required before any
-    nutrition code is written.
-3.  53982c1 - fix(exercise-selector): dead "Functional" category chip
-    removed (was never a category; legacy muscle value only).
-4.  80167b1 - fix(style): .filter-chip consolidated into shared
-    src/styles/filter-chips.css (the two definitions were DIFFERENT
-    designs colliding at equal specificity on /track; Tokens-v2 version
-    won). NO LONGER an open item.
-5.  1a0f06a (+992c42c docs) - feat(exercises): filter parity SHIPPED.
-    src/utils/exerciseFilters.js = shared predicates + canonical
-    vocabulary ("Weights", drift fixed); Exercises.jsx gained
-    equipment-profile + muscle filters (local-only state, page stays
-    read-only); ExerciseSelector refactored onto the util, Build-My-Own
-    verified end to end. NO LONGER an open item. Note:
-    matchesEquipmentProfile MIRRORS WorkoutContext's isExerciseCompatible
-    (not imported there — HIGH-zone file left untouched); dedupe
-    opportunity for a future WorkoutContext session.
-6.  ab57264 - feat(profiles): ProfileSelector RE-ROUTED (product decision
-    executed) at /profiles, entry: Settings > Account > "Manage local
-    profiles". Create/switch/delete verified live incl. storage isolation
-    and scoped-key cleanup. NO LONGER an open item.
-7.  1445924 - fix(theme): full light-mode audit, all screens
-    screenshotted at 375px and COMMITTED (docs/design-review/
-    s17-*-light.png, 14 files). Modal dark-surface ROOT-CAUSED (hardcoded
-    rgba(20,20,20,.95) + black footer -> theme tokens, fixed app-wide);
-    also fixed: rgba(0,0,0,0.3) wrong-theme input/surface backgrounds in
-    ExerciseResult/CoachView/Assessment/History/Timer CSS, invisible
-    light-theme chip borders, and ProfileSelector's fully hardcoded dark
-    page (surfaced by the re-route).
-8.  15af21e - Task 8 finding: profile-switch active-workout race is
-    ALREADY RESOLVED by the S13 hydration-gate pattern (gate compares
-    hydratedFor id vs currentProfile.id; refreshProfileData flips it
-    same-batch). No code change; ARCHITECTURE.md row closed. The old
-    proposed useRef fix would have been wrong (StrictMode hole).
-9.  15b6088 - Task 9 finding: npm audit is CLEAN (0 vulnerabilities,
-    workbox-build 7.4.1 via vite-plugin-pwa 1.3.0) — the debt item was
-    stale, resolved upstream by interim upgrades. No dependency changes.
-10. e62fccf - docs(spec): ACCOUNT DELETION spec (SPEC ONLY, HIGH zone) —
-    AWAITING coordinator clearance for a future implementation session.
-    Key finding: all 8 user-FK tables already have DB-level ON DELETE
-    CASCADE (migrations 0001/0003) — no migration needed; deletion is a
-    single-transaction user delete. Design: DELETE /api/auth/account,
-    password re-entry (local) / typed DELETE (OAuth), Settings danger
-    zone. Also the path to finally remove the two S16 test accounts.
-11. 372e028 - docs(spec): OAUTH HARDENING spec (SPEC ONLY, HIGH zone) —
-    AWAITING coordinator clearance. Audit finding: state IS implemented
-    and validated (S8 claim confirmed; tech-debt entry was stale); nonce
-    is currently N/A (id_token never consumed); PKCE is the one real gap
-    (~25-line stdlib-only diff, no redirect-URI/console changes).
-12. (this commit) docs: SESSION_START.md to Session 17 state.
+## Session 17 Final State (reference)
+S17 closed at bdb020c (12-task backlog-clearing session). Shipped:
+ARCHITECTURE.md full S12-S16 catch-up (now authoritative), nutrition
+research synthesis committed, exercise filter parity + shared
+exerciseFilters util, ProfileSelector re-routed at /profiles, full
+light-mode audit + Modal dark-surface root-cause fix, account-deletion
++ OAuth-hardening specs (both spec-only). Full commit list:
+git log 5af7bbf..bdb020c.
 
-## Session 18+ Open Items (priority order)
-P2 - Account-deletion spec (docs/account_deletion_spec_s17.md) awaiting
-     "Cleared, proceed with implementation" — own session, HIGH zone.
-P2 - OAuth PKCE spec (docs/oauth_hardening_spec_s17.md) awaiting
-     clearance — own session, HIGH zone, live-verify with throwaway
-     Google account.
-P3 - Nutrition build: write the real SPEC_FIRST document (see
-     docs/nutrition_research_synthesis.md §6) before ANY code — HIGH
-     zone (new tables). Re-run 2026 pricing comparison first.
-P3 - Two S16 disposable coach-test accounts (s16-coach-test-*@example.com)
-     remain on the live backend PERMANENTLY: account deletion shipped S18
-     (5c3e52c) but requires the account's password, and nobody retained
-     the S16 test credentials. Coordinator-accepted tech debt — do NOT
-     reach for a direct DB op. They hold only a few coach-calibration
-     rows; harmless.
+## Session 18 Final State (reference)
+S18 closed at 5acdab7. Shipped: account deletion end-to-end (5c3e52c —
+DELETE /api/auth/account, Settings danger zone, verified live with
+disposable accounts), OAuth PKCE hardening (5acdab7, live-verified),
+health & nutrition SPEC_FIRST document (8c54b9d,
+docs/nutrition_spec_s18.md), PROJECT_OPERATING_MODEL.md (a05b032) +
+MASTER_CONTEXT reference fix and completion-report template sync
+(c9d8b78). Note: S18 recorded its open items below but never added this
+Final State section — added retroactively in S19. Full commit list:
+git log bdb020c..5acdab7.
+
+## Session 19 Final State
+S19 = nutrition implementation sessions 1 and 2 of 3 (per
+docs/nutrition_spec_s18.md; UI placement Option C decided).
+Session 1 (backend):
+1.  0ab35cd - feat(nutrition): migration 0007 (food_log +
+    off_product_cache), FoodLog/OffProductCache models, nutrition router
+    (7 routes: log CRUD, /analyze Claude Vision — fully implemented, not
+    stubbed; /barcode cache-first OFF lookup; /summary), rate-limit
+    constants, coach NUTRITION context block + trend-deflection boundary.
+    All 6 acceptance criteria verified live; throwaway accounts deleted
+    via the S18 deletion feature.
+Session 2 (frontend core), all live-verified on a disposable account
+(deleted through the Settings danger zone at session end):
+2.  fb6b274 - feat(nutrition): foodLog state in WorkoutContext
+    (hydration-gated on settingsHydratedFor, client_id offline-first,
+    client_id pull-merge with backendId ADOPTION, 3 SyncQueue executor
+    types incl. resolve-by-client_id for offline-created rows), 7
+    ApiService methods, StorageService foodLog key. ARCHITECTURE.md §4.7
+    updated same commit. HIGH zone, coordinator-cleared. StrictMode
+    reload, offline-add→reconnect-push, and re-login dedup all proven.
+3.  ecc58b0 - feat(nutrition): EMA utility (src/utils/ema.js, alpha 0.25,
+    gap-tolerant carry-forward) + 6 vitest tests incl. hand-computed
+    fixture week.
+4.  43a9204 - feat(nutrition): manual + barcode entry paths
+    (src/components/nutrition/: FoodLogFlow single-save-funnel, shared
+    EntryForm, BarcodeEntry with feature-detected BarcodeDetector live
+    scan + ALWAYS-present manual code fallback), /nutrition route +
+    page shell. Barcode verified live (real OFF product, exact values,
+    source=barcode).
+5.  66a03ce - feat(nutrition): photo/label AI path (PhotoEntry: downscale
+    →/analyze→MANDATORY editable review with Estimated badge +
+    confidence; failure falls back to manual form). ONE flow for meals
+    AND labels (backend classifies). Verified live: label OCR exact
+    (source=label, high conf), meal estimate (source=photo, low conf),
+    analyze-without-save persists nothing, user edit wins over AI value.
+6.  51d5785 - feat(nutrition): dashboard + history (today totals/macros,
+    optional manual targets via StorageService nutritionTargets key,
+    dual-series 7-day EMA chart calories+weight with muted raw points,
+    day-grouped history 7/30/90d, confirm-guarded delete + edit modal).
+    Offline render verified (dead-API boot).
+7.  80dbc37 - feat(nutrition): nav placement Option C — More overflow
+    item + Dashboard quick-log card (today kcal + "+" deep-links into
+    the open log modal via location.state).
+8.  b328324 - feat(login): local-only data-loss disclaimer under
+    "Continue without account" (decided prior session — now SHIPPED, do
+    not re-queue).
+9.  (this commit) docs: SESSION_START.md to Session 19 state.
+
+## Session 20+ Open Items (priority order)
+P2 - NUTRITION SESSION 3 of 3 (final): photo/label AI review polish,
+     barcode scanner hardening (live BarcodeDetector camera loop is
+     UNTESTED on a real mobile device — this session's browser lacked
+     the API, so only the manual-code fallback is field-proven), edit
+     flow polish, and a real-phone verification pass (camera capture,
+     real meal photo, real label). Also: mobile-viewport + light-theme
+     screenshot pass for all new nutrition screens (deferred this
+     session; VISUAL_REVIEW_RULE debt).
+P3 - Coach context format nit: NUTRITION line's entries=N reads as
+     "days" to the model (S19 backend test saw "two logged days" for 2
+     entries/1 day) — consider entries=/days= split in coach.py next
+     time it's open.
+P3 - Cloud pull food_log window is 90 days: entries older than 90d
+     logged on ANOTHER device won't pull to this one (local entries
+     unaffected). Fine for v1; revisit if multi-device long-history
+     matters.
 P3 - Cloud login/register silently orphans local profiles (found S18,
      coordinator-confirmed): Login.jsx activateProfileAndGo AND the OAuth
      boot path both call saveProfiles([cloudProfile]) — unconditionally
@@ -171,13 +178,15 @@ P3 - Cloud login/register silently orphans local profiles (found S18,
      localStorage but nothing lists them). Investigate merging with the
      existing profiles list instead of replacing. Do NOT fix ad hoc —
      touches login flow + profile identity, needs its own scoped task.
+P3 - Two S16 disposable coach-test accounts remain on the live backend
+     permanently (credentials lost; coordinator-accepted tech debt).
 P3 - Historical warmup sets still seed the PR baseline (S13 c40750a
      note) — product decision pending.
 P3 - Dedupe equipment-compat predicate: WorkoutContext's internal
      isExerciseCompatible vs exerciseFilters.matchesEquipmentProfile
      (identical logic) — fold into the next WorkoutContext HIGH-zone
      session, not worth its own.
-P3 - Browser-pane screenshot capture broken 4 sessions running — the
+P3 - Browser-pane screenshot capture broken 4+ sessions running — the
      Playwright MCP path is the working standard (saves PNGs directly
      to docs/design-review/; commit them).
 
