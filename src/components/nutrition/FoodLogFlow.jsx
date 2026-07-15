@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { PenLine, ScanLine } from 'lucide-react';
+import { Camera, PenLine, ScanLine } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import EntryForm from './EntryForm';
 import BarcodeEntry from './BarcodeEntry';
+import PhotoEntry from './PhotoEntry';
 import './nutrition.css';
 
 // Entry-path container. Every path funnels into the same addFoodLogEntry
-// call — the save logic is never forked per entry type.
-// Session 3 note: the photo/label AI path (PhotoEntry) mounts here as a
-// third tab; the container and save funnel don't change for it.
+// call — the save logic is never forked per entry type. The Photo tab
+// covers BOTH meal photos and nutrition labels (backend classifies).
 const PATHS = [
     { key: 'manual', label: 'Manual', Icon: PenLine },
+    { key: 'photo', label: 'Photo', Icon: Camera },
     { key: 'barcode', label: 'Barcode', Icon: ScanLine }
 ];
 
@@ -41,6 +42,9 @@ const FoodLogFlow = ({ onDone, onCancel }) => {
 
             {path === 'manual' && (
                 <EntryForm initial={{ source: 'manual' }} onSave={save} onCancel={onCancel} />
+            )}
+            {path === 'photo' && (
+                <PhotoEntry onSave={save} onCancel={onCancel} />
             )}
             {path === 'barcode' && (
                 <BarcodeEntry onSave={save} onCancel={onCancel} />
