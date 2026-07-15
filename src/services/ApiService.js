@@ -203,6 +203,114 @@ export const saveCustomExercise = async (exercise) => {
   return r.json();
 };
 
+// Nutrition — food log CRUD + analysis/lookup (spec: docs/nutrition_spec_s18.md).
+// Local food entries deliberately use the backend's snake_case field names
+// (logged_at, protein_g, ...) so no per-field mapping layer exists to drift.
+export const getFoodLog = async (start = null, end = null) => {
+  const params = new URLSearchParams();
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  const qs = params.toString();
+  const path = `/api/nutrition/log${qs ? `?${qs}` : ''}`;
+  const r = await apiFetch(path);
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, path, text);
+  }
+  return r.json();
+};
+
+export const createFoodLog = async (entry) => {
+  const r = await apiFetch('/api/nutrition/log', {
+    method: 'POST',
+    body: JSON.stringify({
+      client_id: entry.client_id || null,
+      logged_at: entry.logged_at,
+      description: entry.description,
+      calories: entry.calories,
+      protein_g: entry.protein_g ?? null,
+      carbs_g: entry.carbs_g ?? null,
+      fat_g: entry.fat_g ?? null,
+      source: entry.source || 'manual',
+      confidence: entry.confidence ?? null,
+      barcode: entry.barcode ?? null,
+      items: entry.items ?? null
+    })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, '/api/nutrition/log', text);
+  }
+  return r.json();
+};
+
+export const updateFoodLog = async (id, updates) => {
+  // Only the user-correctable fields are PUTtable (backend FoodLogUpdate);
+  // undefined keys drop out of JSON.stringify, so partial updates stay partial.
+  const r = await apiFetch(`/api/nutrition/log/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      logged_at: updates.logged_at,
+      description: updates.description,
+      calories: updates.calories,
+      protein_g: updates.protein_g,
+      carbs_g: updates.carbs_g,
+      fat_g: updates.fat_g
+    })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, `/api/nutrition/log/${id}`, text);
+  }
+  return r.json();
+};
+
+export const deleteFoodLog = async (id) => {
+  const r = await apiFetch(`/api/nutrition/log/${id}`, {
+    method: 'DELETE'
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, `/api/nutrition/log/${id}`, text);
+  }
+  // 204 No Content on success — nothing to parse.
+};
+
+export const analyzeFood = async ({ image, media_type = 'image/jpeg', hint = null }) => {
+  const r = await apiFetch('/api/nutrition/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ image, media_type, hint })
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    const err = new Error(body.detail || `Analysis failed (${r.status})`);
+    err.status = r.status;
+    throw err;
+  }
+  return r.json();
+};
+
+export const getBarcodeProduct = async (code) => {
+  const r = await apiFetch(`/api/nutrition/barcode/${encodeURIComponent(code)}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    const err = new Error(body.detail || `Barcode lookup failed (${r.status})`);
+    err.status = r.status;
+    throw err;
+  }
+  return r.json();
+};
+
+export const getNutritionSummary = async (days = 7) => {
+  const path = `/api/nutrition/summary?days=${days}`;
+  const r = await apiFetch(path);
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, path, text);
+  }
+  return r.json();
+};
+
 // Permanently delete the current account and all its cloud data. Body carries
 // the typed "DELETE" confirmation and (for email/password users) the password
 // re-entry — both re-verified server-side. Surfaces the backend `detail` string

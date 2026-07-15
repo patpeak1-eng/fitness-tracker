@@ -343,6 +343,34 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 }
             }
         });
+        // Food log creates are idempotent server-side (client_id unique per
+        // user), so replays can never duplicate rows. No storage write-back:
+        // the foodLog persist effect would clobber it — backendId adoption
+        // happens in the login pull-merge instead (matched by client_id).
+        SyncQueue.registerExecutor('food_log', op => ApiService.createFoodLog(op.payload));
+        // Updates/deletes may target rows created offline whose backend UUID
+        // was never seen locally — resolve it by client_id via the list
+        // endpoint. Queue order guarantees the pending create flushes first.
+        const resolveFoodBackendId = async (payload) => {
+            if (payload.backendId) return payload.backendId;
+            if (!payload.client_id) return null;
+            // 90-day window (not the backend's 30-day default) so backdated
+            // offline-created entries still resolve — same window as the pull.
+            const rows = await ApiService.getFoodLog(
+                new Date(Date.now() - 90 * 86400000).toISOString()
+            );
+            return rows.find(r => r.client_id === payload.client_id)?.id || null;
+        };
+        SyncQueue.registerExecutor('food_log_update', async op => {
+            const backendId = await resolveFoodBackendId(op.payload);
+            // No backend row (create was dropped/never queued): nothing to
+            // update — resolve as success so the op doesn't retry forever.
+            if (backendId) await ApiService.updateFoodLog(backendId, op.payload);
+        });
+        SyncQueue.registerExecutor('food_log_delete', async op => {
+            const backendId = await resolveFoodBackendId(op.payload);
+            if (backendId) await ApiService.deleteFoodLog(backendId);
+        });
         SyncQueue.init();
     }, []);
 
@@ -385,6 +413,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         boneDensity: ''
     });
     const [weightHistory, setWeightHistory] = useState([]);
+    // Nutrition entries, local-first like weightHistory. Entries use the
+    // backend's snake_case field names (logged_at, protein_g, ...) plus
+    // id/client_id/backendId — see addFoodLogEntry.
+    const [foodLog, setFoodLog] = useState([]);
 
     // Smart Progression Settings
     const [smartProgressionEnabled, setSmartProgressionEnabled] = useState(false); // Master Toggle
@@ -555,6 +587,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
+        // Same-batch restore as weightHistory — the foodLog persist effect is
+        // gated on settingsHydratedFor, which is set at the end of this batch.
+        setFoodLog(ps.foodLog || []);
 
         // Coach prefs are global-keyed (not profile-scoped) and were previously
         // never hydrated into context state — the boot defaults sat in state
@@ -588,14 +623,20 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         ApiService.getHistory(),
                         ApiService.getWeightHistory(),
                         ApiService.getCustomTemplates(),
-                        ApiService.getCustomExercises()
+                        ApiService.getCustomExercises(),
+                        // 90-day window: covers the History view's widest range
+                        // (backend default is only 30 days). Union merge below
+                        // never removes, so older local rows are unaffected.
+                        ApiService.getFoodLog(
+                            new Date(Date.now() - 90 * 86400000).toISOString()
+                        )
                     ]);
                     results.forEach((result, i) => {
                         if (result.status === 'rejected') {
                             console.warn(`Cloud pull [${i}] failed:`, result.reason);
                         }
                     });
-                    const [profileData, workoutData, weightData, templateData, exerciseData] =
+                    const [profileData, workoutData, weightData, templateData, exerciseData, foodData] =
                         results.map(r => r.status === 'fulfilled' ? r.value : null);
 
                     // The user may have switched profiles while these were in flight.
@@ -718,6 +759,54 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                             const merged = [...prev, ...newEntries]
                                 .sort((a, b) => new Date(a.date) - new Date(b.date));
                             StorageService.saveWeightHistory(profile.id, merged);
+                            return merged;
+                        });
+                    }
+
+                    // Food log — union merge by client_id (the field exists
+                    // precisely for this, unlike workouts' fingerprint dedup).
+                    // Cloud rows matching a local client_id adopt their backend
+                    // UUID onto the local entry (covers entries pushed via the
+                    // retry queue, which can't write backendId into state);
+                    // rows with no local match merge in. Never removes local.
+                    if (Array.isArray(foodData) && foodData.length > 0) {
+                        setFoodLog(prev => {
+                            const byClientId = new Map(
+                                foodData.filter(r => r.client_id).map(r => [r.client_id, r])
+                            );
+                            let adopted = false;
+                            const adoptedPrev = prev.map(e => {
+                                if (e.backendId || !e.client_id) return e;
+                                const row = byClientId.get(e.client_id);
+                                if (!row) return e;
+                                adopted = true;
+                                return { ...e, backendId: row.id };
+                            });
+                            const localClientIds = new Set(prev.map(e => e.client_id).filter(Boolean));
+                            const localBackendIds = new Set(prev.map(e => e.backendId).filter(Boolean));
+                            const additions = foodData
+                                .filter(r =>
+                                    !(r.client_id && localClientIds.has(r.client_id)) &&
+                                    !localBackendIds.has(r.id))
+                                .map(r => ({
+                                    id: r.id,
+                                    client_id: r.client_id || null,
+                                    backendId: r.id,
+                                    logged_at: r.logged_at,
+                                    description: r.description,
+                                    calories: r.calories,
+                                    protein_g: r.protein_g,
+                                    carbs_g: r.carbs_g,
+                                    fat_g: r.fat_g,
+                                    source: r.source || 'manual',
+                                    confidence: r.confidence || null,
+                                    barcode: r.barcode || null,
+                                    items: r.items || null
+                                }));
+                            if (!additions.length && !adopted) return prev;
+                            const merged = [...adoptedPrev, ...additions]
+                                .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at));
+                            StorageService.saveFoodLog(profile.id, merged);
                             return merged;
                         });
                     }
@@ -852,6 +941,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                                 type: 'weight',
                                 key: e.date,
                                 payload: { weight: e.weight, date: e.date },
+                                uid: profile.id
+                            }));
+                    }
+                    if (Array.isArray(foodData)) {
+                        const cloudFoodClientIds = new Set(
+                            foodData.map(r => r.client_id).filter(Boolean)
+                        );
+                        const localFood = StorageService.loadProfileState(profile.id).foodLog || [];
+                        // Rows with a backendId are known-cloud; rows whose
+                        // client_id the pull didn't return are cloud-absent
+                        // (or outside the 90-day window — safe either way:
+                        // the POST is idempotent by client_id).
+                        localFood
+                            .filter(e => !e.backendId && e.client_id && !cloudFoodClientIds.has(e.client_id))
+                            .forEach(e => backfill.push({
+                                type: 'food_log',
+                                key: e.client_id,
+                                payload: e,
                                 uid: profile.id
                             }));
                     }
@@ -1041,6 +1148,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             StorageService.saveWeightHistory(currentProfile.id, weightHistory);
         }
     }, [weightHistory, currentProfile, settingsHydratedFor]);
+
+    // Persist Food Log — same hydration gate as weightHistory: refreshProfileData
+    // restores foodLog in the same synchronous batch that sets settingsHydratedFor,
+    // so no pre-restore run (mount, profile switch, StrictMode replay) can write
+    // a stale/empty array over the stored value.
+    useEffect(() => {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
+            StorageService.saveFoodLog(currentProfile.id, foodLog);
+        }
+    }, [foodLog, currentProfile, settingsHydratedFor]);
 
     // Persist Progression Settings
     useEffect(() => {
@@ -1871,6 +1988,125 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     };
 
+    // --- FOOD LOG (nutrition) ---
+    // Every entry gets a frontend-generated client_id before it goes anywhere
+    // (offline-first, same duplicate-prevention pattern as workout_history).
+    // All four entry paths (manual/photo/barcode/label) funnel through here.
+    const addFoodLogEntry = async (entry) => {
+        const clientId = 'food_' + generateId();
+        const newEntry = {
+            id: clientId,
+            client_id: clientId,
+            backendId: null,
+            logged_at: entry.logged_at || new Date().toISOString(),
+            description: entry.description,
+            calories: Math.max(0, Math.round(Number(entry.calories) || 0)),
+            protein_g: entry.protein_g ?? null,
+            carbs_g: entry.carbs_g ?? null,
+            fat_g: entry.fat_g ?? null,
+            source: entry.source || 'manual',
+            confidence: entry.confidence ?? null,
+            barcode: entry.barcode ?? null,
+            items: entry.items ?? null
+        };
+        setFoodLog(prev => [...prev, newEntry]
+            .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at)));
+
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            try {
+                const saved = await ApiService.createFoodLog(newEntry);
+                if (saved?.id) {
+                    setFoodLog(prev => prev.map(e =>
+                        e.client_id === clientId ? { ...e, backendId: saved.id } : e
+                    ));
+                }
+            } catch (err) {
+                console.warn('[CloudSync] Food log push failed (non-fatal):', err.message);
+                SyncQueue.enqueue({
+                    type: 'food_log',
+                    key: clientId,
+                    payload: newEntry,
+                    uid: currentProfile.id
+                });
+            }
+        }
+        return newEntry;
+    };
+
+    const updateFoodLogEntry = async (entryId, updates) => {
+        const existing = foodLog.find(e => e.id === entryId);
+        if (!existing) return;
+        // Only the user-correctable fields are editable (mirrors the backend's
+        // FoodLogUpdate schema) — provenance fields are fixed at creation.
+        const { logged_at, description, calories, protein_g, carbs_g, fat_g } = {
+            ...existing, ...updates
+        };
+        const updated = { ...existing, logged_at, description, calories, protein_g, carbs_g, fat_g };
+        setFoodLog(prev => prev.map(e => (e.id === entryId ? updated : e))
+            .sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at)));
+
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            if (existing.backendId) {
+                try {
+                    await ApiService.updateFoodLog(existing.backendId, updated);
+                } catch (err) {
+                    console.warn('[CloudSync] Food log update failed (non-fatal):', err.message);
+                    SyncQueue.enqueue({
+                        type: 'food_log_update',
+                        key: updated.client_id || entryId,
+                        payload: updated,
+                        uid: currentProfile.id
+                    });
+                }
+            } else {
+                // Row created offline — its backend UUID is unknown here. The
+                // executor resolves it by client_id (after any pending create
+                // flushes first, by queue order).
+                SyncQueue.enqueue({
+                    type: 'food_log_update',
+                    key: updated.client_id || entryId,
+                    payload: updated,
+                    uid: currentProfile.id
+                });
+                SyncQueue.flush();
+            }
+        }
+        return updated;
+    };
+
+    const deleteFoodLogEntry = async (entryId) => {
+        const existing = foodLog.find(e => e.id === entryId);
+        if (!existing) return;
+        setFoodLog(prev => prev.filter(e => e.id !== entryId));
+
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            if (existing.backendId) {
+                try {
+                    await ApiService.deleteFoodLog(existing.backendId);
+                } catch (err) {
+                    console.warn('[CloudSync] Food log delete failed (non-fatal):', err.message);
+                    SyncQueue.enqueue({
+                        type: 'food_log_delete',
+                        key: existing.client_id || entryId,
+                        payload: { backendId: existing.backendId, client_id: existing.client_id },
+                        uid: currentProfile.id
+                    });
+                }
+            } else if (existing.client_id) {
+                // May have been created server-side via the retry queue without
+                // a local backendId — enqueue a delete that resolves by
+                // client_id; a no-match resolves as a clean no-op.
+                SyncQueue.enqueue({
+                    type: 'food_log_delete',
+                    key: existing.client_id,
+                    payload: { backendId: null, client_id: existing.client_id },
+                    uid: currentProfile.id
+                });
+                SyncQueue.flush();
+            }
+        }
+    };
+
     const updateWorkoutNotes = (notes) => {
         if (!activeWorkout) return;
         setActiveWorkout(prev => ({
@@ -2316,6 +2552,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setUserStats,
         weightHistory,
         addWeightEntry,
+        foodLog,
+        addFoodLogEntry,
+        updateFoodLogEntry,
+        deleteFoodLogEntry,
         deleteWorkout,
         importProgram, // NEW
         assessments,   // NEW
@@ -2356,6 +2596,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         activeWorkout, exercises, templates, history,
         profiles, currentProfile, theme, units,
         soundEnabled, coachPersonality, coachVoiceId, userStats, weightHistory,
+        foodLog,
         assessments, currentExerciseIndex, currentSetIndex,
         smartProgressionEnabled, progressionMode,
         progressionType, progressionIncrement,

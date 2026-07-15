@@ -34,7 +34,8 @@ const KEY = {
     customExercises: 'fitness_custom_exercises',
     equipmentProfile: 'fitness_equipment_profile',
     customEquipment: 'fitness_custom_equipment',
-    experienceLevel: 'fitness_experience_level'
+    experienceLevel: 'fitness_experience_level',
+    foodLog: 'fitness_food_log'
 };
 
 const PROFILE_SCOPED_BASE_KEYS = [
@@ -58,7 +59,8 @@ const PROFILE_SCOPED_BASE_KEYS = [
     KEY.customExercises,
     KEY.equipmentProfile,
     KEY.customEquipment,
-    KEY.experienceLevel
+    KEY.experienceLevel,
+    KEY.foodLog
 ];
 
 const safeParse = (raw, fallback) => {
@@ -315,7 +317,8 @@ const StorageService = {
             progressionIncrement: Number(readRaw(KEY.progInc, '5', { uid })),
             equipmentProfileId: readRaw(KEY.equipmentProfile, 'full_gym', { uid }),
             customEquipmentItems: readJSON(KEY.customEquipment, [], { uid }),
-            experienceLevel: readRaw(KEY.experienceLevel, 'intermediate', { uid })
+            experienceLevel: readRaw(KEY.experienceLevel, 'intermediate', { uid }),
+            foodLog: readJSON(KEY.foodLog, [], { uid })
         };
     },
 
@@ -340,6 +343,7 @@ const StorageService = {
     },
     saveUserStats(uid, stats) { writeJSON(KEY.stats, stats, { uid }); },
     saveWeightHistory(uid, weightHistory) { writeJSON(KEY.weightHistory, weightHistory, { uid }); },
+    saveFoodLog(uid, foodLog) { writeJSON(KEY.foodLog, foodLog, { uid }); },
     saveExercisePrefs(uid, prefs) { writeJSON(KEY.exercisePrefs, prefs, { uid }); },
     saveExperienceLevel(uid, level) { writeRaw(KEY.experienceLevel, level, { uid }); },
     saveProgressionSettings(uid, s) {
