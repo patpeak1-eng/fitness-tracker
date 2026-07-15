@@ -316,7 +316,7 @@ async def get_current_user_info(user: User = Depends(get_current_user)):
         "id": str(user.id),
         "email": user.email,
         "name": user.name,
-        "color": user.color or "#bfff00",
+        "color": user.color or "#ff5c2a",
         "avatar": user.avatar or (user.name[0].upper() if user.name else "U"),
     }
 

@@ -27,7 +27,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
     name = Column(String)
-    color = Column(String, server_default="#bfff00")
+    color = Column(String, server_default="#ff5c2a")
     avatar = Column(String(1))
     theme = Column(String, server_default="dark")
     units = Column(String, server_default="metric")

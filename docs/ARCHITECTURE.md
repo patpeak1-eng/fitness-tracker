@@ -529,7 +529,7 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
                                     data per spec Section 5)
 ```
 
-**Database:** PostgreSQL on Railway. Migrations via Alembic (7 revisions in `alembic/versions/`), revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9).
+**Database:** PostgreSQL on Railway. Migrations via Alembic (8 revisions in `alembic/versions/`), revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9). Migration 0008 (`avatar_color_default`, S21) is default-change + data backfill only, no shape change: `users.color` server_default moved from the retired `#bfff00` to `#ff5c2a` (Design Tokens v2 `--primary`), with a one-time `UPDATE ... WHERE color = '#bfff00'` — safe because no frontend path has ever written `color` to the backend (spec: docs/avatar_color_spec_s21.md).
 
 **Known tables beyond the 0001 core eight:** `coach_messages` (0003 — AI Coach conversation history, CASCADE delete tied to user); `food_log` (0007/S19 — nutrition entries, user-scoped, CASCADE, per-user-unique `client_id` like workout_history); `off_product_cache` (0007/S19 — shared no-user-id barcode→product cache for Open Food Facts, 90-day freshness). `food_log` keeps the account-deletion "single-transaction, no per-table cleanup" invariant intact (standard cascade shape on `User.food_entries`).
 
