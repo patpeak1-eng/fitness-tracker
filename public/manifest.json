@@ -5,8 +5,8 @@
     "scope": "/",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0a0a0a",
-    "theme_color": "#bfff00",
+    "background_color": "#0d0d0f",
+    "theme_color": "#ff5c2a",
     "description": "Your personal fitness tracking companion.",
     "icons": [
         {
