@@ -134,11 +134,11 @@ const Nutrition = () => {
         return next;
     });
 
-    const confirmDelete = (entry) => {
-        if (window.confirm(`Delete "${entry.description}"?`)) {
-            deleteFoodLogEntry(entry.id);
-        }
-    };
+    // Token-compliant confirm modal (replaces window.confirm — S20 polish;
+    // native confirms are off-brand and unstylable, same reasoning as the
+    // account-deletion modal).
+    const [deleteEntry, setDeleteEntry] = useState(null);
+    const confirmDelete = (entry) => setDeleteEntry(entry);
 
     const openTargets = () => {
         setTargetDraft({
@@ -345,6 +345,32 @@ const Nutrition = () => {
                         }}
                         onCancel={() => setEditEntry(null)}
                     />
+                )}
+            </Modal>
+
+            {/* Delete confirm */}
+            <Modal isOpen={!!deleteEntry} onClose={() => setDeleteEntry(null)} title="Delete entry">
+                {deleteEntry && (
+                    <div className="nutrition-entry-form">
+                        <p className="photo-hint">
+                            Delete "{deleteEntry.description}" ({deleteEntry.calories} kcal)?
+                            This removes it from your log everywhere.
+                        </p>
+                        <div className="entry-form-actions">
+                            <button className="entry-cancel-btn" onClick={() => setDeleteEntry(null)}>
+                                Cancel
+                            </button>
+                            <button
+                                className="entry-danger-btn"
+                                onClick={() => {
+                                    deleteFoodLogEntry(deleteEntry.id);
+                                    setDeleteEntry(null);
+                                }}
+                            >
+                                <Trash2 size={15} /> Delete
+                            </button>
+                        </div>
+                    </div>
                 )}
             </Modal>
 

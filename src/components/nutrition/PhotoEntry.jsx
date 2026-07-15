@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Camera, CircleAlert, LoaderCircle, PenLine, RefreshCw } from 'lucide-react';
 import * as ApiService from '../../services/ApiService';
 import EntryForm from './EntryForm';
@@ -41,10 +41,23 @@ const PhotoEntry = ({ onSave, onCancel }) => {
     const [phase, setPhase] = useState('pick'); // pick | analyzing | review | error | manual
     const [error, setError] = useState(null);
     const [result, setResult] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
     const fileRef = useRef(null);
+
+    // The preview object-URL outlives downscaleToBase64's internal one so the
+    // user can see WHICH photo the estimate describes while reviewing it.
+    const clearPreview = () => {
+        setPreviewUrl(prev => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+        });
+    };
+    useEffect(() => clearPreview, []); // revoke on unmount
 
     const analyze = async (file) => {
         if (!file) return;
+        clearPreview();
+        setPreviewUrl(URL.createObjectURL(file));
         setPhase('analyzing');
         setError(null);
         try {
@@ -60,21 +73,27 @@ const PhotoEntry = ({ onSave, onCancel }) => {
 
     if (phase === 'review' && result) {
         return (
-            <EntryForm
-                initial={{
-                    description: result.description,
-                    calories: result.calories,
-                    protein_g: result.protein_g,
-                    carbs_g: result.carbs_g,
-                    fat_g: result.fat_g,
-                    source: result.source,      // "photo" | "label", classified by the backend
-                    items: result.items
-                }}
-                estimated
-                confidence={result.confidence}
-                onSave={onSave}
-                onCancel={() => { setResult(null); setPhase('pick'); }}
-            />
+            <div className="photo-review">
+                {previewUrl && (
+                    <img className="photo-review-thumb" src={previewUrl}
+                        alt="The photo being analyzed" />
+                )}
+                <EntryForm
+                    initial={{
+                        description: result.description,
+                        calories: result.calories,
+                        protein_g: result.protein_g,
+                        carbs_g: result.carbs_g,
+                        fat_g: result.fat_g,
+                        source: result.source,      // "photo" | "label", classified by the backend
+                        items: result.items
+                    }}
+                    estimated
+                    confidence={result.confidence}
+                    onSave={onSave}
+                    onCancel={() => { setResult(null); clearPreview(); setPhase('pick'); }}
+                />
+            </div>
         );
     }
 

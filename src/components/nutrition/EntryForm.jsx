@@ -74,6 +74,21 @@ const EntryForm = ({
                 </div>
             )}
 
+            {/* What the model saw — read-only breakdown so the user can judge
+                whether the estimate covered the whole plate. */}
+            {estimated && Array.isArray(initial.items) && initial.items.length > 0 && (
+                <ul className="estimated-items">
+                    {initial.items.map((it, i) => (
+                        <li key={i}>
+                            <span className="estimated-item-name">{it.name}</span>
+                            {(it.calories === 0 || it.calories) && (
+                                <span className="estimated-item-cal">{it.calories} kcal</span>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+
             <div className="form-group">
                 <label>Description</label>
                 <input

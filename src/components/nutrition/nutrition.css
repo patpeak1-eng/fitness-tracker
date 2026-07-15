@@ -267,3 +267,70 @@
 @keyframes photo-spin {
     to { transform: rotate(360deg); }
 }
+
+/* Review-phase photo thumbnail — the user sees WHICH photo the estimate
+   describes while correcting it. */
+.photo-review {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.photo-review-thumb {
+    width: 100%;
+    max-height: 160px;
+    object-fit: cover;
+    border-radius: 12px;
+    background: var(--bg-app);
+}
+
+/* Read-only detected-items breakdown under the Estimated banner */
+.estimated-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--surface);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.estimated-items li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    font-size: 0.875rem;
+}
+
+.estimated-items li + li {
+    border-top: 1px solid var(--border);
+}
+
+.estimated-item-name {
+    color: var(--text-secondary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.estimated-item-cal {
+    color: var(--text-primary);
+    font-feature-settings: "tnum";
+    flex-shrink: 0;
+}
+
+/* Danger confirm button (delete-entry modal) */
+.entry-danger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
