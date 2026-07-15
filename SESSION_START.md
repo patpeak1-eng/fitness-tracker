@@ -105,63 +105,94 @@ MASTER_CONTEXT reference fix and completion-report template sync
 Final State section — added retroactively in S19. Full commit list:
 git log bdb020c..5acdab7.
 
-## Session 19 Final State
-S19 = nutrition implementation sessions 1 and 2 of 3 (per
-docs/nutrition_spec_s18.md; UI placement Option C decided).
-Session 1 (backend):
-1.  0ab35cd - feat(nutrition): migration 0007 (food_log +
-    off_product_cache), FoodLog/OffProductCache models, nutrition router
-    (7 routes: log CRUD, /analyze Claude Vision — fully implemented, not
-    stubbed; /barcode cache-first OFF lookup; /summary), rate-limit
-    constants, coach NUTRITION context block + trend-deflection boundary.
-    All 6 acceptance criteria verified live; throwaway accounts deleted
-    via the S18 deletion feature.
-Session 2 (frontend core), all live-verified on a disposable account
-(deleted through the Settings danger zone at session end):
-2.  fb6b274 - feat(nutrition): foodLog state in WorkoutContext
-    (hydration-gated on settingsHydratedFor, client_id offline-first,
-    client_id pull-merge with backendId ADOPTION, 3 SyncQueue executor
-    types incl. resolve-by-client_id for offline-created rows), 7
-    ApiService methods, StorageService foodLog key. ARCHITECTURE.md §4.7
-    updated same commit. HIGH zone, coordinator-cleared. StrictMode
-    reload, offline-add→reconnect-push, and re-login dedup all proven.
-3.  ecc58b0 - feat(nutrition): EMA utility (src/utils/ema.js, alpha 0.25,
-    gap-tolerant carry-forward) + 6 vitest tests incl. hand-computed
-    fixture week.
-4.  43a9204 - feat(nutrition): manual + barcode entry paths
-    (src/components/nutrition/: FoodLogFlow single-save-funnel, shared
-    EntryForm, BarcodeEntry with feature-detected BarcodeDetector live
-    scan + ALWAYS-present manual code fallback), /nutrition route +
-    page shell. Barcode verified live (real OFF product, exact values,
-    source=barcode).
-5.  66a03ce - feat(nutrition): photo/label AI path (PhotoEntry: downscale
-    →/analyze→MANDATORY editable review with Estimated badge +
-    confidence; failure falls back to manual form). ONE flow for meals
-    AND labels (backend classifies). Verified live: label OCR exact
-    (source=label, high conf), meal estimate (source=photo, low conf),
-    analyze-without-save persists nothing, user edit wins over AI value.
-6.  51d5785 - feat(nutrition): dashboard + history (today totals/macros,
-    optional manual targets via StorageService nutritionTargets key,
-    dual-series 7-day EMA chart calories+weight with muted raw points,
-    day-grouped history 7/30/90d, confirm-guarded delete + edit modal).
-    Offline render verified (dead-API boot).
-7.  80dbc37 - feat(nutrition): nav placement Option C — More overflow
-    item + Dashboard quick-log card (today kcal + "+" deep-links into
-    the open log modal via location.state).
-8.  b328324 - feat(login): local-only data-loss disclaimer under
-    "Continue without account" (decided prior session — now SHIPPED, do
-    not re-queue).
-9.  (this commit) docs: SESSION_START.md to Session 19 state.
+## Session 19 Final State (reference)
+S19 = nutrition implementation sessions 1 & 2 of 3 (per
+docs/nutrition_spec_s18.md; UI placement Option C). Session 1 backend
+(0ab35cd): migration 0007 (food_log + off_product_cache), 7-route
+nutrition router incl. Claude Vision /analyze (fully implemented) + OFF
+cache-first /barcode + /summary, coach NUTRITION context block +
+trend-deflection boundary. Session 2 frontend core: foodLog WorkoutContext
+state (hydration-gated, client_id offline-first, backendId-adopting
+pull-merge, SyncQueue executors — HIGH, cleared), EMA util + tests,
+manual/barcode/photo/label entry paths, dashboard + history with dual EMA
+chart, Option C nav, login data-loss disclaimer. All live-verified on
+disposable accounts. Closed at 603c885. Full commit list:
+git log 5acdab7..603c885.
 
-## Session 20+ Open Items (priority order)
-P2 - NUTRITION SESSION 3 of 3 (final): photo/label AI review polish,
-     barcode scanner hardening (live BarcodeDetector camera loop is
-     UNTESTED on a real mobile device — this session's browser lacked
-     the API, so only the manual-code fallback is field-proven), edit
-     flow polish, and a real-phone verification pass (camera capture,
-     real meal photo, real label). Also: mobile-viewport + light-theme
-     screenshot pass for all new nutrition screens (deferred this
-     session; VISUAL_REVIEW_RULE debt).
+## Session 20 Final State
+S20 = nutrition implementation session 3 of 3 (final polish + hardening +
+real-image verification). All live-verified on a disposable account
+(deleted through the Settings danger zone at session end):
+1.  8395125 - fix(nutrition): barcode scanner hardening. Close-read of the
+    camera path found and fixed 3 LATENT defects (the whole scan branch
+    had never executed anywhere — S19's browser lacked BarcodeDetector):
+    (a) requestAnimationFrame stream-attach raced React's commit → could
+    leave a live camera with a dead viewport; replaced with a
+    deterministic effect keyed on `scanning`. (b) closing the modal while
+    the camera-permission prompt was pending leaked the stream (tracks
+    never stopped); now stopped on resolve-after-unmount via a mounted
+    ref. (c) double-tap opened two streams; now guarded. Emulated
+    end-to-end via Playwright with stubbed getUserMedia + BarcodeDetector
+    (correct constraints, format list, auto-stop on detect, unmount
+    cleanup, feature-detect both directions). NOT a real-device test —
+    see P1 below.
+2.  7046d87 - feat(nutrition): review + edit flow polish. Photo thumbnail
+    in the review step, read-only detected-items breakdown under the
+    Estimated banner (also in edit), and window.confirm delete replaced
+    with a token-compliant --danger modal (cancel-safe). Edit preserves
+    source/confidence; live create→edit→delete round-trip verified.
+3.  (no commit — verification) real-photo /analyze pass. Real Wikimedia
+    images (fish-and-chips plate 4048×3036 also exercising the client
+    downscale; agave-nectar label photo) through the live UI: meal →
+    source=photo, medium confidence, 5-item breakdown, plausible macros;
+    label → source=label, high confidence, exact per-serving values read
+    off the package. Analyze-without-save persisted zero rows (local +
+    backend). Improvement over S19's synthetic-image test.
+4.  9038c9f - docs(design-review): 10 committed screenshots
+    (docs/design-review/s20-*.png) — nutrition dashboard, manual/barcode-
+    fallback/photo-review/edit/delete modals, Home quick-log at mobile
+    375px, plus dashboard/manual/delete in LIGHT theme (flipped through
+    the real Settings path). VISUAL_REVIEW_RULE debt from S19 cleared.
+5.  (this commit) docs: SESSION_START.md to Session 20 state.
+
+NUTRITION STATUS: functionally complete across all 3 implementation
+sessions (backend, frontend core, polish/hardening). Not yet "fully
+closed" — three items need Patrick's hands-on involvement (P1 below);
+none block any other work.
+
+## Session 21+ Open Items (priority order)
+P1 - Real-device barcode camera test (blocks full Nutrition closure
+     only). On a phone, live app → Log food → Barcode → Scan, point at a
+     real packaged product. Everything up to the physical camera+detector
+     is proven (component logic, cleanup, feature-detect, OFF lookup);
+     the real Chrome-on-Android detector reading a real barcode through
+     this UI is the one link no automated environment can exercise —
+     same category as the OAuth consent screen that needed manual
+     completion. Manual code-entry fallback is field-proven as the safety
+     net if the live scan misbehaves.
+P1 - Real phone-camera photo through the Photo path (optional but
+     recommended). S20's test used a real photograph but from a FILE, not
+     a live phone-camera capture. Confirm capture="environment" opens the
+     camera and the captured image analyzes correctly.
+P1 - Coach nutrition-commentary spot-check once real meals are logged.
+     Confirm the trend-deflection boundary (chart-only; coach gives a
+     one-line observation and points to the dashboard, never recites
+     logged data) feels right in real use.
+P2 - Stale neon-green avatar color (#bfff00, the pre-redesign theme).
+     Two-layer bug, and existing rows hold the literal stale value (not
+     just a fallback gap — confirmed on Patrick's own account): migration
+     0001's users.color server_default is still '#bfff00', AND
+     routers/auth.py's /me handler falls back to the same literal in two
+     places. Fix needs a DB default change + a one-time backfill UPDATE
+     for existing rows + the auth.py fallbacks corrected to match. HIGH
+     zone (users table). Spec not yet written.
+P2 - Date-of-birth field for auto-updating age. UserStats.age is a plain
+     String today (manually typed, never auto-updates). Add date_of_birth
+     (nullable Date) to UserStats via a new migration; when set, displayed
+     age is COMPUTED from DOB (takes priority over the manual string);
+     users without a DOB keep today's manual-entry behavior unchanged.
+     HIGH zone (user_stats table) + a real UI decision (calendar picker
+     on tap, per the original request). Spec not yet written.
 P3 - Coach context format nit: NUTRITION line's entries=N reads as
      "days" to the model (S19 backend test saw "two logged days" for 2
      entries/1 day) — consider entries=/days= split in coach.py next
