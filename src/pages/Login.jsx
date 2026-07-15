@@ -251,6 +251,10 @@ const Login = () => {
                 >
                     Continue without account
                 </button>
+                <p className="login-local-note">
+                    Your data will not be saved to the cloud — sign in with
+                    Google or email to back up your progress.
+                </p>
 
                 <p className="login-switch">
                     {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
