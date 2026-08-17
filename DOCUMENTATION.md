@@ -4,6 +4,9 @@
 > AI Coach visual equipment capture and cross-device station environments are
 > defined in `docs/ai_coach_visual_equipment_spec_s25.md`. Keep those documents
 > updated in the same commit as any substantive app change.
+> The S25.1 maintenance contract (`docs/ai_coach_photo_flow_maintenance_s25_1.md`)
+> clarifies the temporary photo lifecycle and keeps live video explicitly
+> deferred while the still-photo workflow is validated in normal use.
 
 ## 1. State Management
 **File**: `src/context/WorkoutContext.jsx`

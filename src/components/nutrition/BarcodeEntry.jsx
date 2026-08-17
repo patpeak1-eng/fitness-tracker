@@ -41,7 +41,6 @@ const BarcodeEntry = ({ onSave, onCancel }) => {
     useEffect(() => {
         mountedRef.current = true;
         return () => { mountedRef.current = false; stopScan(); }; // release the camera on unmount
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Attach the stream and start the detect loop only AFTER React has
@@ -70,7 +69,6 @@ const BarcodeEntry = ({ onSave, onCancel }) => {
         return () => {
             if (scanLoopRef.current) { clearInterval(scanLoopRef.current); scanLoopRef.current = null; }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scanning]);
 
     const lookup = async (code) => {

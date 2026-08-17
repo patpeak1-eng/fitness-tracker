@@ -197,8 +197,18 @@ docs/ai_coach_visual_equipment_spec_s25.md):
 - named environments such as Station 12 sync through nullable
   `users.equipment_environments` JSONB while offline/local profiles retain the
   existing local-first behavior; raw photos are never stored;
-- live video remains the next separately evaluated phase after real-phone
-  validation of the still-photo workflow.
+- the still-photo workflow is the current product path; live video is deferred
+  unless routine use demonstrates a need that photos cannot meet.
+
+S25.1 photo-flow maintenance (spec:
+docs/ai_coach_photo_flow_maintenance_s25_1.md):
+
+- separates the two user-controlled photo paths in the Coach interface:
+  identify and save equipment, or send photos to Coach for discussion;
+- explains that successful Coach sends clear temporary photo attachments for
+  privacy, preventing the detector's empty state from looking broken;
+- updates the architecture freshness marker and removes two obsolete lint
+  suppressions; no Coach API, account, or database behavior changes.
 
 ## Session 25+ Open Items (priority order)
 P1 - Real-device barcode camera test (blocks full Nutrition closure
@@ -221,9 +231,10 @@ P1 - Coach nutrition-commentary spot-check once real meals are logged.
 P1 - Real phone-camera S25 Coach pass. Confirm the in-app camera selects the
      outward lens, flip works, several captures append, the joint inventory is
      sensible, and a direct Coach reply references visible equipment.
-P2 - Gemini Live visual walkthrough evaluation. Compare a bounded 60-second
-     station scan against the completed still-photo path for accuracy, latency,
-     cost, tool reliability, and provider data-handling terms before building.
+P3 - Live-video visual walkthrough is deferred. Reconsider only if routine
+     still-photo use proves insufficient for a real station or gym workflow;
+     compare accuracy, latency, cost, reliability, and provider data handling
+     before any implementation.
 P3 - Cloud login/register silently orphans local profiles (found S18,
      coordinator-confirmed): Login.jsx activateProfileAndGo AND the OAuth
      boot path both call saveProfiles([cloudProfile]) — unconditionally

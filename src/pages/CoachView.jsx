@@ -116,6 +116,7 @@ const CoachView = () => {
     const [isAnalyzingEquipment, setIsAnalyzingEquipment] = useState(false);
     const [activeEnvironmentName, setActiveEnvironmentName] = useState('');
     const [photoAttachments, setPhotoAttachments] = useState([]);
+    const [photoAttachmentNotice, setPhotoAttachmentNotice] = useState('');
 
     const threadRef = useRef(null);
     // Web Audio fallback (full-text playback; also the iOS path).
@@ -591,7 +592,11 @@ const CoachView = () => {
             } else if (voiceActive) {
                 stopSpeaking();
             }
-            if (attachedImages.length && !streamFailed) clearPhotoAttachments();
+            if (attachedImages.length && !streamFailed) {
+                clearPhotoAttachments(
+                    'Photos were sent to Coach and cleared from this device for privacy. Add them again if you want to identify and save this location.'
+                );
+            }
         } catch {
             setLastAssistant({
                 content: 'Could not reach the coach. Check your connection and try again.',
@@ -662,11 +667,12 @@ const CoachView = () => {
             : [...prev, item]);
     };
 
-    const clearPhotoAttachments = () => {
+    const clearPhotoAttachments = (notice = '') => {
         setPhotoAttachments(prev => {
             prev.forEach(item => URL.revokeObjectURL(item.preview));
             return [];
         });
+        setPhotoAttachmentNotice(notice);
     };
 
     const removePhotoAttachment = (attachmentId) => {
@@ -687,6 +693,7 @@ const CoachView = () => {
             return;
         }
         setEquipmentError('');
+        setPhotoAttachmentNotice('');
         const prepared = [];
         try {
             for (const file of candidates.slice(0, available)) {
@@ -714,6 +721,7 @@ const CoachView = () => {
             return;
         }
         setEquipmentError('');
+        setPhotoAttachmentNotice('');
         setIsAnalyzingEquipment(true);
         try {
             const result = await analyzeEquipment({
@@ -817,7 +825,7 @@ const CoachView = () => {
                 <div className="coach-pending-photos">
                     <button type="button" onClick={() => setEquipmentOpen(true)}>
                         <Images size={15} />
-                        {photoAttachments.length} photo{photoAttachments.length === 1 ? '' : 's'} ready for Coach
+                        {photoAttachments.length} photo{photoAttachments.length === 1 ? '' : 's'} ready
                     </button>
                     <button type="button" onClick={clearPhotoAttachments} aria-label="Remove all attached photos">
                         Clear
@@ -830,7 +838,7 @@ const CoachView = () => {
                     <div className="coach-panel-heading">
                         <div>
                             <h2>Equipment environment</h2>
-                            <p>Capture several angles or choose saved photos. The Coach receives them with your next message.</p>
+                            <p>Use photos to identify equipment for a saved location, or send them with your next Coach message to discuss a workout.</p>
                         </div>
                         <button type="button" className="coach-panel-close"
                             onClick={() => setEquipmentOpen(false)} aria-label="Close equipment panel">
@@ -845,13 +853,24 @@ const CoachView = () => {
                         onRemove={removePhotoAttachment}
                         disabled={isAnalyzingEquipment || isStreaming}
                     />
-                    <button type="button" className="coach-photo-btn"
-                        onClick={analyzeEquipmentPhotos}
-                        disabled={isAnalyzingEquipment || photoAttachments.length === 0}>
-                        {isAnalyzingEquipment
-                            ? <><LoaderCircle size={18} className="coach-spin" /> Reviewing {photoAttachments.length} photos…</>
-                            : <><Sparkles size={18} /> Detect equipment in {photoAttachments.length || ''} photo{photoAttachments.length === 1 ? '' : 's'}</>}
-                    </button>
+                    {photoAttachments.length > 0 ? (
+                        <>
+                            <p className="coach-photo-guidance">
+                                <strong>Two ways to use these photos:</strong> identify equipment to save this location, or send them with your next Coach message to discuss a workout.
+                            </p>
+                            <button type="button" className="coach-photo-btn"
+                                onClick={analyzeEquipmentPhotos}
+                                disabled={isAnalyzingEquipment}>
+                                {isAnalyzingEquipment
+                                    ? <><LoaderCircle size={18} className="coach-spin" /> Reviewing {photoAttachments.length} photos…</>
+                                    : <><Sparkles size={18} /> Identify equipment from {photoAttachments.length} photo{photoAttachments.length === 1 ? '' : 's'}</>}
+                            </button>
+                        </>
+                    ) : (
+                        <p className={`coach-photo-guidance${photoAttachmentNotice ? ' coach-photo-notice' : ''}`} role={photoAttachmentNotice ? 'status' : undefined}>
+                            {photoAttachmentNotice || 'Add one or more photos above to identify and save the equipment at this location.'}
+                        </p>
+                    )}
 
                     <label className="coach-environment-name">
                         Environment name

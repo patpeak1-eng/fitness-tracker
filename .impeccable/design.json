@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-17T00:00:00Z",
+  "title": "Design System: Fitness Tracker",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Graphite Canvas", "canonical": "#0D0D0F", "tonalRamp": ["#0D0D0F", "#161618", "#1E1E21", "#28282C", "#5F5F66", "#9C9CA3", "#F4F4F2"] },
+      "ember": { "role": "primary", "displayName": "Ember Action", "canonical": "#FF5C2A", "tonalRamp": ["#40150A", "#6B2410", "#943515", "#BF461D", "#FF5C2A", "#FF8A66", "#FFC5B5"] },
+      "success": { "role": "secondary", "displayName": "Completion Green", "canonical": "#3DC96E", "tonalRamp": ["#103A20", "#195B31", "#258445", "#3DC96E", "#70DB96", "#A8ECC0", "#D9F8E3"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Athletic Display", "purpose": "Screen titles and hero numerals only." },
+      "body": { "displayName": "Training Body", "purpose": "All task controls, rows, coaching copy, and data." },
+      "label": { "displayName": "Supporting Label", "purpose": "Captions, field labels, and quiet metadata." }
+    },
+    "shadows": [
+      { "name": "floating-surface", "value": "0 8px 32px rgba(0, 0, 0, 0.4)", "purpose": "Rare raised panels and overlays." },
+      { "name": "action-glow", "value": "0 0 20px rgba(255, 92, 42, 0.12)", "purpose": "Restrained ember action feedback." }
+    ],
+    "motion": [
+      { "name": "standard", "value": "0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)", "purpose": "State feedback only, with no choreography." }
+    ],
+    "breakpoints": [
+      { "name": "mobile-column", "value": "600px" },
+      { "name": "compact-phone", "value": "390px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single clear action for a training decision.",
+      "html": "<button class=\"ds-btn-primary\">START WORKOUT</button>",
+      "css": ".ds-btn-primary { min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: #FF5C2A; color: #0D0D0F; font: 700 0.875rem Inter, system-ui, sans-serif; transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.2s cubic-bezier(0.25,0.46,0.45,0.94); } .ds-btn-primary:hover { box-shadow: 0 0 20px rgba(255,92,42,0.12); } .ds-btn-primary:focus-visible { outline: 2px solid #FF8A66; outline-offset: 2px; } .ds-btn-primary:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Training Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "A clear recessed field for weight, reps, names, and notes.",
+      "html": "<input class=\"ds-input\" placeholder=\"Current location\" />",
+      "css": ".ds-input { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; outline: none; background: #28282C; color: #F4F4F2; font: 400 1rem Inter, system-ui, sans-serif; } .ds-input::placeholder { color: #5F5F66; } .ds-input:focus { border-color: #FF5C2A; box-shadow: 0 0 0 2px rgba(255,92,42,0.14); }"
+    },
+    {
+      "name": "Equipment Chip",
+      "kind": "chip",
+      "refersTo": "input-default",
+      "description": "A selectable piece of available equipment.",
+      "html": "<button class=\"ds-chip\">Dumbbells</button>",
+      "css": ".ds-chip { min-height: 34px; padding: 0 10px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: #28282C; color: #9C9CA3; font: 700 0.75rem Inter, system-ui, sans-serif; } .ds-chip:hover, .ds-chip:focus-visible { color: #F4F4F2; border-color: #FF5C2A; } .ds-chip:focus-visible { outline: 2px solid #FF8A66; outline-offset: 2px; }"
+    },
+    {
+      "name": "Training Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "A grouped training decision or summary, separated by tone rather than a heavy outline.",
+      "html": "<section class=\"ds-card\"><strong>Equipment environment</strong><p>Review before saving.</p></section>",
+      "css": ".ds-card { padding: 16px; border-radius: 12px; background: #161618; color: #F4F4F2; font: 400 0.875rem/1.5 Inter, system-ui, sans-serif; } .ds-card p { margin: 4px 0 0; color: #9C9CA3; }"
+    },
+    {
+      "name": "Active Navigation",
+      "kind": "nav",
+      "refersTo": "button-primary",
+      "description": "A familiar mobile destination marker, with ember reserved for the current screen.",
+      "html": "<nav class=\"ds-nav\"><span>Home</span><span class=\"is-active\">Coach</span><span>Progress</span></nav>",
+      "css": ".ds-nav { display: flex; gap: 20px; padding: 12px 16px; border-radius: 18px; background: #161618; color: #9C9CA3; font: 700 0.75rem Inter, system-ui, sans-serif; } .ds-nav .is-active { color: #FF5C2A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dependable Training Partner",
+    "overview": "Fitness Tracker is a focused training tool for phone use before and during workouts. Ember on Graphite keeps the athlete's attention on the next meaningful action, durable training data, and honest AI feedback.",
+    "keyCharacteristics": ["Mobile-first, one-handed actions", "Restrained ember accent use", "Tonal grouping over border clutter", "Honest AI and camera state feedback"],
+    "rules": [
+      { "name": "The Ember Rule", "body": "Ember means tap, active, or selected, never decoration or data.", "section": "colors" },
+      { "name": "The Data Rule", "body": "Data values use primary text and are never ember-colored merely to draw attention.", "section": "typography" }
+    ],
+    "dos": ["Do use the existing graphite surfaces and ember action color exactly as defined in docs/DESIGN_TOKENS.md.", "Do keep camera, upload, save, and delete controls familiar and obvious."],
+    "donts": ["Don't add decorative cyber or neon styling that competes with workout data.", "Don't create dense spreadsheet-style logging during an active session.", "Don't let AI language overclaim what the Coach can see, has saved, or has changed."]
+  }
+}

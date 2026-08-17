@@ -344,6 +344,13 @@ combined editable inventory and attached directly to the next Coach turn. Raw
 photos, object URLs, and model image blocks are discarded; only confirmed
 equipment metadata is stored.
 
+S25.1 clarifies this temporary-photo lifecycle in the interface: attached
+photos can either be analyzed into an editable inventory for a named location
+or sent with the next Coach message for discussion. After a successful Coach
+reply, the app clears the attachments and explains that they were removed for
+privacy. Live video is explicitly deferred; the still-photo workflow is the
+current product path. See `docs/ai_coach_photo_flow_maintenance_s25_1.md`.
+
 **Gotcha (from S15):** `exercise.equipment` uses `/` both as an OR-separator AND inside literal multi-word names (`"Parallel Bars/Bench"`). Matching logic must test the full string before slash-splitting.
 
 **Other S12–S16 UI changes worth knowing:** Dashboard's active-workout card gained a cancel action (S15/S16 — `cancelWorkout()` from WorkoutContext, confirm-guarded), alongside the existing cancel paths in TrackWorkout and GuidedWorkoutView.
@@ -703,4 +710,4 @@ Themes:     light theme via data-theme attribute on root (S15)
 
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json (S12), docs/DESIGN_TOKENS.md, and session notes/memory across S9-S16. Full catch-up audit pass completed S17 — all PROVISIONAL flags cleared; routing (4.1) and component tree (4.6) verified directly against source. Last updated: Session 17, 2026-07-14.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.1. Full catch-up audit pass completed S17; S24/S25/S25.1 architecture changes were then added with their implementation commits. Last updated: S25.1, 2026-08-17.*
