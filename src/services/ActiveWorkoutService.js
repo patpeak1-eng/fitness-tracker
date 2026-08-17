@@ -60,6 +60,7 @@ const removeSet = (state, { exerciseInstanceId, setId }) => {
         ...state,
         exercises: (state.exercises || []).map(ex => {
             if (ex.id !== exerciseInstanceId) return ex;
+            if ((ex.sets || []).length <= 1) return ex;
             return { ...ex, sets: (ex.sets || []).filter(s => s.id !== setId) };
         })
     };

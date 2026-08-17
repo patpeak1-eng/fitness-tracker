@@ -256,14 +256,20 @@
     background: none;
     border: none;
     color: var(--text-secondary);
-    opacity: 0.5;
-    padding: 6px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.delete-set-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 .delete-set-btn:hover {

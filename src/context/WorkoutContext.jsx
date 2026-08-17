@@ -2040,12 +2040,13 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
 
     const removeSet = (exerciseInstanceId, setId) => {
-    if (!activeWorkout) return;
-
-    setActiveWorkout(prev =>
-        ActiveWorkoutService.removeSet(prev, { exerciseInstanceId, setId })
-    );
-};
+        setActiveWorkout(prev => {
+            if (!prev || prev.status !== 'preparing') return prev;
+            const exercise = prev.exercises.find(item => item.id === exerciseInstanceId);
+            if (!exercise || (exercise.sets || []).length <= 1) return prev;
+            return ActiveWorkoutService.removeSet(prev, { exerciseInstanceId, setId });
+        });
+    };
 
 
     const removeExerciseFromWorkout = (exerciseInstanceId) => {

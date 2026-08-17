@@ -359,6 +359,14 @@ starts a Coach-proposed workout now routes directly to `/track`, the existing
 preparation surface, rather than taking a dashboard detour. See
 `docs/ai_coach_handoff_polish_s25_2.md`.
 
+S25.3 keeps Coach proposals athlete-adjustable before training begins: the
+Preparation rows use the existing `removeSet` state action alongside Add Set,
+but never allow an exercise to have zero sets and never expose removal after a
+guided workout starts. Built-in exercise visuals use the canonical local
+`illustration` field, with `imageUrl` only as a legacy/custom fallback. This
+unifies the detail sheet with the existing library and guided-workout visual
+surfaces. See `docs/preparation_controls_visual_contract_s25_3.md`.
+
 **Gotcha (from S15):** `exercise.equipment` uses `/` both as an OR-separator AND inside literal multi-word names (`"Parallel Bars/Bench"`). Matching logic must test the full string before slash-splitting.
 
 **Other S12–S16 UI changes worth knowing:** Dashboard's active-workout card gained a cancel action (S15/S16 — `cancelWorkout()` from WorkoutContext, confirm-guarded), alongside the existing cancel paths in TrackWorkout and GuidedWorkoutView.
@@ -718,4 +726,4 @@ Themes:     light theme via data-theme attribute on root (S15)
 
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.2. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2 architecture changes were then added with their implementation commits. Last updated: S25.2, 2026-08-17.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits. Last updated: S25.3, 2026-08-17.*

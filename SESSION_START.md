@@ -221,6 +221,18 @@ docs/ai_coach_handoff_polish_s25_2.md):
 - installed-PWA testing confirmed the multi-photo capture, visual Coach reply,
   and Coach workout proposal flows in normal phone use.
 
+S25.3 preparation controls and visual contract (spec:
+docs/preparation_controls_visual_contract_s25_3.md):
+
+- Coach-proposed sets remain editable in Preparation: athletes can add or
+  remove a set, while an exercise always keeps at least one set and guided
+  sessions keep their set log stable;
+- the shared instruction sheet uses canonical local `illustration` paths first,
+  with `imageUrl` retained only as a legacy/custom fallback;
+- 73 declared built-in illustrations match the 73 deployed local assets;
+  Arnold Press's previous “No Visual Available” state was a field-name mismatch,
+  not missing image files.
+
 ## Session 25+ Open Items (priority order)
 P1 - Real-device barcode camera test (blocks full Nutrition closure
      only). On a phone, live app → Log food → Barcode → Scan, point at a

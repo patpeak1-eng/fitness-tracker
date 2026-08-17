@@ -64,4 +64,41 @@ describe("ActiveWorkoutService", () => {
       completed: true,
     });
   });
+
+  it("removeSet removes only the selected set", () => {
+    const workout = {
+      ...mkWorkout(),
+      exercises: [
+        {
+          id: "exi_1",
+          sets: [
+            { id: "set_1", reps: 5 },
+            { id: "set_2", reps: 8 },
+          ],
+        },
+      ],
+    };
+
+    const next = ActiveWorkoutService.removeSet(workout, {
+      exerciseInstanceId: "exi_1",
+      setId: "set_1",
+    });
+
+    expect(next.exercises[0].sets).toEqual([{ id: "set_2", reps: 8 }]);
+    expect(workout.exercises[0].sets).toHaveLength(2);
+  });
+
+  it("removeSet preserves an exercise's final set", () => {
+    const workout = {
+      ...mkWorkout(),
+      exercises: [{ id: "exi_1", sets: [{ id: "set_1", reps: 5 }] }],
+    };
+
+    const next = ActiveWorkoutService.removeSet(workout, {
+      exerciseInstanceId: "exi_1",
+      setId: "set_1",
+    });
+
+    expect(next.exercises[0].sets).toEqual([{ id: "set_1", reps: 5 }]);
+  });
 });

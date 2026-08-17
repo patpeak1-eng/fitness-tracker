@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Info, Plus } from 'lucide-react';
+import { Info, Plus, Trash2 } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import InstructionModal from './InstructionModal';
 import './ExerciseResult.css';
 
 const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [] }) => {
-    const { units, updateSet, addSet } = useWorkout();
+    const { units, updateSet, addSet, removeSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
 
     // CRITICAL: Find the exercise safely
@@ -35,9 +35,10 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
         );
     }
 
-    // Grid Columns Logic: Prep Mode = 3 columns (Set, Weight, Reps). Active Mode = 4 cols (Set, Weight, Reps, RPE)
+    // Grid Columns Logic: Prep Mode adds a compact action column so an athlete
+    // can adjust a proposed plan before the guided workout begins.
     const gridStyle = isPrep
-        ? { gridTemplateColumns: '0.5fr 1fr 1fr' }
+        ? { gridTemplateColumns: '0.5fr 1fr 1fr 44px' }
         : { gridTemplateColumns: '0.5fr 1fr 1fr 1fr' };
 
     return (
@@ -56,6 +57,7 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                 <div className="col-set">SET</div>
                 <div className="col-weight">{units === 'imperial' ? 'LBS' : 'KGS'}</div>
                 <div className="col-reps">REPS</div>
+                {isPrep && <div className="col-actions" aria-label="Set actions" />}
                 {!isPrep && <div className="col-reps">RPE (1-10)</div>}
             </div>
 
@@ -97,6 +99,21 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                         {!isPrep && (
                             <div className="col-reps">
                                 <input type="number" placeholder="-" />
+                            </div>
+                        )}
+                        {isPrep && (
+                            <div className="col-actions">
+                                {workoutData && sets.length > 1 && (
+                                    <button
+                                        type="button"
+                                        className="delete-set-btn"
+                                        aria-label={`Remove set ${index + 1}`}
+                                        title={`Remove set ${index + 1}`}
+                                        onClick={() => removeSet(workoutData.id, set.id)}
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

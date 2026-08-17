@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { X, ExternalLink } from 'lucide-react';
+import { X } from 'lucide-react';
 import './InstructionModal.css';
 
 const InstructionModal = ({ exercise, isOpen, onClose }) => {
+    // Built-in exercises use `illustration`; `imageUrl` remains a compatibility
+    // fallback for older or custom exercise records.
+    const visualSource = exercise?.illustration || exercise?.imageUrl;
+    const [visualError, setVisualError] = useState(false);
+
+    useEffect(() => {
+        setVisualError(false);
+    }, [visualSource]);
+
     if (!exercise || !isOpen) return null;
 
     return ReactDOM.createPortal(
@@ -14,8 +23,13 @@ const InstructionModal = ({ exercise, isOpen, onClose }) => {
                 </button>
 
                 <div className="instruction-image-container">
-                    {exercise.imageUrl ? (
-                        <img src={exercise.imageUrl} alt={exercise.name} className="instruction-image" />
+                    {visualSource && !visualError ? (
+                        <img
+                            src={visualSource}
+                            alt={`${exercise.name} exercise demonstration`}
+                            className="instruction-image"
+                            onError={() => setVisualError(true)}
+                        />
                     ) : (
                         <div className="placeholder-image">
                             <span>No Visual Available</span>
@@ -31,12 +45,6 @@ const InstructionModal = ({ exercise, isOpen, onClose }) => {
                         <h3>How to Perform</h3>
                         <p>{exercise.instructions || 'No detailed instructions available for this exercise yet.'}</p>
                     </div>
-
-                    {exercise.imageUrl && (
-                        <a href={exercise.imageUrl} target="_blank" rel="noopener noreferrer" className="external-link">
-                            View Source <ExternalLink size={14} />
-                        </a>
-                    )}
                 </div>
             </div>
         </div>,

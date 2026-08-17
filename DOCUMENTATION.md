@@ -10,6 +10,8 @@
 > S25.2 (`docs/ai_coach_handoff_polish_s25_2.md`) keeps the camera from
 > obscuring a streaming Coach reply and routes Coach-created workouts directly
 > to preparation.
+> S25.3 (`docs/preparation_controls_visual_contract_s25_3.md`) documents
+> athlete-adjustable preparation sets and the shared exercise-visual contract.
 
 ## 1. State Management
 **File**: `src/context/WorkoutContext.jsx`
