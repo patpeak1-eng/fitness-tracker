@@ -142,6 +142,8 @@ User-specific state (reset on profile change):
   userStats        — age, height, weight, goal, etc.
   weightHistory    — array of {date, weight}
   activeEquipmentProfileId, customEquipmentItems — equipment system (S15, local-only)
+  equipmentEnvironments — named confirmed photo/manual equipment lists (S24,
+                          profile-scoped local storage; image never stored)
 
 Hydration gates (S13/S15 — see pattern 7 below):
   historyHydratedFor, activeWorkoutHydratedFor, settingsHydratedFor
@@ -198,7 +200,9 @@ Global keys (not profile-scoped): profiles, currentProfileId, autoSync
 Profile-scoped keys: history, activeWorkout, assessments, theme, units,
                       sound, defaultRest, defaultWork, stats, weightHistory,
                       exercisePrefs, smartProg, progMode, progType, progInc,
-                      customTemplates, customExercises
+                      customTemplates, customExercises, equipmentProfile,
+                      customEquipment, equipmentEnvironments, foodLog,
+                      nutritionTargets
 ```
 
 Profile-scoped keys are namespaced as `{baseKey}_user_{uid}`. A **legacy migration path** exists (`legacyScopedKey`, `migrateLegacyProfileKey`) for an older `{baseKey}_{uid}` format — this runs automatically on `getOrCreateProfiles()` via `startupCleanup()`. **Do not remove this migration code** without confirming no user has data in the legacy format.
@@ -221,15 +225,20 @@ apiFetch(path, options)
 Exported calls (all via apiFetch unless noted):
   register/login          → plain fetch, surface 4xx JSON detail to the UI
   getMe                   → cookie-only fetch to /api/auth/me
-  getHistory/saveWorkout  → /api/workouts (saveWorkout maps camelCase → snake_case)
+  getHistory/saveWorkout  → /api/workouts (getHistory paginates in 200-row
+                            pages until complete history is hydrated;
+                            saveWorkout maps camelCase → snake_case)
   get/save/clearActiveWorkout → /api/workouts/active
   getProfile/saveProfile  → /api/profile (partial objects OK — ProfileUpdate
                             fields are all Optional server-side)
   getWeightHistory/addWeightEntry → /api/weight
   get/save/deleteCustomTemplate   → /api/templates
-  sendCoachMessage        → /api/coach/chat (returns raw Response for SSE —
-                            never call .json() on it)
+  sendCoachMessage        → /api/coach/chat (message + active workout + bounded
+                            app context; returns raw Response for SSE — never
+                            call .json() on it)
   getCoachHistory         → /api/coach/history
+  analyzeEquipment        → /api/coach/equipment/analyze (transient image;
+                            confirmed equipment is saved by the client)
   synthesizeVoice         → /api/voice/coach-synthesize
 ```
 
@@ -305,11 +314,26 @@ The backend `PUT /api/profile` handler is a generic `setattr` loop over Optional
 
 **SyncQueue (`src/services/SyncQueue.js`, S12):** persistent localStorage-backed retry queue for failed cloud pushes. Ops carry a `(type, key)` dedupe key so only the latest value per item is held. Executors are registered at runtime from WorkoutContext (keeps SyncQueue dependency-free, no import cycles). The queue flushes on boot, on `online`, and on foreground; a 401 during replay stops flushing and raises `authExpired`, which surfaces a re-login banner via `SyncStatusBadge.jsx`. **Any new backend push path must enqueue on failure and register an executor.**
 
-**Food log sync (S19, spec: docs/nutrition_spec_s18.md §7.4):** `foodLog` state in WorkoutContext is local-first like `weightHistory` — entries keep the backend's snake_case field names plus `id`/`client_id`/`backendId`. Persistence is hydration-gated on `settingsHydratedFor` (restored in the same `refreshProfileData` batch, so the existing gate covers it — no new flag). Every entry gets a frontend `client_id` at creation; the backend POST is idempotent on `(user_id, client_id)`, so queue replays can't duplicate rows. Three executor types: `food_log` (create), `food_log_update`, `food_log_delete` — the latter two resolve a missing backend UUID by `client_id` via the list endpoint (queue order guarantees a pending create flushes first; this also closes the offline-create-then-delete resurrection hole). Login pull rides the existing 6-promise `allSettled` (90-day window), union-merges by `client_id`, and **adopts** backend UUIDs onto local entries that were pushed via the queue (executors deliberately never write back into storage — the persist effect would clobber it). Device-only entries backfill through the same once-per-boot-gated block as workouts/weights.
+**Food log sync (S19, full-history hydration S24; spec: docs/nutrition_spec_s18.md §7.4 and docs/ai_coach_expansion_spec_s24.md):** `foodLog` state in WorkoutContext is local-first like `weightHistory` — entries keep the backend's snake_case field names plus `id`/`client_id`/`backendId`. Persistence is hydration-gated on `settingsHydratedFor` (restored in the same `refreshProfileData` batch, so the existing gate covers it — no new flag). Every entry gets a frontend `client_id` at creation; the backend POST is idempotent on `(user_id, client_id)`, so queue replays can't duplicate rows. Three executor types: `food_log` (create), `food_log_update`, `food_log_delete` — the latter two resolve a missing backend UUID by `client_id` via the list endpoint (queue order guarantees a pending create flushes first; this also closes the offline-create-then-delete resurrection hole). Login pull rides the cloud `allSettled` batch, requests from Unix epoch forward (complete durable history), union-merges by `client_id`, and **adopts** backend UUIDs onto local entries that were pushed via the queue (executors deliberately never write back into storage — the persist effect would clobber it). Device-only entries backfill through the same once-per-boot-gated block as workouts/weights.
+
+**Assessment sync (S24):** the previously unused `/api/assessments` routes now
+participate in cloud pull, local/backend-id adoption, device-only backfill, and
+the retry queue. The frontend-generated assessment `id` remains inside the
+JSONB payload and is the cross-device merge key. This makes assessment goals
+and equipment answers available to durable Coach context rather than only the
+originating browser.
 
 ### 4.8 Equipment Profile System ✅ VERIFIED (S15, local-only)
 
 `DEFAULT_EQUIPMENT_PROFILES` in WorkoutContext defines five tiers — `full_gym`, `home_gym`, `fire_station`, `bodyweight_only`, `custom` — each an equipment string list. `activeEquipmentProfileId` + `customEquipmentItems` are profile-scoped persisted state (hydration-gated, **local-only — deliberately not backend-synced**). `TrackWorkout.jsx` and `ExerciseSelector.jsx` consume the active profile to filter exercises by their `equipment` field.
+
+S24 adds `equipmentEnvironments`: named, confirmed equipment arrays created
+manually or from the Coach photo-review flow. They are profile-scoped local
+data and activate through `sessionEquipmentOverride`, so the existing
+compatibility filter is reused unchanged. Coach requests carry the confirmed
+list and compatible exercise catalog in bounded `app_context`. The source
+photo is downscaled, sent transiently to `/api/coach/equipment/analyze`, and
+discarded; only the confirmed equipment terms are stored.
 
 **Gotcha (from S15):** `exercise.equipment` uses `/` both as an OR-separator AND inside literal multi-word names (`"Parallel Bars/Bench"`). Matching logic must test the full string before slash-splitting.
 
@@ -488,7 +512,11 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
 /api/coach     (routers/coach.py)
   POST /chat                     → SSE streaming AI Coach chat
                                     (model claude-sonnet-4-6, prompt-cached
-                                    system blocks, rate-limited)
+                                    system blocks, long-term compact context,
+                                    optional validated workout-plan event,
+                                    rate-limited)
+  POST /equipment/analyze        → transient Claude Vision equipment detection;
+                                    canonical terms + confidence, image discarded
   POST /chat/stream              → deprecated alias, delegates to /chat
   GET  /history                  → last 20 CoachMessage rows
 
@@ -549,15 +577,17 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
 ## 8. AI COACH INTEGRATION ✅ VERIFIED (read directly from source, S12 audit)
 
 ```
-Model:        claude-sonnet-4-6 (COACH_MODEL in routers/coach.py, max_tokens 1024)
+Model:        claude-sonnet-4-6 (COACH_MODEL in routers/coach.py, max_tokens 1600)
 Personas:     apex (default) / hype / zen — persona prompt is system block 1,
               static app-knowledge prompt is block 0, both prompt-cached;
-              per-request user context (experience level + stats + last 10
-              workouts + active session + 7-day NUTRITION summary line when
-              food_log rows exist — plain averages only, never per-entry
-              data; trend questions are deflected to the dashboard by the
-              NUTRITION BOUNDARY block in the system prompt, S19) is
-              block 2, uncached
+              per-request user context is block 2, uncached. It contains
+              profile stats/preferences, the last 10 workouts in detail,
+              active session, recent assessments, custom template/exercise
+              summaries, compact 28/90/365-day + all-time training/nutrition/
+              weight trends, and bounded frontend app context (exercise
+              library, equipment, local assessments/stats, templates and
+              nutrition targets). Long-term aggregates are computed server-
+              side; raw historical meal rows are never placed in the prompt.
 Calibration:  users.experience_level (beginner/intermediate/advanced, default
               intermediate, migration 0006) controls response DEPTH — the
               EXPERIENCE CALIBRATION block in COACH_SYSTEM_PROMPT tells the
@@ -571,6 +601,13 @@ Voice:        ElevenLabs "Jarvis" (FxZjRiAEBESrb7srpme7), model eleven_flash_v2_
 Transport:    SSE streaming via POST /api/coach/chat
 Frontend:     src/pages/CoachView.jsx; ApiService.sendCoachMessage returns the
               raw Response for ReadableStream consumption
+Actions:      Anthropic propose_workout tool output is server-validated against
+              compatible exercise ids and emitted as SSE `workout_plan`.
+              CoachView renders a review card; only explicit Start workout or
+              Save template clicks call existing WorkoutContext mutations.
+Equipment:    POST /api/coach/equipment/analyze accepts a downscaled image,
+              returns canonical equipment + confidence/notes, and never stores
+              the image. The user edits and confirms before activation.
 Storage:      CoachMessage table, PostgreSQL, CASCADE delete on user removal;
               chat replays last 10 turns, /history returns last 20
 Guardrails:   per-user rate limits on both coach and voice (app/rate_limit.py);

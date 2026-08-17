@@ -318,6 +318,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         SyncQueue.registerExecutor('workout', op => ApiService.saveWorkout(op.payload));
         SyncQueue.registerExecutor('weight', op =>
             ApiService.addWeightEntry(op.payload.weight, op.payload.date));
+        SyncQueue.registerExecutor('assessment', async op => {
+            const resp = await ApiService.saveAssessment(op.payload);
+            if (resp?.id && op.uid) {
+                const stored = StorageService.loadAssessments(op.uid);
+                const idx = stored.findIndex(item => item.id === op.payload.id);
+                if (idx !== -1) {
+                    stored[idx].backendId = resp.id;
+                    StorageService.saveAssessments(op.uid, stored);
+                }
+            }
+        });
         SyncQueue.registerExecutor('profile_settings', op => ApiService.saveProfile(op.payload));
         SyncQueue.registerExecutor('template', async op => {
             const resp = await ApiService.saveCustomTemplate(op.payload);
@@ -354,11 +365,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         const resolveFoodBackendId = async (payload) => {
             if (payload.backendId) return payload.backendId;
             if (!payload.client_id) return null;
-            // 90-day window (not the backend's 30-day default) so backdated
-            // offline-created entries still resolve — same window as the pull.
-            const rows = await ApiService.getFoodLog(
-                new Date(Date.now() - 90 * 86400000).toISOString()
-            );
+            // Resolve against complete durable history so an old offline row
+            // can still be edited or deleted after a later reconnect.
+            const rows = await ApiService.getFoodLog(new Date(0).toISOString());
             return rows.find(r => r.client_id === payload.client_id)?.id || null;
         };
         SyncQueue.registerExecutor('food_log_update', async op => {
@@ -395,6 +404,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [activeEquipmentProfileId, setActiveEquipmentProfileId] = useState('full_gym');
     const [customEquipmentItems, setCustomEquipmentItems] = useState([]);
+    const [equipmentEnvironments, setEquipmentEnvironments] = useState([]);
     const [sessionEquipmentOverride, setSessionEquipmentOverride] = useState(null); // null = use saved profile, array = temp override
     const [coachPersonality, setCoachPersonality] = useState(DEFAULT_PERSONALITY);
     const [coachVoiceId, setCoachVoiceId] = useState(DEFAULT_VOICE_ID);
@@ -595,6 +605,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
         setActiveEquipmentProfileId(ps.equipmentProfileId || 'full_gym');
         setCustomEquipmentItems(ps.customEquipmentItems || []);
+        setEquipmentEnvironments(ps.equipmentEnvironments || []);
+        setSessionEquipmentOverride(null);
 
         setUserStats(ps.userStats);
         setWeightHistory(ps.weightHistory);
@@ -635,19 +647,18 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         ApiService.getWeightHistory(),
                         ApiService.getCustomTemplates(),
                         ApiService.getCustomExercises(),
-                        // 90-day window: covers the History view's widest range
-                        // (backend default is only 30 days). Union merge below
-                        // never removes, so older local rows are unaffected.
-                        ApiService.getFoodLog(
-                            new Date(Date.now() - 90 * 86400000).toISOString()
-                        )
+                        // Pull the complete durable food history. The former
+                        // 90-day window made older cloud entries invisible on
+                        // a new device even though the backend retained them.
+                        ApiService.getFoodLog(new Date(0).toISOString()),
+                        ApiService.getAssessments()
                     ]);
                     results.forEach((result, i) => {
                         if (result.status === 'rejected') {
                             console.warn(`Cloud pull [${i}] failed:`, result.reason);
                         }
                     });
-                    const [profileData, workoutData, weightData, templateData, exerciseData, foodData] =
+                    const [profileData, workoutData, weightData, templateData, exerciseData, foodData, assessmentData] =
                         results.map(r => r.status === 'fulfilled' ? r.value : null);
 
                     // The user may have switched profiles while these were in flight.
@@ -823,6 +834,42 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         });
                     }
 
+                    // Assessments — merge by the frontend id preserved inside
+                    // assessment_data; adopt backend UUIDs onto local rows.
+                    if (Array.isArray(assessmentData) && assessmentData.length > 0) {
+                        setAssessments(prev => {
+                            const byLocalId = new Map(
+                                assessmentData
+                                    .filter(row => row.assessment_data?.id)
+                                    .map(row => [row.assessment_data.id, row])
+                            );
+                            const adopted = prev.map(item => {
+                                const row = byLocalId.get(item.id);
+                                return row && !item.backendId
+                                    ? { ...item, backendId: row.id }
+                                    : item;
+                            });
+                            const localIds = new Set(prev.map(item => item.id));
+                            const localBackendIds = new Set(prev.map(item => item.backendId).filter(Boolean));
+                            const additions = assessmentData
+                                .filter(row =>
+                                    !localBackendIds.has(row.id) &&
+                                    !localIds.has(row.assessment_data?.id))
+                                .map(row => ({
+                                    ...row.assessment_data,
+                                    backendId: row.id,
+                                }));
+                            const changed = additions.length > 0 || adopted.some(
+                                (item, index) => item !== prev[index]
+                            );
+                            if (!changed) return prev;
+                            const merged = [...adopted, ...additions]
+                                .sort((a, b) => new Date(a.date) - new Date(b.date));
+                            StorageService.saveAssessments(profile.id, merged);
+                            return merged;
+                        });
+                    }
+
                     // Custom templates — merge backend templates into local.
                     // Dedup by backendId (the backend UUID): templates we've already
                     // pulled or pushed carry it locally, so a UUID-to-UUID compare avoids
@@ -963,8 +1010,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         const localFood = StorageService.loadProfileState(profile.id).foodLog || [];
                         // Rows with a backendId are known-cloud; rows whose
                         // client_id the pull didn't return are cloud-absent
-                        // (or outside the 90-day window — safe either way:
-                        // the POST is idempotent by client_id).
+                        // the POST is idempotent by client_id.
                         localFood
                             .filter(e => !e.backendId && e.client_id && !cloudFoodClientIds.has(e.client_id))
                             .forEach(e => backfill.push({
@@ -972,6 +1018,19 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                                 key: e.client_id,
                                 payload: e,
                                 uid: profile.id
+                            }));
+                    }
+                    if (Array.isArray(assessmentData)) {
+                        const cloudAssessmentIds = new Set(
+                            assessmentData.map(row => row.assessment_data?.id).filter(Boolean)
+                        );
+                        StorageService.loadAssessments(profile.id)
+                            .filter(item => !item.backendId && !cloudAssessmentIds.has(item.id))
+                            .forEach(item => backfill.push({
+                                type: 'assessment',
+                                key: item.id,
+                                payload: item,
+                                uid: profile.id,
                             }));
                     }
                     if (backfill.length > 0) {
@@ -1196,6 +1255,15 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             StorageService.saveCustomEquipment(currentProfile.id, customEquipmentItems);
         }
     }, [customEquipmentItems, currentProfile, settingsHydratedFor]);
+
+    // Named photo/manual equipment environments stay profile-scoped and local.
+    // The confirmed active environment is sent to the Coach as request context;
+    // photos themselves are never stored.
+    useEffect(() => {
+        if (currentProfile && settingsHydratedFor === currentProfile.id) {
+            StorageService.saveEquipmentEnvironments(currentProfile.id, equipmentEnvironments);
+        }
+    }, [equipmentEnvironments, currentProfile, settingsHydratedFor]);
 
 
 
@@ -2276,6 +2344,29 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
         // Save to storage
         StorageService.saveAssessments(currentProfile.id, updated);
+
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            const uid = currentProfile.id;
+            ApiService.saveAssessment(newAssessment)
+                .then(resp => {
+                    if (!resp?.id) return;
+                    const stored = StorageService.loadAssessments(uid);
+                    const idx = stored.findIndex(item => item.id === newAssessment.id);
+                    if (idx !== -1) {
+                        stored[idx].backendId = resp.id;
+                        StorageService.saveAssessments(uid, stored);
+                    }
+                })
+                .catch(err => {
+                    console.warn('[CloudSync] Assessment push failed (non-fatal):', err.message);
+                    SyncQueue.enqueue({
+                        type: 'assessment',
+                        key: newAssessment.id,
+                        payload: newAssessment,
+                        uid,
+                    });
+                });
+        }
     };
 
     // --- 10. HISTORY LOOKUP (Previous Stats) ---
@@ -2511,6 +2602,33 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         );
     };
 
+    const saveEquipmentEnvironment = ({ name, equipment, source = 'manual' }) => {
+        if (!currentProfile || !Array.isArray(equipment) || equipment.length === 0) return null;
+        const normalizedName = String(name || 'Current location').trim().slice(0, 60) || 'Current location';
+        const normalizedEquipment = [...new Set(equipment.map(String))];
+        const next = {
+            id: 'env_' + generateId(),
+            name: normalizedName,
+            equipment: normalizedEquipment,
+            source,
+            updatedAt: new Date().toISOString()
+        };
+        setEquipmentEnvironments(prev => [next, ...prev.filter(env => env.name !== normalizedName)]);
+        setSessionEquipmentOverride(normalizedEquipment);
+        return next;
+    };
+
+    const activateEquipmentEnvironment = (environmentId) => {
+        const environment = equipmentEnvironments.find(env => env.id === environmentId);
+        if (!environment) return false;
+        setSessionEquipmentOverride(environment.equipment);
+        return true;
+    };
+
+    const deleteEquipmentEnvironment = (environmentId) => {
+        setEquipmentEnvironments(prev => prev.filter(env => env.id !== environmentId));
+    };
+
     const value = useMemo(() => ({
         activeWorkout,
         prepValidation,
@@ -2600,6 +2718,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setActiveEquipmentProfileId,
         customEquipmentItems,
         setCustomEquipmentItems,
+        equipmentEnvironments,
+        saveEquipmentEnvironment,
+        activateEquipmentEnvironment,
+        deleteEquipmentEnvironment,
         sessionEquipmentOverride,
         setSessionEquipmentOverride,
         getCompatibleExercises
@@ -2613,7 +2735,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         smartProgressionEnabled, progressionMode,
         progressionType, progressionIncrement,
         authChecked,
-        activeEquipmentProfileId, customEquipmentItems, sessionEquipmentOverride,
+        activeEquipmentProfileId, customEquipmentItems, equipmentEnvironments, sessionEquipmentOverride,
     ]);
 
     return (

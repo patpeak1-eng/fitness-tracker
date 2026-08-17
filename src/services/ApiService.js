@@ -77,8 +77,27 @@ export const getMe = () =>
   });
 
 // Workouts
-export const getHistory = () =>
-  apiFetch('/api/workouts').then(r => r.json());
+export const getHistory = async () => {
+  const limit = 200;
+  let offset = 0;
+  let total = null;
+  const items = [];
+  do {
+    const path = `/api/workouts?limit=${limit}&offset=${offset}`;
+    const r = await apiFetch(path);
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      throw httpError(r, path, text);
+    }
+    const page = await r.json();
+    total = Number(page.total) || 0;
+    const pageItems = Array.isArray(page.items) ? page.items : [];
+    items.push(...pageItems);
+    offset += pageItems.length;
+    if (pageItems.length === 0) break;
+  } while (offset < total);
+  return { total: total || items.length, limit, offset: 0, items };
+};
 
 export const saveWorkout = async (workout) => {
   const r = await apiFetch('/api/workouts', {
@@ -337,10 +356,20 @@ export const getGoogleAuthUrl = () => {
 };
 
 // Coach
-export const sendCoachMessage = async (message, workoutContext = null, personality = DEFAULT_PERSONALITY) => {
+export const sendCoachMessage = async (
+  message,
+  workoutContext = null,
+  personality = DEFAULT_PERSONALITY,
+  appContext = null
+) => {
   const res = await apiFetch('/api/coach/chat', {
     method: 'POST',
-    body: JSON.stringify({ message, workout_context: workoutContext, personality })
+    body: JSON.stringify({
+      message,
+      workout_context: workoutContext,
+      personality,
+      app_context: appContext
+    })
   });
   // Returns raw Response for SSE streaming — do NOT call .json()
   return res;
@@ -348,6 +377,33 @@ export const sendCoachMessage = async (message, workoutContext = null, personali
 
 export const getCoachHistory = () =>
   apiFetch('/api/coach/history').then(r => r.json());
+
+export const analyzeEquipment = async ({ image, media_type = 'image/jpeg' }) => {
+  const r = await apiFetch('/api/coach/equipment/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ image, media_type })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, '/api/coach/equipment/analyze', text);
+  }
+  return r.json();
+};
+
+export const getAssessments = () =>
+  apiFetch('/api/assessments').then(r => r.json());
+
+export const saveAssessment = async (assessment) => {
+  const r = await apiFetch('/api/assessments', {
+    method: 'POST',
+    body: JSON.stringify({ assessment_data: assessment })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, '/api/assessments', text);
+  }
+  return r.json();
+};
 
 export const synthesizeVoice = (text, voiceId = DEFAULT_VOICE_ID) =>
   apiFetch('/api/voice/coach-synthesize', {

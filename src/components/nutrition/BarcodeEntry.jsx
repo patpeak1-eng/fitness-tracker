@@ -170,7 +170,6 @@ const BarcodeEntry = ({ onSave, onCancel }) => {
             )}
             {scanning && (
                 <div className="scan-viewport">
-                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                     <video ref={videoRef} playsInline muted />
                     <button className="entry-cancel-btn" onClick={stopScan}>Stop scanning</button>
                 </div>

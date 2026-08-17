@@ -76,6 +76,214 @@
     box-shadow: 0 0 15px var(--primary-glow);
 }
 
+.coach-equipment-toggle,
+.coach-panel-close {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    border: var(--border-glass);
+}
+
+.coach-equipment-toggle:hover,
+.coach-equipment-toggle.active {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.coach-equipment-panel {
+    flex-shrink: 1;
+    max-height: min(62vh, 560px);
+    overflow-y: auto;
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 18px;
+    background: var(--bg-card);
+    border: var(--border-glass);
+    box-shadow: var(--shadow-card);
+}
+
+.coach-active-environment {
+    align-self: flex-start;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    color: var(--primary);
+    background: var(--primary-glow);
+    border: 1px solid var(--primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.coach-panel-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.coach-panel-heading h2,
+.coach-plan-card h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+}
+
+.coach-panel-heading p {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.coach-panel-close {
+    width: 34px;
+    height: 34px;
+}
+
+.coach-photo-btn,
+.coach-confirm-equipment {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+.coach-photo-btn {
+    color: var(--primary);
+    background: var(--primary-glow);
+    border: 1px solid var(--primary);
+}
+
+.coach-photo-btn:disabled {
+    opacity: 0.65;
+}
+
+.coach-environment-name {
+    display: grid;
+    gap: 6px;
+    margin: 14px 0;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.coach-environment-name input {
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: var(--text-primary);
+    background: var(--input-bg);
+    border: var(--border-glass);
+}
+
+.coach-equipment-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.coach-equipment-grid button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border: var(--border-glass);
+    font-size: 0.76rem;
+}
+
+.coach-equipment-grid button.selected {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: var(--primary-glow);
+}
+
+.coach-detection-note,
+.coach-equipment-error {
+    margin: 12px 0 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.coach-detection-note { color: var(--text-secondary); }
+.coach-equipment-error { color: var(--error); }
+
+.coach-confirm-equipment {
+    margin-top: 14px;
+    color: #0a0a0a;
+    background: var(--primary);
+}
+
+.coach-saved-environments {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: var(--border-glass);
+}
+
+.coach-saved-environments h3 {
+    margin: 0 0 2px;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.coach-environment-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.coach-environment-row > button:first-child {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 10px 12px;
+    text-align: left;
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    border: var(--border-glass);
+    border-radius: 10px;
+}
+
+.coach-environment-row small {
+    overflow: hidden;
+    color: var(--text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coach-environment-delete {
+    width: 40px;
+    color: var(--error);
+    border: var(--border-glass);
+    border-radius: 10px;
+}
+
+.coach-spin { animation: coach-spin 0.9s linear infinite; }
+@keyframes coach-spin { to { transform: rotate(360deg); } }
+
 /* --- Message thread (scrollable, fills the middle) --- */
 .coach-thread {
     flex: 1;
@@ -137,6 +345,114 @@
 .coach-bubble-error {
     color: var(--error);
     border-color: var(--error);
+}
+
+.coach-plan-card {
+    width: 100%;
+    padding: 16px;
+    border-radius: 18px;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--primary);
+    box-shadow: 0 0 22px var(--primary-glow);
+}
+
+.coach-plan-kicker {
+    margin-bottom: 5px;
+    color: var(--primary);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.coach-plan-card > p {
+    margin: 6px 0 12px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.coach-plan-card ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: coach-plan;
+}
+
+.coach-plan-card li {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 0 8px;
+    counter-increment: coach-plan;
+}
+
+.coach-plan-card li::before {
+    content: counter(coach-plan);
+    grid-row: 1 / span 2;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--primary);
+    background: var(--primary-glow);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.coach-plan-card li div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 10px;
+}
+
+.coach-plan-card li span,
+.coach-plan-card li small {
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+}
+
+.coach-plan-card li small {
+    grid-column: 2;
+    margin-top: 2px;
+}
+
+.coach-plan-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.coach-plan-actions button {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border-radius: 11px;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.coach-plan-save {
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+.coach-plan-start {
+    color: #0a0a0a;
+    background: var(--primary);
+}
+
+.coach-plan-status {
+    margin: 10px 0 0 !important;
+    color: var(--success) !important;
+    text-align: center;
 }
 
 /* Streaming caret */

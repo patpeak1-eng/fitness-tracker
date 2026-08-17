@@ -1,13 +1,47 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Send, Sparkles, Mic, Square } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+    BookmarkPlus, Camera, Check, LoaderCircle, Mic, Play,
+    Send, Sparkles, Square, Trash2, Volume2, VolumeX, X
+} from 'lucide-react';
 import BackButton from '../components/common/BackButton';
 import { useWorkout } from '../context/WorkoutContext';
-import { sendCoachMessage, getCoachHistory, synthesizeVoice } from '../services/ApiService';
+import {
+    analyzeEquipment, sendCoachMessage, getCoachHistory, synthesizeVoice
+} from '../services/ApiService';
 import StorageService from '../services/StorageService';
+import { coachPlanToTemplate } from '../utils/coachWorkout';
 import './CoachView.css';
 
 const FLUSH_WORD_COUNT = 8;
 const VOICE_MIME = 'audio/mpeg';
+const EQUIPMENT_OPTIONS = [
+    'Barbell', 'Dumbbells', 'Cable', 'Machine', 'Pull-up Bar',
+    'Bench/Elevated Surface', 'Parallel Bars/Bench', 'Low Bar', 'Wall', 'None'
+];
+const MAX_IMAGE_DIMENSION = 1280;
+
+const downscaleToBase64 = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+        try {
+            const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(img.src);
+            resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+        } catch (err) {
+            reject(err);
+        }
+    };
+    img.onerror = () => {
+        URL.revokeObjectURL(img.src);
+        reject(new Error('Could not read the image.'));
+    };
+    img.src = URL.createObjectURL(file);
+});
 
 // Incremental WS→MSE playback needs MediaSource + audio/mpeg support. iOS Safari
 // has neither, so we detect once and fall back to full-text Web Audio there.
@@ -46,7 +80,15 @@ function stripMarkdownForDisplay(text) {
 }
 
 const CoachView = () => {
-    const { activeWorkout } = useWorkout();
+    const navigate = useNavigate();
+    const {
+        activeWorkout, currentProfile, exercises, templates, assessments, userStats,
+        experienceLevel, units, getCompatibleExercises,
+        activeEquipmentProfileId, equipmentProfiles, customEquipmentItems,
+        sessionEquipmentOverride, equipmentEnvironments,
+        saveEquipmentEnvironment, activateEquipmentEnvironment,
+        deleteEquipmentEnvironment, startWorkoutFromTemplate, saveCustomTemplate
+    } = useWorkout();
 
     // AI Coach can be turned off in Settings → AI Coach. Read once on mount; the
     // view gates to a short notice below when it's disabled.
@@ -61,6 +103,16 @@ const CoachView = () => {
     const [speakingIndex, setSpeakingIndex] = useState(null);
     const [isSpeaking, setIsSpeaking] = useState(false); // drives the Stop button
     const [isListening, setIsListening] = useState(false); // mic active
+    const [workoutPlan, setWorkoutPlan] = useState(null);
+    const [planStatus, setPlanStatus] = useState('');
+    const [equipmentOpen, setEquipmentOpen] = useState(false);
+    const [equipmentName, setEquipmentName] = useState('Current location');
+    const [detectedEquipment, setDetectedEquipment] = useState([]);
+    const [equipmentNotes, setEquipmentNotes] = useState('');
+    const [equipmentConfidence, setEquipmentConfidence] = useState(null);
+    const [equipmentError, setEquipmentError] = useState('');
+    const [isAnalyzingEquipment, setIsAnalyzingEquipment] = useState(false);
+    const [activeEnvironmentName, setActiveEnvironmentName] = useState('');
 
     const threadRef = useRef(null);
     // Web Audio fallback (full-text playback; also the iOS path).
@@ -84,6 +136,7 @@ const CoachView = () => {
     const streamDoneRef = useRef(false); // WS closed (all audio received) → safe to endOfStream
     const audioElRef = useRef(null); // hidden <audio> sink for MSE playback
     const recognitionRef = useRef(null); // Web Speech recognition instance
+    const equipmentFileRef = useRef(null);
 
     // --- Hydrate previous conversation on mount ---
     useEffect(() => {
@@ -109,7 +162,53 @@ const CoachView = () => {
     useEffect(() => {
         const el = threadRef.current;
         if (el) el.scrollTop = el.scrollHeight;
-    }, [messages]);
+    }, [messages, workoutPlan, equipmentOpen]);
+
+    const buildCoachAppContext = () => {
+        const compatible = getCompatibleExercises().slice(0, 120).map((exercise) => ({
+            id: exercise.id,
+            name: exercise.name,
+            category: exercise.category,
+            primary_muscle: exercise.primary_muscle,
+            equipment: exercise.equipment || 'None',
+            is_bodyweight: !!exercise.isBodyweight,
+        }));
+        const library = exercises.slice(0, 150).map((exercise) => ({
+            id: exercise.id,
+            name: exercise.name,
+            category: exercise.category,
+            primary_muscle: exercise.primary_muscle,
+            equipment: exercise.equipment || 'None',
+        }));
+        const selectedProfile = equipmentProfiles.find(
+            profile => profile.id === activeEquipmentProfileId
+        );
+        const equipment = sessionEquipmentOverride
+            || (activeEquipmentProfileId === 'custom'
+                ? customEquipmentItems
+                : selectedProfile?.equipment)
+            || [];
+        return {
+            available_exercises: compatible,
+            exercise_library: library,
+            app_templates: templates.slice(0, 30).map(template => ({
+                name: template.name,
+                exercise_count: template.exercises?.length || 0,
+                custom: !!template.isCustom,
+            })),
+            recent_local_assessments: assessments.slice(-3),
+            current_profile_stats: userStats,
+            preferences: { experience_level: experienceLevel, units },
+            pending_workout_plan: workoutPlan,
+            equipment: {
+                environment: activeEnvironmentName || selectedProfile?.name || 'Current equipment',
+                confirmed_items: equipment,
+            },
+            nutrition_targets: currentProfile
+                ? StorageService.loadNutritionTargets(currentProfile.id)
+                : null,
+        };
+    };
 
     // --- Tear down every audio/voice pipeline on unmount ---
     useEffect(() => () => {
@@ -380,7 +479,12 @@ const CoachView = () => {
         const personality = StorageService.loadCoachPersonality();
 
         try {
-            const res = await sendCoachMessage(trimmed, activeWorkout || null, personality);
+            const res = await sendCoachMessage(
+                trimmed,
+                activeWorkout || null,
+                personality,
+                buildCoachAppContext()
+            );
 
             if (!res.ok) {
                 let detail = `Coach request failed (${res.status}).`;
@@ -415,6 +519,13 @@ const CoachView = () => {
                         assistantText += event.content;
                         setLastAssistant({ content: assistantText });
                         if (voiceActive) phraseAccumulator(event.content);
+                    } else if (event.type === 'workout_plan' && event.plan) {
+                        setWorkoutPlan(event.plan);
+                        setPlanStatus('');
+                        if (!assistantText.trim()) {
+                            assistantText = `I prepared ${event.plan.name} for your review.`;
+                            setLastAssistant({ content: assistantText });
+                        }
                     } else if (event.type === 'error') {
                         setLastAssistant({
                             content: assistantText || event.content || 'The coach hit an error.',
@@ -518,6 +629,65 @@ const CoachView = () => {
         handleSend(input);
     };
 
+    const startCoachWorkout = () => {
+        if (!workoutPlan) return;
+        startWorkoutFromTemplate(coachPlanToTemplate(workoutPlan));
+        navigate('/');
+    };
+
+    const saveCoachTemplate = () => {
+        if (!workoutPlan) return;
+        const template = coachPlanToTemplate(workoutPlan);
+        saveCustomTemplate(template.name, template.exercises);
+        setPlanStatus('Saved to your workout templates.');
+    };
+
+    const toggleDetectedEquipment = (item) => {
+        setDetectedEquipment(prev => prev.includes(item)
+            ? prev.filter(value => value !== item)
+            : [...prev, item]);
+    };
+
+    const handleEquipmentPhoto = async (file) => {
+        if (!file) return;
+        setEquipmentError('');
+        setIsAnalyzingEquipment(true);
+        try {
+            const image = await downscaleToBase64(file);
+            const result = await analyzeEquipment({ image, media_type: 'image/jpeg' });
+            setDetectedEquipment(result.equipment || ['None']);
+            setEquipmentNotes(result.notes || '');
+            setEquipmentConfidence(result.confidence || 'low');
+        } catch (err) {
+            setEquipmentError(err.message || 'Could not analyze that photo.');
+        } finally {
+            setIsAnalyzingEquipment(false);
+            if (equipmentFileRef.current) equipmentFileRef.current.value = '';
+        }
+    };
+
+    const confirmEquipmentEnvironment = () => {
+        if (!detectedEquipment.length) {
+            setEquipmentError('Select at least one available equipment option.');
+            return;
+        }
+        const environment = saveEquipmentEnvironment({
+            name: equipmentName,
+            equipment: detectedEquipment,
+            source: equipmentConfidence ? 'photo' : 'manual',
+        });
+        if (!environment) return;
+        setActiveEnvironmentName(environment.name);
+        setEquipmentOpen(false);
+        setEquipmentError('');
+    };
+
+    const handleSavedEnvironment = (environment) => {
+        if (!activateEquipmentEnvironment(environment.id)) return;
+        setActiveEnvironmentName(environment.name);
+        setEquipmentOpen(false);
+    };
+
     // Gate the whole view when the coach is disabled in Settings. Placed after all
     // hooks so the early return doesn't violate the Rules of Hooks.
     if (!coachEnabled) {
@@ -550,6 +720,15 @@ const CoachView = () => {
                 </div>
                 <button
                     type="button"
+                    className={`coach-equipment-toggle ${equipmentOpen ? 'active' : ''}`}
+                    aria-label="Scan or choose workout equipment"
+                    title="Equipment environment"
+                    onClick={() => setEquipmentOpen(open => !open)}
+                >
+                    <Camera size={20} />
+                </button>
+                <button
+                    type="button"
                     className={`coach-voice-toggle ${voiceEnabled ? 'active' : ''}`}
                     aria-pressed={voiceEnabled}
                     aria-label={voiceEnabled ? 'Turn voice off' : 'Turn voice on'}
@@ -559,6 +738,85 @@ const CoachView = () => {
                     {voiceEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 </button>
             </header>
+
+            {activeEnvironmentName && !equipmentOpen && (
+                <div className="coach-active-environment">
+                    <Check size={14} /> Using {activeEnvironmentName}
+                </div>
+            )}
+
+            {equipmentOpen && (
+                <section className="coach-equipment-panel" aria-label="Equipment environment">
+                    <div className="coach-panel-heading">
+                        <div>
+                            <h2>Equipment environment</h2>
+                            <p>Photograph what is available, then confirm the result.</p>
+                        </div>
+                        <button type="button" className="coach-panel-close"
+                            onClick={() => setEquipmentOpen(false)} aria-label="Close equipment panel">
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <input ref={equipmentFileRef} type="file" accept="image/*"
+                        capture="environment" hidden
+                        onChange={(event) => handleEquipmentPhoto(event.target.files?.[0])} />
+                    <button type="button" className="coach-photo-btn"
+                        onClick={() => equipmentFileRef.current?.click()}
+                        disabled={isAnalyzingEquipment}>
+                        {isAnalyzingEquipment
+                            ? <><LoaderCircle size={18} className="coach-spin" /> Analyzing equipment…</>
+                            : <><Camera size={18} /> Take or choose a photo</>}
+                    </button>
+
+                    <label className="coach-environment-name">
+                        Environment name
+                        <input value={equipmentName}
+                            onChange={(event) => setEquipmentName(event.target.value)}
+                            maxLength={60} placeholder="Station 4, Home, Hotel gym…" />
+                    </label>
+
+                    <div className="coach-equipment-grid">
+                        {EQUIPMENT_OPTIONS.map(item => (
+                            <button type="button" key={item}
+                                className={detectedEquipment.includes(item) ? 'selected' : ''}
+                                onClick={() => toggleDetectedEquipment(item)}>
+                                {detectedEquipment.includes(item) && <Check size={14} />}
+                                {item}
+                            </button>
+                        ))}
+                    </div>
+                    {equipmentConfidence && (
+                        <p className="coach-detection-note">
+                            {equipmentConfidence} confidence{equipmentNotes ? ` · ${equipmentNotes}` : ''}
+                        </p>
+                    )}
+                    {equipmentError && <p className="coach-equipment-error">{equipmentError}</p>}
+                    <button type="button" className="coach-confirm-equipment"
+                        onClick={confirmEquipmentEnvironment}>
+                        Use this equipment
+                    </button>
+
+                    {equipmentEnvironments.length > 0 && (
+                        <div className="coach-saved-environments">
+                            <h3>Saved on this device</h3>
+                            {equipmentEnvironments.map(environment => (
+                                <div key={environment.id} className="coach-environment-row">
+                                    <button type="button" onClick={() => handleSavedEnvironment(environment)}>
+                                        <span>{environment.name}</span>
+                                        <small>{environment.equipment.join(', ')}</small>
+                                    </button>
+                                    <button type="button" className="coach-environment-delete"
+                                        aria-label={`Delete ${environment.name}`}
+                                        onClick={() => deleteEquipmentEnvironment(environment.id)}>
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+            )}
 
             <div className="coach-thread" ref={threadRef}>
                 {messages.length === 0 ? (
@@ -581,6 +839,39 @@ const CoachView = () => {
                             {m.streaming && <span className="coach-cursor">|</span>}
                         </div>
                     ))
+                )}
+
+                {workoutPlan && (
+                    <section className="coach-plan-card" aria-label="Coach workout proposal">
+                        <div className="coach-plan-kicker">Ready for review</div>
+                        <h2>{workoutPlan.name}</h2>
+                        {workoutPlan.rationale && <p>{workoutPlan.rationale}</p>}
+                        <ol>
+                            {workoutPlan.exercises.map(item => (
+                                <li key={item.exercise_id}>
+                                    <div>
+                                        <strong>{item.name}</strong>
+                                        <span>
+                                            {item.sets} sets
+                                            {item.reps ? ` × ${item.reps} reps` : ''}
+                                            {item.duration_seconds ? ` × ${item.duration_seconds}s` : ''}
+                                            {` · ${item.rest_seconds}s rest`}
+                                        </span>
+                                    </div>
+                                    {item.notes && <small>{item.notes}</small>}
+                                </li>
+                            ))}
+                        </ol>
+                        <div className="coach-plan-actions">
+                            <button type="button" className="coach-plan-save" onClick={saveCoachTemplate}>
+                                <BookmarkPlus size={17} /> Save template
+                            </button>
+                            <button type="button" className="coach-plan-start" onClick={startCoachWorkout}>
+                                <Play size={17} fill="currentColor" /> Start workout
+                            </button>
+                        </div>
+                        {planStatus && <p className="coach-plan-status">{planStatus}</p>}
+                    </section>
                 )}
             </div>
 

@@ -34,6 +34,7 @@ const KEY = {
     customExercises: 'fitness_custom_exercises',
     equipmentProfile: 'fitness_equipment_profile',
     customEquipment: 'fitness_custom_equipment',
+    equipmentEnvironments: 'fitness_equipment_environments',
     experienceLevel: 'fitness_experience_level',
     foodLog: 'fitness_food_log',
     nutritionTargets: 'fitness_nutrition_targets'
@@ -60,6 +61,7 @@ const PROFILE_SCOPED_BASE_KEYS = [
     KEY.customExercises,
     KEY.equipmentProfile,
     KEY.customEquipment,
+    KEY.equipmentEnvironments,
     KEY.experienceLevel,
     KEY.foodLog,
     KEY.nutritionTargets
@@ -320,6 +322,7 @@ const StorageService = {
             progressionIncrement: Number(readRaw(KEY.progInc, '5', { uid })),
             equipmentProfileId: readRaw(KEY.equipmentProfile, 'full_gym', { uid }),
             customEquipmentItems: readJSON(KEY.customEquipment, [], { uid }),
+            equipmentEnvironments: readJSON(KEY.equipmentEnvironments, [], { uid }),
             experienceLevel: readRaw(KEY.experienceLevel, 'intermediate', { uid }),
             foodLog: readJSON(KEY.foodLog, [], { uid })
         };
@@ -331,10 +334,14 @@ const StorageService = {
         else remove(KEY.activeWorkout, { uid });
     },
     saveAssessments(uid, assessments) { writeJSON(KEY.assessments, assessments, { uid }); },
+    loadAssessments(uid) { return readJSON(KEY.assessments, [], { uid }); },
     saveTheme(uid, theme) { writeRaw(KEY.theme, theme, { uid }); },
     saveUnits(uid, units) { writeRaw(KEY.units, units, { uid }); },
     saveEquipmentProfile(uid, profileId) { writeRaw(KEY.equipmentProfile, profileId, { uid }); },
     saveCustomEquipment(uid, items) { writeJSON(KEY.customEquipment, items, { uid }); },
+    saveEquipmentEnvironments(uid, environments) {
+        writeJSON(KEY.equipmentEnvironments, environments, { uid });
+    },
     saveSound(uid, soundEnabled) { writeRaw(KEY.sound, soundEnabled, { uid }); },
     saveDefaultTimers(uid, rest, work) {
         // Single-key JSON write: localStorage.setItem is atomic, so rest/work

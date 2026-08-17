@@ -160,7 +160,33 @@ sessions (backend, frontend core, polish/hardening). Not yet "fully
 closed" — three items need Patrick's hands-on involvement (P1 below);
 none block any other work.
 
-## Session 21+ Open Items (priority order)
+## Sessions 21–24 Final State
+
+S21 shipped the stale-avatar default/backfill correction and date-of-birth
+field with computed age (migrations 0008/0009), plus PWA icon cleanup and
+live verification. S22 committed the visual-identity research. S23 added
+native Share This App with clipboard/manual fallbacks.
+
+S24 expands the AI Coach end to end (spec:
+docs/ai_coach_expansion_spec_s24.md):
+
+- durable Coach context now combines last-10 workout detail with compact
+  28/90/365-day and all-time workout, nutrition, and weight summaries;
+  profile/app settings, assessments, custom templates/exercises, nutrition
+  targets, the exercise library, and confirmed equipment are included;
+- full cross-device history hydration replaces the old 90-day food window
+  and single 50-workout page; assessment routes now participate in cloud
+  pull, device backfill, and SyncQueue retry;
+- typed or spoken workout requests can emit a server-validated
+  `workout_plan`; the app shows a review card and requires an explicit Start
+  workout or Save template action before mutation;
+- the Coach camera flow sends a downscaled equipment photo to a transient
+  Claude Vision endpoint, requires editable review, saves only the confirmed
+  named environment locally, and reuses the existing equipment compatibility
+  filter; the image is never stored;
+- docs/ARCHITECTURE.md was updated in the same implementation change.
+
+## Session 25+ Open Items (priority order)
 P1 - Real-device barcode camera test (blocks full Nutrition closure
      only). On a phone, live app → Log food → Barcode → Scan, point at a
      real packaged product. Everything up to the physical camera+detector
@@ -178,29 +204,12 @@ P1 - Coach nutrition-commentary spot-check once real meals are logged.
      Confirm the trend-deflection boundary (chart-only; coach gives a
      one-line observation and points to the dashboard, never recites
      logged data) feels right in real use.
-P2 - Stale neon-green avatar color (#bfff00, the pre-redesign theme).
-     Two-layer bug, and existing rows hold the literal stale value (not
-     just a fallback gap — confirmed on Patrick's own account): migration
-     0001's users.color server_default is still '#bfff00', AND
-     routers/auth.py's /me handler falls back to the same literal in two
-     places. Fix needs a DB default change + a one-time backfill UPDATE
-     for existing rows + the auth.py fallbacks corrected to match. HIGH
-     zone (users table). Spec not yet written.
-P2 - Date-of-birth field for auto-updating age. UserStats.age is a plain
-     String today (manually typed, never auto-updates). Add date_of_birth
-     (nullable Date) to UserStats via a new migration; when set, displayed
-     age is COMPUTED from DOB (takes priority over the manual string);
-     users without a DOB keep today's manual-entry behavior unchanged.
-     HIGH zone (user_stats table) + a real UI decision (calendar picker
-     on tap, per the original request). Spec not yet written.
-P3 - Coach context format nit: NUTRITION line's entries=N reads as
-     "days" to the model (S19 backend test saw "two logged days" for 2
-     entries/1 day) — consider entries=/days= split in coach.py next
-     time it's open.
-P3 - Cloud pull food_log window is 90 days: entries older than 90d
-     logged on ANOTHER device won't pull to this one (local entries
-     unaffected). Fine for v1; revisit if multi-device long-history
-     matters.
+P1 - Real phone-camera equipment photo through the S24 Coach path. Confirm
+     capture="environment" opens the camera, the detected inventory is
+     sensible, edits persist, and the next workout proposal respects it.
+P2 - Named S24 equipment environments are profile-scoped local data. Add
+     backend sync only if cross-device environment reuse proves valuable;
+     the Coach already receives the active confirmed environment per request.
 P3 - Cloud login/register silently orphans local profiles (found S18,
      coordinator-confirmed): Login.jsx activateProfileAndGo AND the OAuth
      boot path both call saveProfiles([cloudProfile]) — unconditionally
