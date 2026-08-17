@@ -5,7 +5,7 @@ from SQLAlchemy ORM instances. JSONB payloads are typed as ``Any`` because the
 frontend owns their internal shape.
 """
 from datetime import date, datetime
-from typing import Any, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -62,6 +62,16 @@ class UserStatsResponse(UserStatsUpdate):
     updated_at: Optional[datetime] = None
 
 
+class EquipmentEnvironmentData(BaseModel):
+    id: str = Field(..., min_length=1, max_length=80)
+    name: str = Field(..., min_length=1, max_length=60)
+    equipment: List[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        ..., min_length=1, max_length=20
+    )
+    source: Literal["manual", "photo"] = "manual"
+    updatedAt: Optional[str] = Field(default=None, max_length=50)
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,6 +88,7 @@ class UserResponse(BaseModel):
     coach_personality: Optional[str] = None
     coach_voice_id: Optional[str] = None
     experience_level: Optional[str] = None
+    equipment_environments: Optional[List[EquipmentEnvironmentData]] = None
     created_at: Optional[datetime] = None
 
 
@@ -99,6 +110,9 @@ class ProfileUpdate(BaseModel):
     coach_personality: Optional[str] = None
     coach_voice_id: Optional[str] = None
     experience_level: Optional[str] = None
+    equipment_environments: Optional[List[EquipmentEnvironmentData]] = Field(
+        default=None, max_length=30
+    )
     # Optional nested body-stats update.
     stats: Optional[UserStatsUpdate] = None
 

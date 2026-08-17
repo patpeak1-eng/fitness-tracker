@@ -1,5 +1,10 @@
 # Fitness Tracker 2.0 - Technical Reference Manual
 
+> Current architecture and feature contracts live in `docs/ARCHITECTURE.md`.
+> AI Coach visual equipment capture and cross-device station environments are
+> defined in `docs/ai_coach_visual_equipment_spec_s25.md`. Keep those documents
+> updated in the same commit as any substantive app change.
+
 ## 1. State Management
 **File**: `src/context/WorkoutContext.jsx`
 

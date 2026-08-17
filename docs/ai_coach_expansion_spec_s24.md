@@ -88,6 +88,10 @@ access even though the image itself is discarded. Cross-device named-
 environment persistence is a follow-up; it is deliberately not coupled to the
 first workout-action release.
 
+S25 follow-up completed on 2026-08-17: multi-photo capture, direct Coach image
+attachments, outward-camera controls, and cross-device named-environment sync
+are specified in `docs/ai_coach_visual_equipment_spec_s25.md`.
+
 ## 6. Safety and privacy
 
 - All Coach and equipment-analysis endpoints require the current authenticated

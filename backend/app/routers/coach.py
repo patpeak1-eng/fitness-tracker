@@ -41,6 +41,8 @@ COACH_MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 1600
 MAX_APP_CONTEXT_CHARS = 60_000
 MAX_EQUIPMENT_IMAGE_CHARS = 7_000_000
+MAX_COACH_IMAGES = 6
+MAX_IMAGE_REQUEST_CHARS = 24_000_000
 ALLOWED_EQUIPMENT_IMAGE_TYPES = {
     "image/jpeg",
     "image/png",
@@ -110,6 +112,15 @@ WORKOUT ACTION:
 - The app will show the proposal for review; never claim it has already started
   or saved a workout.
 
+VISUAL INPUT:
+- When the current user turn contains image attachments, you can see those
+  images. Inspect all attached photos together and answer from what is visibly
+  present. State uncertainty and possible omissions plainly.
+- Never say image input is unavailable when image attachments are present.
+- Equipment photos are transient. The app saves only an equipment list after
+  the user reviews and confirms it, so never claim a station inventory was
+  saved merely because you inspected a photo.
+
 NUTRITION BOUNDARY: for questions about nutrition trends or history, give
 at most a one-line observation and direct the user to the Nutrition
 dashboard — never recite logged data or act as a trend-retrieval interface.
@@ -154,16 +165,25 @@ PERSONALITY_PROMPTS = {
 }
 
 
+class CoachImageAttachment(BaseModel):
+    image: str = Field(..., min_length=1, max_length=MAX_EQUIPMENT_IMAGE_CHARS)
+    media_type: str = "image/jpeg"
+
+
 class CoachChatRequest(BaseModel):
-    message: str = Field(..., max_length=4000)
+    message: str = Field(default="", max_length=4000)
     workout_context: Optional[dict] = None
     app_context: Optional[dict] = None
     personality: Optional[str] = "apex"
+    images: List[CoachImageAttachment] = Field(default_factory=list, max_length=MAX_COACH_IMAGES)
 
 
 class EquipmentAnalyzeRequest(BaseModel):
-    image: str
+    # The singular fields keep the S24 client request compatible while the
+    # list supports a multi-angle equipment scan.
+    image: Optional[str] = Field(default=None, max_length=MAX_EQUIPMENT_IMAGE_CHARS)
     media_type: str = "image/jpeg"
+    images: List[CoachImageAttachment] = Field(default_factory=list, max_length=MAX_COACH_IMAGES)
 
 
 class EquipmentAnalyzeResponse(BaseModel):
@@ -179,6 +199,36 @@ class CoachMessageResponse(BaseModel):
     role: str
     content: str
     created_at: Optional[datetime] = None
+
+
+def _request_images(payload: EquipmentAnalyzeRequest) -> List[CoachImageAttachment]:
+    images = list(payload.images)
+    if payload.image:
+        images.insert(0, CoachImageAttachment(image=payload.image, media_type=payload.media_type))
+    return images
+
+
+def _validate_images(images: List[CoachImageAttachment]) -> None:
+    if len(images) > MAX_COACH_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Attach no more than {MAX_COACH_IMAGES} images.",
+        )
+    if any(item.media_type not in ALLOWED_EQUIPMENT_IMAGE_TYPES for item in images):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported image type.",
+        )
+    if any(len(item.image) > MAX_EQUIPMENT_IMAGE_CHARS for item in images):
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="An image is too large; use images under about 5 MB each.",
+        )
+    if sum(len(item.image) for item in images) > MAX_IMAGE_REQUEST_CHARS:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="The combined image attachment is too large.",
+        )
 
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -535,11 +585,14 @@ async def coach_chat(
         )
 
     message_text = (payload.message or "").strip()
-    if not message_text:
+    images = list(payload.images)
+    _validate_images(images)
+    if not message_text and not images:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Message must not be empty.",
+            detail="Add a message or at least one image.",
         )
+    persisted_message = message_text or f"Shared {len(images)} equipment photo{'s' if len(images) != 1 else ''}."
 
     app_context = payload.app_context or None
     if app_context and len(json.dumps(app_context, default=str)) > MAX_APP_CONTEXT_CHARS:
@@ -549,7 +602,10 @@ async def coach_chat(
         )
 
     # 1. Persist the user's message so it's part of the replayed history.
-    db.add(CoachMessage(user_id=current_user.id, role="user", content=message_text))
+    user_message = CoachMessage(
+        user_id=current_user.id, role="user", content=persisted_message
+    )
+    db.add(user_message)
     await db.commit()
 
     # 2. Replay the last 10 turns (oldest first) — includes the message above.
@@ -560,13 +616,35 @@ async def coach_chat(
         .limit(10)
     )
     recent = list(reversed(result.scalars().all()))
-    conversation = [{"role": m.role, "content": m.content} for m in recent]
+    conversation = []
+    for item in recent:
+        content = item.content
+        if item.id == user_message.id and images:
+            content = [
+                *[
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image.media_type,
+                            "data": image.image,
+                        },
+                    }
+                    for image in images
+                ],
+                {"type": "text", "text": message_text or (
+                    "Inspect these equipment photos together. Identify what is visibly "
+                    "available, mention uncertainty, and ask what muscle groups or goal "
+                    "I want to train next."
+                )},
+            ]
+        conversation.append({"role": item.role, "content": content})
     # The Anthropic API requires the first message to be from the user and
     # roles to alternate. Trim any leading assistant turns the window caught.
     while conversation and conversation[0]["role"] != "user":
         conversation.pop(0)
     if not conversation:
-        conversation = [{"role": "user", "content": message_text}]
+        conversation = [{"role": "user", "content": persisted_message}]
 
     # 3. Pull durable history for compact long-term summaries. Only the newest
     # 10 workouts are included in detail; older rows feed aggregate trends.
@@ -816,18 +894,17 @@ async def analyze_equipment(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Equipment analysis is not configured.",
         )
-    if payload.media_type not in ALLOWED_EQUIPMENT_IMAGE_TYPES:
+    images = _request_images(payload)
+    if not images:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Unsupported image type.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Add at least one equipment image.",
         )
-    if len(payload.image) > MAX_EQUIPMENT_IMAGE_CHARS:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Image is too large; use an image under about 5 MB.",
-        )
+    _validate_images(images)
 
-    prompt = f"""Inspect this workout-area photo and identify visible usable equipment.
+    prompt = f"""Inspect all {len(images)} workout-area photo(s) together and identify
+visible usable equipment across the full set. Deduplicate items that appear in
+more than one angle.
 Return ONLY JSON with this shape:
 {{"equipment": [<values>], "notes": "<brief uncertainty or useful detail>",
 "confidence": "low" | "medium" | "high"}}
@@ -842,14 +919,17 @@ available. Do not infer equipment hidden outside the image."""
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": payload.media_type,
-                                "data": payload.image,
-                            },
-                        },
+                        *[
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": image.media_type,
+                                    "data": image.image,
+                                },
+                            }
+                            for image in images
+                        ],
                         {"type": "text", "text": prompt},
                     ],
                 }

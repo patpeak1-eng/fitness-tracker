@@ -186,6 +186,20 @@ docs/ai_coach_expansion_spec_s24.md):
   filter; the image is never stored;
 - docs/ARCHITECTURE.md was updated in the same implementation change.
 
+S25 completes the visual equipment path (spec:
+docs/ai_coach_visual_equipment_spec_s25.md):
+
+- the Coach can receive and inspect up to six transient photos on the current
+  conversation turn; only the text caption remains in Coach history;
+- equipment analysis combines multiple angles into one editable inventory;
+- the phone UI requests the outward camera first, provides a front/back flip,
+  repeated captures, a native-camera fallback, and multi-photo library upload;
+- named environments such as Station 12 sync through nullable
+  `users.equipment_environments` JSONB while offline/local profiles retain the
+  existing local-first behavior; raw photos are never stored;
+- live video remains the next separately evaluated phase after real-phone
+  validation of the still-photo workflow.
+
 ## Session 25+ Open Items (priority order)
 P1 - Real-device barcode camera test (blocks full Nutrition closure
      only). On a phone, live app → Log food → Barcode → Scan, point at a
@@ -204,12 +218,12 @@ P1 - Coach nutrition-commentary spot-check once real meals are logged.
      Confirm the trend-deflection boundary (chart-only; coach gives a
      one-line observation and points to the dashboard, never recites
      logged data) feels right in real use.
-P1 - Real phone-camera equipment photo through the S24 Coach path. Confirm
-     capture="environment" opens the camera, the detected inventory is
-     sensible, edits persist, and the next workout proposal respects it.
-P2 - Named S24 equipment environments are profile-scoped local data. Add
-     backend sync only if cross-device environment reuse proves valuable;
-     the Coach already receives the active confirmed environment per request.
+P1 - Real phone-camera S25 Coach pass. Confirm the in-app camera selects the
+     outward lens, flip works, several captures append, the joint inventory is
+     sensible, and a direct Coach reply references visible equipment.
+P2 - Gemini Live visual walkthrough evaluation. Compare a bounded 60-second
+     station scan against the completed still-photo path for accuracy, latency,
+     cost, tool reliability, and provider data-handling terms before building.
 P3 - Cloud login/register silently orphans local profiles (found S18,
      coordinator-confirmed): Login.jsx activateProfileAndGo AND the OAuth
      boot path both call saveProfiles([cloudProfile]) — unconditionally

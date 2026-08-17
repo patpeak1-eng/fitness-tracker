@@ -360,7 +360,8 @@ export const sendCoachMessage = async (
   message,
   workoutContext = null,
   personality = DEFAULT_PERSONALITY,
-  appContext = null
+  appContext = null,
+  images = []
 ) => {
   const res = await apiFetch('/api/coach/chat', {
     method: 'POST',
@@ -368,7 +369,8 @@ export const sendCoachMessage = async (
       message,
       workout_context: workoutContext,
       personality,
-      app_context: appContext
+      app_context: appContext,
+      images
     })
   });
   // Returns raw Response for SSE streaming — do NOT call .json()
@@ -378,10 +380,10 @@ export const sendCoachMessage = async (
 export const getCoachHistory = () =>
   apiFetch('/api/coach/history').then(r => r.json());
 
-export const analyzeEquipment = async ({ image, media_type = 'image/jpeg' }) => {
+export const analyzeEquipment = async ({ image = null, media_type = 'image/jpeg', images = [] }) => {
   const r = await apiFetch('/api/coach/equipment/analyze', {
     method: 'POST',
-    body: JSON.stringify({ image, media_type })
+    body: JSON.stringify({ image, media_type, images })
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');

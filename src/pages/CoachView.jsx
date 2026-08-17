@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    BookmarkPlus, Camera, Check, LoaderCircle, Mic, Play,
+    BookmarkPlus, Camera, Check, Images, LoaderCircle, Mic, Play,
     Send, Sparkles, Square, Trash2, Volume2, VolumeX, X
 } from 'lucide-react';
 import BackButton from '../components/common/BackButton';
+import EquipmentPhotoCapture from '../components/coach/EquipmentPhotoCapture';
 import { useWorkout } from '../context/WorkoutContext';
 import {
     analyzeEquipment, sendCoachMessage, getCoachHistory, synthesizeVoice
@@ -20,6 +21,7 @@ const EQUIPMENT_OPTIONS = [
     'Bench/Elevated Surface', 'Parallel Bars/Bench', 'Low Bar', 'Wall', 'None'
 ];
 const MAX_IMAGE_DIMENSION = 1280;
+const MAX_EQUIPMENT_PHOTOS = 6;
 
 const downscaleToBase64 = (file) => new Promise((resolve, reject) => {
     const img = new Image();
@@ -113,6 +115,7 @@ const CoachView = () => {
     const [equipmentError, setEquipmentError] = useState('');
     const [isAnalyzingEquipment, setIsAnalyzingEquipment] = useState(false);
     const [activeEnvironmentName, setActiveEnvironmentName] = useState('');
+    const [photoAttachments, setPhotoAttachments] = useState([]);
 
     const threadRef = useRef(null);
     // Web Audio fallback (full-text playback; also the iOS path).
@@ -136,7 +139,8 @@ const CoachView = () => {
     const streamDoneRef = useRef(false); // WS closed (all audio received) → safe to endOfStream
     const audioElRef = useRef(null); // hidden <audio> sink for MSE playback
     const recognitionRef = useRef(null); // Web Speech recognition instance
-    const equipmentFileRef = useRef(null);
+    const photoAttachmentsRef = useRef(photoAttachments);
+    useEffect(() => { photoAttachmentsRef.current = photoAttachments; }, [photoAttachments]);
 
     // --- Hydrate previous conversation on mount ---
     useEffect(() => {
@@ -218,6 +222,7 @@ const CoachView = () => {
         const el = audioElRef.current;
         if (el) { try { el.pause(); } catch { /* nothing playing */ } }
         try { recognitionRef.current?.stop(); } catch { /* not listening */ }
+        photoAttachmentsRef.current.forEach(item => URL.revokeObjectURL(item.preview));
     }, []);
 
     // Create/resume the AudioContext. Call from within a user gesture (voice
@@ -446,7 +451,12 @@ const CoachView = () => {
 
     const handleSend = async (text) => {
         const trimmed = (text || '').trim();
-        if (!trimmed || isStreaming) return;
+        const attachedImages = photoAttachments.map(({ image, media_type }) => ({
+            image, media_type,
+        }));
+        if ((!trimmed && attachedImages.length === 0) || isStreaming) return;
+        const displayMessage = trimmed
+            || `Shared ${attachedImages.length} equipment photo${attachedImages.length === 1 ? '' : 's'}.`;
 
         // The assistant placeholder lands at this index after the two appends below.
         const assistantIndex = messages.length + 1;
@@ -454,7 +464,7 @@ const CoachView = () => {
         setInput('');
         setMessages((prev) => [
             ...prev,
-            { role: 'user', content: trimmed },
+            { role: 'user', content: displayMessage, imageCount: attachedImages.length },
             { role: 'assistant', content: '', streaming: true },
         ]);
         setIsStreaming(true);
@@ -476,6 +486,7 @@ const CoachView = () => {
         });
 
         let assistantText = '';
+        let streamFailed = false;
         const personality = StorageService.loadCoachPersonality();
 
         try {
@@ -483,7 +494,8 @@ const CoachView = () => {
                 trimmed,
                 activeWorkout || null,
                 personality,
-                buildCoachAppContext()
+                buildCoachAppContext(),
+                attachedImages
             );
 
             if (!res.ok) {
@@ -527,6 +539,7 @@ const CoachView = () => {
                             setLastAssistant({ content: assistantText });
                         }
                     } else if (event.type === 'error') {
+                        streamFailed = true;
                         setLastAssistant({
                             content: assistantText || event.content || 'The coach hit an error.',
                             streaming: false,
@@ -578,6 +591,7 @@ const CoachView = () => {
             } else if (voiceActive) {
                 stopSpeaking();
             }
+            if (attachedImages.length && !streamFailed) clearPhotoAttachments();
         } catch {
             setLastAssistant({
                 content: 'Could not reach the coach. Check your connection and try again.',
@@ -648,21 +662,70 @@ const CoachView = () => {
             : [...prev, item]);
     };
 
-    const handleEquipmentPhoto = async (file) => {
-        if (!file) return;
+    const clearPhotoAttachments = () => {
+        setPhotoAttachments(prev => {
+            prev.forEach(item => URL.revokeObjectURL(item.preview));
+            return [];
+        });
+    };
+
+    const removePhotoAttachment = (attachmentId) => {
+        setPhotoAttachments(prev => prev.filter(item => {
+            if (item.id !== attachmentId) return true;
+            URL.revokeObjectURL(item.preview);
+            return false;
+        }));
+    };
+
+    const addPhotoFiles = async (files) => {
+        const candidates = Array.from(files || []).filter(
+            file => file && (!file.type || file.type.startsWith('image/'))
+        );
+        const available = Math.max(0, MAX_EQUIPMENT_PHOTOS - photoAttachmentsRef.current.length);
+        if (!available) {
+            setEquipmentError(`You can attach up to ${MAX_EQUIPMENT_PHOTOS} photos at once.`);
+            return;
+        }
+        setEquipmentError('');
+        const prepared = [];
+        try {
+            for (const file of candidates.slice(0, available)) {
+                const image = await downscaleToBase64(file);
+                prepared.push({
+                    id: globalThis.crypto?.randomUUID?.() || `photo_${Date.now()}_${prepared.length}`,
+                    preview: URL.createObjectURL(file),
+                    image,
+                    media_type: 'image/jpeg',
+                });
+            }
+            setPhotoAttachments(prev => [...prev, ...prepared].slice(0, MAX_EQUIPMENT_PHOTOS));
+            if (candidates.length > available) {
+                setEquipmentError(`Only the first ${available} photos were added. The limit is ${MAX_EQUIPMENT_PHOTOS}.`);
+            }
+        } catch (err) {
+            prepared.forEach(item => URL.revokeObjectURL(item.preview));
+            setEquipmentError(err.message || 'Could not prepare one of those photos.');
+        }
+    };
+
+    const analyzeEquipmentPhotos = async () => {
+        if (!photoAttachments.length) {
+            setEquipmentError('Take or choose at least one equipment photo first.');
+            return;
+        }
         setEquipmentError('');
         setIsAnalyzingEquipment(true);
         try {
-            const image = await downscaleToBase64(file);
-            const result = await analyzeEquipment({ image, media_type: 'image/jpeg' });
+            const result = await analyzeEquipment({
+                images: photoAttachments.map(({ image, media_type }) => ({ image, media_type })),
+            });
             setDetectedEquipment(result.equipment || ['None']);
             setEquipmentNotes(result.notes || '');
             setEquipmentConfidence(result.confidence || 'low');
         } catch (err) {
-            setEquipmentError(err.message || 'Could not analyze that photo.');
+            setEquipmentError(err.message || 'Could not analyze those photos.');
         } finally {
             setIsAnalyzingEquipment(false);
-            if (equipmentFileRef.current) equipmentFileRef.current.value = '';
         }
     };
 
@@ -726,6 +789,11 @@ const CoachView = () => {
                     onClick={() => setEquipmentOpen(open => !open)}
                 >
                     <Camera size={20} />
+                    {photoAttachments.length > 0 && (
+                        <span className="coach-equipment-count" aria-hidden="true">
+                            {photoAttachments.length}
+                        </span>
+                    )}
                 </button>
                 <button
                     type="button"
@@ -745,12 +813,24 @@ const CoachView = () => {
                 </div>
             )}
 
+            {photoAttachments.length > 0 && !equipmentOpen && (
+                <div className="coach-pending-photos">
+                    <button type="button" onClick={() => setEquipmentOpen(true)}>
+                        <Images size={15} />
+                        {photoAttachments.length} photo{photoAttachments.length === 1 ? '' : 's'} ready for Coach
+                    </button>
+                    <button type="button" onClick={clearPhotoAttachments} aria-label="Remove all attached photos">
+                        Clear
+                    </button>
+                </div>
+            )}
+
             {equipmentOpen && (
                 <section className="coach-equipment-panel" aria-label="Equipment environment">
                     <div className="coach-panel-heading">
                         <div>
                             <h2>Equipment environment</h2>
-                            <p>Photograph what is available, then confirm the result.</p>
+                            <p>Capture several angles or choose saved photos. The Coach receives them with your next message.</p>
                         </div>
                         <button type="button" className="coach-panel-close"
                             onClick={() => setEquipmentOpen(false)} aria-label="Close equipment panel">
@@ -758,15 +838,19 @@ const CoachView = () => {
                         </button>
                     </div>
 
-                    <input ref={equipmentFileRef} type="file" accept="image/*"
-                        capture="environment" hidden
-                        onChange={(event) => handleEquipmentPhoto(event.target.files?.[0])} />
+                    <EquipmentPhotoCapture
+                        attachments={photoAttachments}
+                        maxPhotos={MAX_EQUIPMENT_PHOTOS}
+                        onAddFiles={addPhotoFiles}
+                        onRemove={removePhotoAttachment}
+                        disabled={isAnalyzingEquipment || isStreaming}
+                    />
                     <button type="button" className="coach-photo-btn"
-                        onClick={() => equipmentFileRef.current?.click()}
-                        disabled={isAnalyzingEquipment}>
+                        onClick={analyzeEquipmentPhotos}
+                        disabled={isAnalyzingEquipment || photoAttachments.length === 0}>
                         {isAnalyzingEquipment
-                            ? <><LoaderCircle size={18} className="coach-spin" /> Analyzing equipment…</>
-                            : <><Camera size={18} /> Take or choose a photo</>}
+                            ? <><LoaderCircle size={18} className="coach-spin" /> Reviewing {photoAttachments.length} photos…</>
+                            : <><Sparkles size={18} /> Detect equipment in {photoAttachments.length || ''} photo{photoAttachments.length === 1 ? '' : 's'}</>}
                     </button>
 
                     <label className="coach-environment-name">
@@ -799,7 +883,7 @@ const CoachView = () => {
 
                     {equipmentEnvironments.length > 0 && (
                         <div className="coach-saved-environments">
-                            <h3>Saved on this device</h3>
+                            <h3>{currentProfile?.email ? 'Saved to your account' : 'Saved on this device'}</h3>
                             {equipmentEnvironments.map(environment => (
                                 <div key={environment.id} className="coach-environment-row">
                                     <button type="button" onClick={() => handleSavedEnvironment(environment)}>
@@ -835,6 +919,11 @@ const CoachView = () => {
                                 speakingIndex === i ? 'coach-bubble-speaking' : '',
                             ].filter(Boolean).join(' ')}
                         >
+                            {m.imageCount > 0 && (
+                                <span className="coach-bubble-attachment">
+                                    <Images size={15} /> {m.imageCount} photo{m.imageCount === 1 ? '' : 's'}
+                                </span>
+                            )}
                             {m.role === 'user' ? m.content : stripMarkdownForDisplay(m.content)}
                             {m.streaming && <span className="coach-cursor">|</span>}
                         </div>
@@ -909,7 +998,7 @@ const CoachView = () => {
                 <button
                     type="submit"
                     className="coach-send-btn"
-                    disabled={isStreaming || !input.trim()}
+                    disabled={isStreaming || (!input.trim() && photoAttachments.length === 0)}
                     aria-label="Send message"
                 >
                     <Send size={20} />

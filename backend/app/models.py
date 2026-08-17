@@ -38,6 +38,9 @@ class User(Base):
     coach_personality = Column(String(50), server_default="apex")
     coach_voice_id = Column(String(100), server_default="FxZjRiAEBESrb7srpme7")
     experience_level = Column(String(20), server_default="intermediate")
+    # Confirmed named equipment environments only. Raw camera/photo data is
+    # transient and is never stored in PostgreSQL.
+    equipment_environments = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     stats = relationship(

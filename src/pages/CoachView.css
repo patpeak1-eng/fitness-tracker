@@ -78,6 +78,7 @@
 
 .coach-equipment-toggle,
 .coach-panel-close {
+    position: relative;
     width: 42px;
     height: 42px;
     flex-shrink: 0;
@@ -88,6 +89,23 @@
     color: var(--text-secondary);
     background: var(--bg-card);
     border: var(--border-glass);
+}
+
+.coach-equipment-count {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 19px;
+    height: 19px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border-radius: 999px;
+    color: var(--bg-app);
+    background: var(--primary);
+    font-size: 0.66rem;
+    font-weight: 800;
 }
 
 .coach-equipment-toggle:hover,
@@ -122,6 +140,34 @@
     border: 1px solid var(--primary);
     font-size: 0.75rem;
     font-weight: 700;
+}
+
+.coach-pending-photos {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 7px 8px 7px 11px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    font-size: 0.76rem;
+}
+
+.coach-pending-photos button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: inherit;
+    font-weight: 700;
+}
+
+.coach-pending-photos button:last-child {
+    padding: 0 8px;
+    color: var(--primary);
 }
 
 .coach-panel-heading {
@@ -164,6 +210,7 @@
 }
 
 .coach-photo-btn {
+    margin-top: 10px;
     color: var(--primary);
     background: var(--primary-glow);
     border: 1px solid var(--primary);
@@ -332,6 +379,16 @@
     font-weight: 600;
     border-radius: 18px 18px 4px 18px;
     box-shadow: 0 4px 16px var(--primary-glow);
+}
+
+.coach-bubble-attachment {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 5px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    opacity: 0.78;
 }
 
 .coach-bubble-coach {

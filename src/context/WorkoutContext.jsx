@@ -5,6 +5,10 @@ import * as ApiService from '../services/ApiService';
 import SyncQueue from '../services/SyncQueue';
 import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
+import {
+    normalizeEquipmentEnvironments,
+    resolveEquipmentEnvironmentHydration,
+} from '../utils/equipmentEnvironments';
 
 
 export const WorkoutContext = createContext();
@@ -406,6 +410,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const [customEquipmentItems, setCustomEquipmentItems] = useState([]);
     const [equipmentEnvironments, setEquipmentEnvironments] = useState([]);
     const [sessionEquipmentOverride, setSessionEquipmentOverride] = useState(null); // null = use saved profile, array = temp override
+    const equipmentEnvironmentsEditedRef = useRef(false);
     const [coachPersonality, setCoachPersonality] = useState(DEFAULT_PERSONALITY);
     const [coachVoiceId, setCoachVoiceId] = useState(DEFAULT_VOICE_ID);
     // Coach depth calibration ('beginner'|'intermediate'|'advanced') — set by
@@ -547,6 +552,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const refreshProfileData = (profile) => {
         if (!profile) return;
         latestProfileIdRef.current = profile.id;
+        equipmentEnvironmentsEditedRef.current = false;
 
         // Remember this user
         StorageService.saveCurrentProfileId(profile.id);
@@ -605,7 +611,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
         setActiveEquipmentProfileId(ps.equipmentProfileId || 'full_gym');
         setCustomEquipmentItems(ps.customEquipmentItems || []);
-        setEquipmentEnvironments(ps.equipmentEnvironments || []);
+        setEquipmentEnvironments(normalizeEquipmentEnvironments(ps.equipmentEnvironments));
         setSessionEquipmentOverride(null);
 
         setUserStats(ps.userStats);
@@ -713,6 +719,32 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         if (u.experience_level) {
                             setExperienceLevel(u.experience_level);
                             StorageService.saveExperienceLevel(profile.id, u.experience_level);
+                        }
+                        const localEnvironments = StorageService.loadProfileState(
+                            profile.id
+                        ).equipmentEnvironments;
+                        const equipmentResolution = resolveEquipmentEnvironmentHydration({
+                            cloud: u.equipment_environments,
+                            local: localEnvironments,
+                            edited: equipmentEnvironmentsEditedRef.current,
+                        });
+                        setEquipmentEnvironments(equipmentResolution.environments);
+                        StorageService.saveEquipmentEnvironments(
+                            profile.id, equipmentResolution.environments
+                        );
+                        if (equipmentResolution.shouldBackfill) {
+                            ApiService.saveProfile({
+                                equipment_environments: equipmentResolution.environments,
+                            }).catch(err => {
+                                console.warn('[settings-sync] equipment_environments backfill:', err);
+                                SyncQueue.enqueue({
+                                    type: 'profile_settings',
+                                    key: 'equipment_environments',
+                                    payload: {
+                                        equipment_environments: equipmentResolution.environments,
+                                    },
+                                });
+                            });
                         }
                         // Timers are pushed as a pair, so they arrive as a pair;
                         // applying a lone value would clobber the other side.
@@ -1256,12 +1288,26 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     }, [customEquipmentItems, currentProfile, settingsHydratedFor]);
 
-    // Named photo/manual equipment environments stay profile-scoped and local.
-    // The confirmed active environment is sent to the Coach as request context;
-    // photos themselves are never stored.
+    // Named photo/manual equipment environments remain local-first and are
+    // mirrored to the signed-in cloud profile. Only confirmed metadata is
+    // persisted; photos themselves are never stored.
+    const equipmentEnvironmentsSyncedProfileRef = useRef(null);
     useEffect(() => {
-        if (currentProfile && settingsHydratedFor === currentProfile.id) {
-            StorageService.saveEquipmentEnvironments(currentProfile.id, equipmentEnvironments);
+        if (!currentProfile || settingsHydratedFor !== currentProfile.id) return;
+        const normalized = normalizeEquipmentEnvironments(equipmentEnvironments);
+        StorageService.saveEquipmentEnvironments(currentProfile.id, normalized);
+        const sameProfile = equipmentEnvironmentsSyncedProfileRef.current === currentProfile.id;
+        equipmentEnvironmentsSyncedProfileRef.current = currentProfile.id;
+        if (sameProfile && canSyncRef.current()) {
+            ApiService.saveProfile({ equipment_environments: normalized })
+                .catch(err => {
+                    console.warn('[settings-sync] equipment_environments:', err);
+                    SyncQueue.enqueue({
+                        type: 'profile_settings',
+                        key: 'equipment_environments',
+                        payload: { equipment_environments: normalized },
+                    });
+                });
         }
     }, [equipmentEnvironments, currentProfile, settingsHydratedFor]);
 
@@ -2613,7 +2659,11 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             source,
             updatedAt: new Date().toISOString()
         };
-        setEquipmentEnvironments(prev => [next, ...prev.filter(env => env.name !== normalizedName)]);
+        equipmentEnvironmentsEditedRef.current = true;
+        setEquipmentEnvironments(prev => normalizeEquipmentEnvironments([
+            next,
+            ...prev.filter(env => env.name.toLowerCase() !== normalizedName.toLowerCase()),
+        ]));
         setSessionEquipmentOverride(normalizedEquipment);
         return next;
     };
@@ -2626,6 +2676,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     };
 
     const deleteEquipmentEnvironment = (environmentId) => {
+        equipmentEnvironmentsEditedRef.current = true;
         setEquipmentEnvironments(prev => prev.filter(env => env.id !== environmentId));
     };
 

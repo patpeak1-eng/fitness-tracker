@@ -142,8 +142,8 @@ User-specific state (reset on profile change):
   userStats        — age, height, weight, goal, etc.
   weightHistory    — array of {date, weight}
   activeEquipmentProfileId, customEquipmentItems — equipment system (S15, local-only)
-  equipmentEnvironments — named confirmed photo/manual equipment lists (S24,
-                          profile-scoped local storage; image never stored)
+  equipmentEnvironments — named confirmed photo/manual equipment lists (S24/S25,
+                          local-first + cloud profile sync; images never stored)
 
 Hydration gates (S13/S15 — see pattern 7 below):
   historyHydratedFor, activeWorkoutHydratedFor, settingsHydratedFor
@@ -233,12 +233,12 @@ Exported calls (all via apiFetch unless noted):
                             fields are all Optional server-side)
   getWeightHistory/addWeightEntry → /api/weight
   get/save/deleteCustomTemplate   → /api/templates
-  sendCoachMessage        → /api/coach/chat (message + active workout + bounded
-                            app context; returns raw Response for SSE — never
+  sendCoachMessage        → /api/coach/chat (message + up to 6 transient images
+                            + active workout + bounded app context; returns raw Response for SSE — never
                             call .json() on it)
   getCoachHistory         → /api/coach/history
-  analyzeEquipment        → /api/coach/equipment/analyze (transient image;
-                            confirmed equipment is saved by the client)
+  analyzeEquipment        → /api/coach/equipment/analyze (1-6 transient images;
+                            combined confirmed equipment is saved by the client)
   synthesizeVoice         → /api/voice/coach-synthesize
 ```
 
@@ -328,12 +328,21 @@ originating browser.
 `DEFAULT_EQUIPMENT_PROFILES` in WorkoutContext defines five tiers — `full_gym`, `home_gym`, `fire_station`, `bodyweight_only`, `custom` — each an equipment string list. `activeEquipmentProfileId` + `customEquipmentItems` are profile-scoped persisted state (hydration-gated, **local-only — deliberately not backend-synced**). `TrackWorkout.jsx` and `ExerciseSelector.jsx` consume the active profile to filter exercises by their `equipment` field.
 
 S24 adds `equipmentEnvironments`: named, confirmed equipment arrays created
-manually or from the Coach photo-review flow. They are profile-scoped local
-data and activate through `sessionEquipmentOverride`, so the existing
-compatibility filter is reused unchanged. Coach requests carry the confirmed
-list and compatible exercise catalog in bounded `app_context`. The source
-photo is downscaled, sent transiently to `/api/coach/equipment/analyze`, and
-discarded; only the confirmed equipment terms are stored.
+manually or from the Coach photo-review flow. S25 makes them local-first and
+cross-device through nullable `users.equipment_environments` JSONB. `NULL`
+means an upgraded device may backfill its local S24 list once; after the server
+holds an array, including `[]`, the cloud value wins on login so deletions do
+not resurrect from stale device storage. Changes use the hydration-gated
+profile-setting effect and existing retry queue. Environments activate through
+`sessionEquipmentOverride`, so the exercise compatibility filter is unchanged.
+
+The S25 capture surface requests the outward camera first with an explicit
+front/back flip control, retains native-camera and multi-file fallbacks, and
+collects up to six removable photos. All photos are browser-normalized to JPEG
+at no more than 1280 px. The same transient set can be analyzed jointly for a
+combined editable inventory and attached directly to the next Coach turn. Raw
+photos, object URLs, and model image blocks are discarded; only confirmed
+equipment metadata is stored.
 
 **Gotcha (from S15):** `exercise.equipment` uses `/` both as an OR-separator AND inside literal multi-word names (`"Parallel Bars/Bench"`). Matching logic must test the full string before slash-splitting.
 
@@ -510,13 +519,14 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
 /api/exercises   (routers/exercises.py)      GET "", POST "" (201)
 
 /api/coach     (routers/coach.py)
-  POST /chat                     → SSE streaming AI Coach chat
+  POST /chat                     → SSE streaming AI Coach chat; optional 1-6
+                                    transient images on the current user turn
                                     (model claude-sonnet-4-6, prompt-cached
                                     system blocks, long-term compact context,
                                     optional validated workout-plan event,
                                     rate-limited)
-  POST /equipment/analyze        → transient Claude Vision equipment detection;
-                                    canonical terms + confidence, image discarded
+  POST /equipment/analyze        → joint 1-6 photo Claude Vision equipment detection;
+                                    canonical terms + confidence, images discarded
   POST /chat/stream              → deprecated alias, delegates to /chat
   GET  /history                  → last 20 CoachMessage rows
 
@@ -557,7 +567,17 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
                                     data per spec Section 5)
 ```
 
-**Database:** PostgreSQL on Railway. Migrations via Alembic (9 revisions in `alembic/versions/`), revision IDs constrained to under 32 characters (VARCHAR(32) column limit — this caused a silent deploy failure once, see MASTER_CONTEXT.md Section 9). Migration 0008 (`avatar_color_default`, S21) is default-change + data backfill only, no shape change: `users.color` server_default moved from the retired `#bfff00` to `#ff5c2a` (Design Tokens v2 `--primary`), with a one-time `UPDATE ... WHERE color = '#bfff00'` — safe because no frontend path has ever written `color` to the backend (spec: docs/avatar_color_spec_s21.md). Migration 0009 (`add_date_of_birth`, S21) adds nullable `user_stats.date_of_birth` (Date, no default, no backfill — NULL = still on the legacy manual `age` string; spec: docs/dob_age_spec_s21.md). The displayed age is computed client-side from DOB when present (DOB wins), and `date_of_birth` rides the generic profile-stats upsert like every other stats field.
+**Database:** PostgreSQL on Railway. Migrations via Alembic (10 revisions in
+`alembic/versions/`), with revision IDs constrained to under 32 characters
+(the `alembic_version` column is VARCHAR(32)). Migration 0008
+(`avatar_color_default`, S21) changed and backfilled the `users.color` default
+from retired lime to Design Tokens v2 ember. Migration 0009
+(`add_date_of_birth`, S21) adds nullable `user_stats.date_of_birth`; NULL keeps
+the legacy manual age fallback. Migration 0010 (`equipment_env_cloud`, S25)
+adds nullable `users.equipment_environments` JSONB; NULL is the one-time local
+backfill marker and stored arrays become authoritative. See
+`docs/avatar_color_spec_s21.md`, `docs/dob_age_spec_s21.md`, and
+`docs/ai_coach_visual_equipment_spec_s25.md`.
 
 **Known tables beyond the 0001 core eight:** `coach_messages` (0003 — AI Coach conversation history, CASCADE delete tied to user); `food_log` (0007/S19 — nutrition entries, user-scoped, CASCADE, per-user-unique `client_id` like workout_history); `off_product_cache` (0007/S19 — shared no-user-id barcode→product cache for Open Food Facts, 90-day freshness). `food_log` keeps the account-deletion "single-transaction, no per-table cleanup" invariant intact (standard cascade shape on `User.food_entries`).
 
@@ -605,9 +625,12 @@ Actions:      Anthropic propose_workout tool output is server-validated against
               compatible exercise ids and emitted as SSE `workout_plan`.
               CoachView renders a review card; only explicit Start workout or
               Save template clicks call existing WorkoutContext mutations.
-Equipment:    POST /api/coach/equipment/analyze accepts a downscaled image,
-              returns canonical equipment + confidence/notes, and never stores
-              the image. The user edits and confirms before activation.
+Equipment:    POST /api/coach/equipment/analyze accepts 1-6 downscaled images,
+              returns a combined canonical inventory + confidence/notes, and
+              never stores images. POST /chat accepts the same transient image
+              blocks so the conversational Coach can inspect them directly.
+              The user edits and confirms before activation; named environments
+              then sync through users.equipment_environments JSONB.
 Storage:      CoachMessage table, PostgreSQL, CASCADE delete on user removal;
               chat replays last 10 turns, /history returns last 20
 Guardrails:   per-user rate limits on both coach and voice (app/rate_limit.py);
