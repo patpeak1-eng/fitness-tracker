@@ -351,6 +351,14 @@ reply, the app clears the attachments and explains that they were removed for
 privacy. Live video is explicitly deferred; the still-photo workflow is the
 current product path. See `docs/ai_coach_photo_flow_maintenance_s25_1.md`.
 
+S25.2 closes the equipment panel as soon as a photo-bearing Coach request is
+accepted for streaming, releasing the camera preview so the reply remains
+visible. A failed request retains the photos for retry, and the existing
+successful-reply cleanup still removes them for privacy. A user who explicitly
+starts a Coach-proposed workout now routes directly to `/track`, the existing
+preparation surface, rather than taking a dashboard detour. See
+`docs/ai_coach_handoff_polish_s25_2.md`.
+
 **Gotcha (from S15):** `exercise.equipment` uses `/` both as an OR-separator AND inside literal multi-word names (`"Parallel Bars/Bench"`). Matching logic must test the full string before slash-splitting.
 
 **Other S12–S16 UI changes worth knowing:** Dashboard's active-workout card gained a cancel action (S15/S16 — `cancelWorkout()` from WorkoutContext, confirm-guarded), alongside the existing cancel paths in TrackWorkout and GuidedWorkoutView.
@@ -710,4 +718,4 @@ Themes:     light theme via data-theme attribute on root (S15)
 
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.1. Full catch-up audit pass completed S17; S24/S25/S25.1 architecture changes were then added with their implementation commits. Last updated: S25.1, 2026-08-17.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.2. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2 architecture changes were then added with their implementation commits. Last updated: S25.2, 2026-08-17.*

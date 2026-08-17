@@ -27,11 +27,14 @@ visual media temporary:
      editable inventory, and requires an explicit save.
    - **Discuss with Coach** passes the same temporary images with the next
      `/api/coach/chat` message.
-4. After a successful Coach reply, revoke object URLs and clear attachments.
+4. Once a photo-bearing Coach request is accepted for streaming, close the
+   camera/equipment panel so the response remains visible and the camera stream
+   is released. Do not close it for a failed request; the user needs a retry.
+5. After a successful Coach reply, revoke object URLs and clear attachments.
    Show plain-language feedback that the photos were cleared for privacy.
-5. When no photos are attached, teach the prerequisite instead of displaying a
+6. When no photos are attached, teach the prerequisite instead of displaying a
    disabled detector that looks broken.
-6. Persist only the confirmed environment name and canonical equipment list via
+7. Persist only the confirmed environment name and canonical equipment list via
    `equipment_environments`; use the existing local-first hydration and sync
    pattern.
 

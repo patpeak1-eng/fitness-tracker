@@ -210,6 +210,17 @@ docs/ai_coach_photo_flow_maintenance_s25_1.md):
 - updates the architecture freshness marker and removes two obsolete lint
   suppressions; no Coach API, account, or database behavior changes.
 
+S25.2 Coach handoff polish (spec:
+docs/ai_coach_handoff_polish_s25_2.md):
+
+- a successful photo-bearing Coach request closes the equipment panel before
+  the reply streams, so the chat remains visible and the camera stream is
+  released; failed requests retain photos for retry;
+- Coach-proposed workouts now open `/track` directly, avoiding the dashboard
+  detour before the existing preparation screen;
+- installed-PWA testing confirmed the multi-photo capture, visual Coach reply,
+  and Coach workout proposal flows in normal phone use.
+
 ## Session 25+ Open Items (priority order)
 P1 - Real-device barcode camera test (blocks full Nutrition closure
      only). On a phone, live app → Log food → Barcode → Scan, point at a
@@ -228,9 +239,9 @@ P1 - Coach nutrition-commentary spot-check once real meals are logged.
      Confirm the trend-deflection boundary (chart-only; coach gives a
      one-line observation and points to the dashboard, never recites
      logged data) feels right in real use.
-P1 - Real phone-camera S25 Coach pass. Confirm the in-app camera selects the
-     outward lens, flip works, several captures append, the joint inventory is
-     sensible, and a direct Coach reply references visible equipment.
+P1 - Real phone-camera S25.2 Coach pass. Confirm a successful photo send
+     collapses the equipment panel before the Coach text arrives, then confirm
+     the Coach workout action opens preparation without visiting the dashboard.
 P3 - Live-video visual walkthrough is deferred. Reconsider only if routine
      still-photo use proves insufficient for a real station or gym workflow;
      compare accuracy, latency, cost, reliability, and provider data handling

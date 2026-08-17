@@ -512,6 +512,11 @@ const CoachView = () => {
                 return;
             }
 
+            // The request is accepted: free the chat view and release any live
+            // camera stream while the Coach reply streams. Attachments remain
+            // available until the successful-response privacy cleanup below.
+            if (attachedImages.length) setEquipmentOpen(false);
+
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -651,7 +656,7 @@ const CoachView = () => {
     const startCoachWorkout = () => {
         if (!workoutPlan) return;
         startWorkoutFromTemplate(coachPlanToTemplate(workoutPlan));
-        navigate('/');
+        navigate('/track');
     };
 
     const saveCoachTemplate = () => {

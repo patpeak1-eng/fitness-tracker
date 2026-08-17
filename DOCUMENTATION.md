@@ -7,6 +7,9 @@
 > The S25.1 maintenance contract (`docs/ai_coach_photo_flow_maintenance_s25_1.md`)
 > clarifies the temporary photo lifecycle and keeps live video explicitly
 > deferred while the still-photo workflow is validated in normal use.
+> S25.2 (`docs/ai_coach_handoff_polish_s25_2.md`) keeps the camera from
+> obscuring a streaming Coach reply and routes Coach-created workouts directly
+> to preparation.
 
 ## 1. State Management
 **File**: `src/context/WorkoutContext.jsx`
