@@ -53,6 +53,11 @@ const MSE_SUPPORTED =
     typeof window.MediaSource.isTypeSupported === 'function' &&
     window.MediaSource.isTypeSupported(VOICE_MIME);
 
+// How long the user may pause before we treat the utterance as
+// finished. The Web Speech API does not expose Chrome's own
+// endpointing timer (~1.2s), which cuts users off mid-thought.
+const SILENCE_MS = 2500;
+
 // Strip Markdown for the TTS pipeline so it speaks clean prose, not "asterisk
 // asterisk bold". Applied to each phrase right before it's sent to the voice WS.
 // Inline code is dropped entirely — you don't want code spans read aloud.
@@ -140,6 +145,9 @@ const CoachView = () => {
     const streamDoneRef = useRef(false); // WS closed (all audio received) → safe to endOfStream
     const audioElRef = useRef(null); // hidden <audio> sink for MSE playback
     const recognitionRef = useRef(null); // Web Speech recognition instance
+    const srTranscriptRef = useRef(''); // accumulated final transcript for the open mic session
+    const srSilenceTimerRef = useRef(null); // pending endpoint timer (SILENCE_MS)
+    const srIntentionalStopRef = useRef(false); // deliberate stop → onend must not restart
     const photoAttachmentsRef = useRef(photoAttachments);
     useEffect(() => { photoAttachmentsRef.current = photoAttachments; }, [photoAttachments]);
 
@@ -222,7 +230,10 @@ const CoachView = () => {
         if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* already closed */ } }
         const el = audioElRef.current;
         if (el) { try { el.pause(); } catch { /* nothing playing */ } }
+        srIntentionalStopRef.current = true; // onend must not restart after unmount
+        clearTimeout(srSilenceTimerRef.current);
         try { recognitionRef.current?.stop(); } catch { /* not listening */ }
+        recognitionRef.current = null; // a post-stop flush must not re-arm the timer
         photoAttachmentsRef.current.forEach(item => URL.revokeObjectURL(item.preview));
     }, []);
 
@@ -620,6 +631,28 @@ const CoachView = () => {
         setVoiceEnabled((v) => !v);
     };
 
+    // Deliberately end the mic session and send whatever was captured. The
+    // silence timer and the user tapping the mic off both converge here.
+    const finishListening = () => {
+        clearTimeout(srSilenceTimerRef.current);
+        srIntentionalStopRef.current = true;
+        setIsListening(false);
+        const text = srTranscriptRef.current.trim();
+        srTranscriptRef.current = '';
+        const recognition = recognitionRef.current;
+        if (text) {
+            // Detach before stop(): Chrome can flush one more final result
+            // after stop(), and with this message already sent that late tail
+            // would go out as a stray second message.
+            recognitionRef.current = null;
+        }
+        // else: keep the instance attached — a post-stop flush is the only
+        // copy of an utterance that never got a final result, and letting it
+        // land re-arms the timer so the words still send.
+        try { recognition?.stop(); } catch { /* not running */ }
+        if (text) handleSend(text);
+    };
+
     const toggleMic = () => {
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) {
@@ -627,22 +660,66 @@ const CoachView = () => {
             return;
         }
         if (isListening) {
-            try { recognitionRef.current?.stop(); } catch { /* not running */ }
-            setIsListening(false);
+            finishListening();
             return;
         }
         // Unlock audio within this user gesture so the spoken reply can play back.
         if (voiceEnabled) ensureAudioContext();
+        srIntentionalStopRef.current = false;
+        srTranscriptRef.current = '';
+        // A timer can survive a closed session (Chrome flushes a final result
+        // after stop(), which re-arms it); firing into this new session would
+        // poison the stop flag and flip the mic UI off mid-listen.
+        clearTimeout(srSilenceTimerRef.current);
         const recognition = new SR();
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        // We own endpointing: the browser's own silence cutoff (~1.2s, not
+        // configurable) is too eager, so keep recognition open and decide
+        // "utterance finished" ourselves via SILENCE_MS.
+        recognition.continuous = true;
+        recognition.interimResults = true;
         recognition.lang = 'en-US';
         recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            if (transcript) handleSend(transcript);
+            if (recognitionRef.current !== recognition) return; // stale instance
+            for (let i = event.resultIndex; i < event.results.length; i += 1) {
+                const result = event.results[i];
+                if (!result.isFinal) continue;
+                const finalText = result[0].transcript.trim();
+                if (finalText) {
+                    srTranscriptRef.current = srTranscriptRef.current
+                        ? `${srTranscriptRef.current} ${finalText}`
+                        : finalText;
+                }
+            }
+            // Any result — interim included — proves the user is still talking,
+            // so push the endpoint out by a fresh SILENCE_MS.
+            clearTimeout(srSilenceTimerRef.current);
+            srSilenceTimerRef.current = setTimeout(finishListening, SILENCE_MS);
         };
-        recognition.onerror = () => setIsListening(false);
-        recognition.onend = () => setIsListening(false);
+        recognition.onerror = () => {
+            if (recognitionRef.current !== recognition) return; // stale instance
+            // No restart on error ('no-speech' etc.) — restarting here loops the mic.
+            srIntentionalStopRef.current = true;
+            clearTimeout(srSilenceTimerRef.current);
+            recognitionRef.current = null; // drop any post-error stragglers
+            const text = srTranscriptRef.current.trim();
+            srTranscriptRef.current = '';
+            // Recover the words into the input for a manual send — an error here
+            // means we can't trust the capture was complete, so never auto-send.
+            if (text) setInput(text);
+            setIsListening(false);
+        };
+        recognition.onend = () => {
+            if (srIntentionalStopRef.current) {
+                srIntentionalStopRef.current = false;
+                if (recognitionRef.current === recognition) setIsListening(false);
+                return;
+            }
+            // iOS Safari ignores continuous=true and self-ends after each
+            // utterance; restarting keeps the mic open until SILENCE_MS decides.
+            if (recognitionRef.current === recognition) {
+                try { recognition.start(); } catch { setIsListening(false); }
+            }
+        };
         recognitionRef.current = recognition;
         try { recognition.start(); setIsListening(true); } catch { setIsListening(false); }
     };
