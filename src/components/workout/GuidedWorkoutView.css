@@ -142,7 +142,7 @@
 .active-set-header,
 .active-set-row {
     display: grid;
-    grid-template-columns: 52px 1fr 1fr 38px;
+    grid-template-columns: 52px 1fr 1fr 56px;
     align-items: center;
     column-gap: 10px;
 }
@@ -204,6 +204,52 @@
     border-color: var(--success);
     background: var(--success);
     color: var(--bg-app);
+}
+
+/* Inline ACTUAL reps input (rep-based exercises) */
+.active-set-actual-input {
+    width: 100%;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-size: 1rem;
+    text-align: center;
+}
+
+.active-set-actual-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.active-set-row.completed .active-set-actual-input {
+    border-color: color-mix(in srgb, var(--success) 60%, transparent);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    color: var(--success);
+}
+
+/* Static circle content for rep-based sets (no work timer) */
+.timer-static-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    text-align: center;
+    max-width: 180px;
+    line-height: 1.25;
+}
+
+.timer-set-position {
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1;
+    margin: 12px 0 0;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
 }
 
 /* TIMER CIRCLE - NEON CENTERPIECE */

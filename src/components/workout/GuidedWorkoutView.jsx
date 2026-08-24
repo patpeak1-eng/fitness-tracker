@@ -245,7 +245,8 @@ const GuidedWorkoutView = () => {
                     const duration = currentSet.targetTime || currentExerciseInstance.exercise.default_duration || 60;
                     startWorkTimer(duration);
                 } else {
-                    startWorkTimer();
+                    // Rep-based sets have no work timer — go straight to logging.
+                    openInputModal();
                 }
             }
         }
@@ -259,6 +260,30 @@ const GuidedWorkoutView = () => {
             time: currentSet.time || currentSet.targetTime || 0
         });
         setShowInputModal(true);
+    };
+
+    // Inline ACTUAL-reps commit for rep-based exercises. Empty is not zero:
+    // a blurred empty box records nothing. 0 is a real (failed) set.
+    const commitActualReps = (set, inputEl) => {
+        const raw = inputEl.value.trim();
+        if (raw === '') {
+            // Restore the stored value so an abandoned edit doesn't lie.
+            if (set.completed) inputEl.value = set.reps ?? '';
+            return;
+        }
+        const reps = Number(raw);
+        if (!Number.isFinite(reps) || reps < 0) {
+            inputEl.value = set.completed ? (set.reps ?? '') : '';
+            return;
+        }
+        if (set.completed) {
+            // Re-edit: update reps, never toggle back to incomplete.
+            if (reps !== set.reps) updateSet(currentExerciseInstance.id, set.id, { reps });
+            return;
+        }
+        // Reps must land before the completion toggle (PR check reads the set).
+        updateSet(currentExerciseInstance.id, set.id, { reps });
+        toggleSetComplete(currentExerciseInstance.id, set.id, false);
     };
 
     const confirmSetCompletion = () => {
@@ -430,8 +455,8 @@ const GuidedWorkoutView = () => {
                         <div className="active-set-header">
                             <span>Set</span>
                             <span>{units === 'imperial' ? 'LBS' : 'KGS'}</span>
-                            <span>Reps</span>
-                            <span></span>
+                            <span>Goal</span>
+                            <span>Actual</span>
                         </div>
                         {currentExerciseInstance.sets.map((set, index) => {
                             const setType = set.setType || 'normal';
@@ -474,15 +499,35 @@ const GuidedWorkoutView = () => {
                                     {set.isPR && <Trophy size={12} className="set-pr-flag" aria-label="Personal record" />}
                                 </span>
                                 <span className="active-set-value">{set.weight > 0 ? set.weight : 'BW'}</span>
-                                <span className="active-set-value">{set.reps || set.targetReps || '--'}</span>
-                                <button
-                                    type="button"
-                                    className="active-set-check"
-                                    aria-label={`${set.completed ? 'Mark set incomplete' : 'Mark set complete'} ${index + 1}`}
-                                    onClick={() => toggleSetComplete(currentExerciseInstance.id, set.id, set.completed)}
-                                >
-                                    {set.completed && <Check size={18} strokeWidth={3} />}
-                                </button>
+                                <span className="active-set-value">{set.targetReps || '--'}</span>
+                                {isDurationBased ? (
+                                    <button
+                                        type="button"
+                                        className="active-set-check"
+                                        aria-label={`${set.completed ? 'Mark set incomplete' : 'Mark set complete'} ${index + 1}`}
+                                        onClick={() => toggleSetComplete(currentExerciseInstance.id, set.id, set.completed)}
+                                    >
+                                        {set.completed && <Check size={18} strokeWidth={3} />}
+                                    </button>
+                                ) : (
+                                    <input
+                                        /* Remount when reps land externally (e.g. via the Log Set
+                                           modal) so the uncontrolled value reflects storage. */
+                                        key={`actual-${set.id}-${set.completed}-${set.reps}`}
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        className="active-set-actual-input"
+                                        aria-label={`Actual reps for set ${index + 1}`}
+                                        /* Deliberately empty until completed: pre-filling the goal
+                                           invites reflexive taps and fabricates data. */
+                                        defaultValue={set.completed ? (set.reps ?? '') : ''}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') e.currentTarget.blur();
+                                        }}
+                                        onBlur={(e) => commitActualReps(set, e.currentTarget)}
+                                    />
+                                )}
                             </div>
                             );
                         })}
@@ -490,12 +535,23 @@ const GuidedWorkoutView = () => {
 
                     {/* TIMER CIRCLE */}
                     <div className="timer-container-row">
-                        <button className="timer-adjust-side" onClick={() => adjustTimer(-10)}>
-                            <Minus size={24} />
-                        </button>
+                        {/* Work +/- hide for rep-based sets (no work timer); the same
+                            buttons stay for rest adjustments on every exercise. */}
+                        {(isDurationBased || isResting || isRestPaused) && (
+                            <button className="timer-adjust-side" onClick={() => adjustTimer(-10)}>
+                                <Minus size={24} />
+                            </button>
+                        )}
 
                         <div className={`timer-circle ${isResting ? 'resting' : isWorking ? (isDurationBased ? 'working duration-mode' : 'working') : 'ready'}`}>
                             <div className="timer-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                {!isDurationBased && !isResting && !isRestPaused ? (
+                                    <>
+                                        <span className="timer-static-name">{currentExerciseInstance.exercise.name}</span>
+                                        <h1 className="timer-set-position">Set {currentSetIndex + 1} of {currentExerciseInstance.sets.length}</h1>
+                                    </>
+                                ) : (
+                                    <>
                                 <span className="timer-label">{displayLabel}</span>
                                 <h1 className={`timer-value ${pulseClass}`}>{formatTime(displayTime)}</h1>
 
@@ -522,12 +578,16 @@ const GuidedWorkoutView = () => {
                                         {(isResting || isWorking) ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
                                     </button>
                                 )}
+                                    </>
+                                )}
                             </div>
                         </div>
 
-                        <button className="timer-adjust-side" onClick={() => adjustTimer(10)}>
-                            <Plus size={24} />
-                        </button>
+                        {(isDurationBased || isResting || isRestPaused) && (
+                            <button className="timer-adjust-side" onClick={() => adjustTimer(10)}>
+                                <Plus size={24} />
+                            </button>
+                        )}
                     </div>
 
                     {isResting && nextExerciseInstance?.exercise?.illustration && (
@@ -556,8 +616,10 @@ const GuidedWorkoutView = () => {
                             ) : (
                                 isDurationBased ? (
                                     <>Start Timer &nbsp; <Play size={24} fill="currentColor" /></>
+                                ) : currentSet.completed ? (
+                                    <>Next Set &nbsp; <SkipForward size={24} /></>
                                 ) : (
-                                    <>Start Set &nbsp; <Play size={24} fill="currentColor" /></>
+                                    <>Log Set &nbsp; <CheckCircle2 size={24} /></>
                                 )
                             )}
                         </button>
