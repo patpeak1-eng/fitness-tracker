@@ -1,4 +1,4 @@
-"""Template routes: list, create, and delete custom workout templates."""
+"""Template routes: list, create, update, and delete custom workout templates."""
 from typing import List
 from uuid import UUID
 
@@ -39,6 +39,35 @@ async def create_template(
         template_data=payload.template_data,
     )
     db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    return TemplateResponse.model_validate(template)
+
+
+@router.put("/{id}", response_model=TemplateResponse)
+async def update_template(
+    id: UUID,
+    payload: TemplateCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TemplateResponse:
+    """Overwrite an owned template in place (S27 — progression apply and the
+    in-place template save both use this; delete+recreate would churn the row
+    id and race the SyncQueue replay)."""
+    result = await db.execute(
+        select(CustomTemplate).where(
+            CustomTemplate.id == id,
+            CustomTemplate.user_id == current_user.id,
+        )
+    )
+    template = result.scalar_one_or_none()
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
+        )
+
+    template.name = payload.name
+    template.template_data = payload.template_data
     await db.commit()
     await db.refresh(template)
     return TemplateResponse.model_validate(template)

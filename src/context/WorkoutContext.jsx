@@ -347,6 +347,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 }
             }
         });
+        // In-place template overwrite replay. A 404 (template deleted
+        // server-side) is a non-auth 4xx → dead-letter, which is correct.
+        SyncQueue.registerExecutor('template_update', op =>
+            ApiService.updateCustomTemplate(op.payload.backendId, op.payload));
         SyncQueue.registerExecutor('exercise', async op => {
             const resp = await ApiService.saveCustomExercise(op.payload);
             if (resp?.id && op.uid) {
@@ -1555,7 +1559,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
         // Generate Recommendations
         const recommendations = [];
-        activeWorkout.exercises.forEach(ex => {
+        activeWorkout.exercises.forEach((ex, exerciseIndex) => {
             // Progression Logic
             // Determine effective settings
             const effectiveMode = smartProgressionEnabled ? progressionMode : 'linear';
@@ -1612,6 +1616,12 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                     setId: lastSet.id,
                     oldWeight: lastSet.weight,
                     newWeight: newWeight,
+                    // Captured at detection time, while the workout still
+                    // exists: applying runs post-finish, when activeWorkout
+                    // is null (S27 spec §A/§C). exerciseIndex is positional;
+                    // apply re-verifies it against exerciseId.
+                    templateId: activeWorkout.sourceTemplateId || null,
+                    exerciseIndex,
                     message: `Recommend +${incrementValue}${units === 'metric' ? 'kg' : 'lbs'} (${newWeight})`
                 });
             }
@@ -1919,20 +1929,109 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     };
 
-    // Explicitly apply progression to the template for future workouts
-    const applyProgression = (exerciseInstanceId, setId, updates) => {
-        if (!activeWorkout || !activeWorkout.sourceTemplateId) return;
+    // --- Single canonical template-write path (S27 spec §B). ---
+    // Progression apply and the in-place template save (queued Prompt B) are
+    // thin transforms over this; there must never be a second write path.
+    // Returns { ok, error?, template? } — callers branch on it (decision 9).
+    // Local persistence is the success criterion (localStorage is the source
+    // of truth app-wide); the cloud push is best-effort with the SyncQueue
+    // fallback, exactly like every other push in this file.
+    const writeTemplate = async (templateId, transformFn) => {
+        if (!currentProfile) return { ok: false, error: 'No active profile.' };
+        const current = templates.find(t => t.id === templateId);
+        if (!current) {
+            return { ok: false, error: 'That template no longer exists — it may have been deleted.' };
+        }
+        if (!current.isCustom) {
+            return { ok: false, error: 'Built-in templates cannot be modified.' };
+        }
 
-        // Find indices
-        const exIndex = activeWorkout.exercises.findIndex(e => e.id === exerciseInstanceId);
-        if (exIndex === -1) return;
+        let nextTemplate;
+        try {
+            nextTemplate = transformFn(current);
+        } catch {
+            nextTemplate = null;
+        }
+        if (!nextTemplate) {
+            return { ok: false, error: 'Could not update the template.' };
+        }
 
-        const exercise = activeWorkout.exercises[exIndex];
-        const setIndex = exercise.sets.findIndex(s => s.id === setId);
-        if (setIndex === -1) return;
+        setTemplates(prev => prev.map(t => (t.id === templateId ? nextTemplate : t)));
 
-        // Sync to template
-        syncToTemplate(activeWorkout.sourceTemplateId, exIndex, setIndex, updates);
+        const stored = StorageService.loadCustomTemplates(currentProfile.id);
+        const storedIndex = stored.findIndex(t => t.id === templateId);
+        if (storedIndex !== -1) stored[storedIndex] = nextTemplate;
+        else stored.push(nextTemplate);
+        StorageService.saveCustomTemplates(currentProfile.id, stored);
+
+        // Cloud push — PUT when the backend row is known, create otherwise.
+        if (currentProfile?.email && ApiService.isAvailable()) {
+            const uid = currentProfile.id;
+            const push = nextTemplate.backendId
+                ? ApiService.updateCustomTemplate(nextTemplate.backendId, nextTemplate)
+                : ApiService.saveCustomTemplate(nextTemplate);
+            push.then(resp => {
+                if (resp?.id && !nextTemplate.backendId) {
+                    const fresh = StorageService.loadCustomTemplates(uid);
+                    const idx = fresh.findIndex(t => t.id === templateId);
+                    if (idx !== -1) {
+                        fresh[idx].backendId = resp.id;
+                        StorageService.saveCustomTemplates(uid, fresh);
+                    }
+                }
+            }).catch(err => {
+                console.warn('[CloudSync] Template update failed (non-fatal):', err.message);
+                SyncQueue.enqueue({
+                    type: nextTemplate.backendId ? 'template_update' : 'template',
+                    key: templateId,
+                    payload: nextTemplate,
+                    uid
+                });
+            });
+        }
+
+        return { ok: true, template: nextTemplate };
+    };
+
+    // Recommendation objects carry a positional exerciseIndex captured at
+    // detection time; re-verify it against the catalog id in case the
+    // template changed shape (or the workout skipped a missing exercise).
+    const resolveTemplateExerciseIndex = (template, rec) => {
+        const itemIdAt = (i) => {
+            const item = template.exercises?.[i];
+            return typeof item === 'string' ? item : item?.id;
+        };
+        if (itemIdAt(rec.exerciseIndex) === rec.exerciseId) return rec.exerciseIndex;
+        return (template.exercises || []).findIndex((item) =>
+            (typeof item === 'string' ? item : item?.id) === rec.exerciseId
+        );
+    };
+
+    // Apply a progression recommendation to its source template. Runs
+    // post-finish, so it must never read activeWorkout (S27 spec §A —
+    // the old applyProgression died on exactly that).
+    const applyRecommendation = async (rec) => {
+        if (!rec?.templateId || rec.newWeight === undefined || rec.exerciseId === undefined) {
+            return { ok: false, error: 'This recommendation cannot be applied.' };
+        }
+        return writeTemplate(rec.templateId, (template) => {
+            const exIdx = resolveTemplateExerciseIndex(template, rec);
+            if (exIdx === -1) return null; // exercise no longer in the template
+            const item = template.exercises[exIdx];
+            if (typeof item === 'string' || !Array.isArray(item.sets)) {
+                return null; // legacy shape: no per-set weights to write
+            }
+            // Decision 1: write EVERY working set, not just the last. Template
+            // sets carry no setType yet (spec §B / decision 4 pending), so
+            // until that ships every template set counts as a working set.
+            const nextItem = {
+                ...item,
+                sets: item.sets.map(s => ({ ...s, weight: rec.newWeight })),
+            };
+            const exercisesCopy = [...template.exercises];
+            exercisesCopy[exIdx] = nextItem;
+            return { ...template, exercises: exercisesCopy };
+        });
     };
 
     const prepValidation = getPrepValidation(activeWorkout);
@@ -2717,7 +2816,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         updateSet,
         removeSet,
         toggleSetComplete,
-        applyProgression, // NEW
+        writeTemplate,
+        applyRecommendation,
         calculateVolume,
         createProfile,
         switchProfile,

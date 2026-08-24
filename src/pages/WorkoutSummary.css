@@ -137,6 +137,31 @@
     box-shadow: 0 0 10px rgba(var(--primary-rgb), 0.3);
 }
 
+.apply-btn.applied {
+    background: var(--success);
+    color: var(--bg-app);
+}
+
+/* Apply outcome banner (S27) — real success or real failure, never assumed */
+.apply-notice {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+}
+
+.apply-notice.success {
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--success) 50%, transparent);
+    color: var(--success);
+}
+
+.apply-notice.error {
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+    color: var(--danger);
+}
+
 .apply-btn:disabled {
     cursor: default;
     transform: none;

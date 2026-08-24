@@ -194,6 +194,20 @@ export const saveCustomTemplate = async (template) => {
   return r.json();
 };
 
+// Overwrite an owned template in place, keyed by its BACKEND row id (the
+// local tpl_custom_* id never leaves the device). 404 when unknown/unowned.
+export const updateCustomTemplate = async (backendId, template) => {
+  const r = await apiFetch(`/api/templates/${backendId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name: template.name, template_data: template })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, `/api/templates/${backendId}`, text);
+  }
+  return r.json();
+};
+
 export const deleteCustomTemplate = async (id) => {
   const r = await apiFetch(`/api/templates/${id}`, {
     method: 'DELETE'

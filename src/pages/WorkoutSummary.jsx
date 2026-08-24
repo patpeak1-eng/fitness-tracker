@@ -9,7 +9,11 @@ import './WorkoutSummary.css';
 const WorkoutSummary = () => {
     const navigate = useNavigate();
     const location = useLocation(); // NEW
-    const { history, activeWorkout, applyProgression, units } = useWorkout();
+    const { history, applyRecommendation, templates, units } = useWorkout();
+    // Per-recommendation apply outcome ('saved' only on REAL success —
+    // decision 9) and the in-app confirmation banner (decision 8: no alert()).
+    const [applyState, setApplyState] = useState({});
+    const [applyNotice, setApplyNotice] = useState(null);
 
     // Prefer passed state, fallback to history[0]
     const summaryWorkout = location.state?.workout || history[0];
@@ -64,15 +68,30 @@ const WorkoutSummary = () => {
         }))
     );
 
-    const handleApply = (rec) => {
-        // Apply update to template
-        // We need the original template ID. summaryWorkout.sourceTemplateId should exist.
-        if (summaryWorkout.sourceTemplateId) {
-            applyProgression(rec.exerciseId, rec.setId, { weight: rec.newWeight });
-            // Show success logic locally?
-            alert(`Updated ${rec.exerciseName} to ${rec.newWeight}${units === 'metric' ? 'kg' : 'lbs'} for next time!`);
+    const wUnit = units === 'metric' ? 'kg' : 'lbs';
+
+    const handleApply = async (rec, idx) => {
+        const result = await applyRecommendation(rec);
+        if (result.ok) {
+            setApplyState(prev => ({ ...prev, [idx]: 'saved' }));
+            setApplyNotice({
+                kind: 'success',
+                text: `Updated ${rec.exerciseName} to ${rec.newWeight} ${wUnit} for next time`,
+            });
+        } else {
+            setApplyState(prev => ({ ...prev, [idx]: 'failed' }));
+            setApplyNotice({
+                kind: 'error',
+                text: result.error || 'Could not update the template.',
+            });
         }
     };
+
+    // Only offer Apply when the rec carries its source template (older recs
+    // predate that field, and template-less workouts have nothing to write).
+    // Existence/custom-ness is judged at tap time by applyRecommendation so a
+    // deleted template produces an honest failure message, not a hidden button.
+    const canApply = (rec) => Boolean(rec.templateId);
 
     return (
         <div className="page summary-page">
@@ -142,20 +161,30 @@ const WorkoutSummary = () => {
                                         <div className="rec-change">
                                             <span>{rec.oldWeight}</span>
                                             <ArrowRight size={14} />
-                                            <span className="new-val">{rec.newWeight} {units === 'metric' ? 'kg' : 'lbs'}</span>
+                                            <span className="new-val">{rec.newWeight} {wUnit}</span>
                                         </div>
                                     </div>
-                                    <button className="apply-btn" onClick={(e) => {
-                                        e.target.innerText = 'Saved';
-                                        e.target.disabled = true;
-                                        e.target.style.background = 'var(--success)';
-                                        handleApply(rec);
-                                    }}>
-                                        Apply
-                                    </button>
+                                    {canApply(rec) && (
+                                        <button
+                                            className={`apply-btn ${applyState[idx] === 'saved' ? 'applied' : ''}`}
+                                            disabled={applyState[idx] === 'saved'}
+                                            onClick={() => handleApply(rec, idx)}
+                                        >
+                                            {applyState[idx] === 'saved' ? 'Saved' : 'Apply'}
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
+
+                        {applyNotice && (
+                            <div
+                                className={`apply-notice ${applyNotice.kind}`}
+                                role="status"
+                            >
+                                {applyNotice.text}
+                            </div>
+                        )}
                     </Card>
                 )}
 
