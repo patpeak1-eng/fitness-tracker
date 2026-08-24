@@ -724,6 +724,44 @@ Themes:     light theme via data-theme attribute on root (S15)
 
 **Before starting any session:** read this document in full, then read MASTER_CONTEXT.md for workflow/ceremony rules. This document is the *what and how*; MASTER_CONTEXT.md is the *process*.
 
+## 12. PWA UPDATE DELIVERY (S26)
+
+**Model: prompt, not silent.** `vite.config.js` sets `registerType: 'prompt'`
+(was `autoUpdate`). Under autoUpdate, users silently received each deploy one
+app-open late — with multiple users including an external beta tester, nobody
+could tell which build they were on or when it changed. Prompt mode makes the
+update a visible, user-controlled action.
+
+**Registration wiring — exactly one registrar.**
+`UpdateBanner.jsx` (src/components/common/) imports
+`virtual:pwa-register/react` and registers the service worker itself via
+`useRegisterSW`. Because of that, `injectRegister: null` is set in
+`vite.config.js` — with the default injection AND the virtual-module import,
+the SW would be registered twice. If UpdateBanner is ever removed, the
+injectRegister setting must be revisited or updates stop being delivered.
+
+**Update detection.** `useRegisterSW`'s `onRegistered` starts a 15-minute
+`registration.update()` interval (cleared on unmount, StrictMode-guarded), so
+a new deploy can surface the banner while the app stays open — no cold start
+required. When the new worker reaches `waiting`, `needRefresh` flips and the
+banner renders: "New version available" + Reload. Reload calls
+`updateServiceWorker(true)` — skipWaiting + page reload. Dismissal is
+session-state only, never persisted; a stale build prompts again next load.
+
+**Workout suppression.** The banner does not render while
+`activeWorkout.status` is `'active'` **or** `'paused'`. A mid-set reload
+prompt is unacceptable, and a version change mid-workout risks the in-flight
+localStorage shape. Paused counts as in-progress because a paused workout is
+resumable from the Dashboard ("Resume Paused Workout"), where no pause
+overlay hides the banner. The banner appears once the workout is finished or
+cancelled (needRefresh state survives).
+
+**Version string.** `__APP_VERSION__` is a Vite `define` (JSON-stringified)
+sourced from `RAILWAY_GIT_COMMIT_SHA` (set by Railway at build time), first 7
+chars, falling back to `'dev'` for local builds. Rendered in Settings'
+`.version-info` block ("Version <sha7>"), so any tester can report exactly
+which build they are on.
+
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits. Last updated: S25.3, 2026-08-17.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery). Last updated: S26, 2026-08-24.*

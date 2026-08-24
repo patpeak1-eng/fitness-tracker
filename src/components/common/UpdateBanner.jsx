@@ -32,8 +32,11 @@ const UpdateBanner = () => {
     useEffect(() => () => clearInterval(checkIntervalRef.current), []);
 
     // A mid-set reload prompt is unacceptable, and a version change
-    // mid-workout risks the in-flight localStorage shape.
-    const workoutInProgress = activeWorkout && activeWorkout.status === 'active';
+    // mid-workout risks the in-flight localStorage shape. Paused counts as
+    // in-progress: a paused workout is resumable from the Dashboard, where
+    // no pause overlay hides the banner.
+    const workoutInProgress = activeWorkout
+        && (activeWorkout.status === 'active' || activeWorkout.status === 'paused');
 
     if (!needRefresh || dismissed || workoutInProgress) return null;
 
