@@ -801,6 +801,42 @@ workout parks on the Dashboard where the badge renders). While suppressed,
 the neutral "N not synced" pill still shows. Tap-to-flush behavior is
 unchanged.
 
+## 14. PROGRESSION APPLY PATH (S27)
+
+Spec + decisions: docs/smart_progression_spec_s27.md; staging:
+docs/PROGRESSION_ROADMAP.md.
+
+**Recommendation shape.** finishWorkout's detection now stamps each
+recommendation with `templateId` (the finished workout's `sourceTemplateId`)
+and the positional `exerciseIndex`, captured while the workout still exists —
+applying runs post-finish, when `activeWorkout` is null. Old recommendations
+without `templateId` render without an Apply button. History/backend storage
+is JSONB; no migration.
+
+**Single template-write path.** `writeTemplate(templateId, transformFn)` in
+WorkoutContext is THE way a template gets modified: it resolves the template
+(custom-only; built-ins refused), applies a pure transform, persists
+state → localStorage → cloud (PUT `/api/templates/{id}` when `backendId` is
+known, create otherwise) with SyncQueue fallback (`'template_update'` /
+`'template'` ops), and **returns `{ ok, error? }`** — callers must branch on
+it. Local persistence is the success criterion; cloud is best-effort, like
+every push in the app. The queued in-place template save (Prompt B) must be
+built as another transform over this function — never a second write path.
+
+**applyRecommendation(rec).** Thin transform over writeTemplate: re-verifies
+`exerciseIndex` against the catalog `exerciseId` (indices can shift if the
+workout skipped a missing exercise), then writes `weight` on EVERY set of
+that exercise (decision 1). Template sets carry no `setType` yet, so all
+template sets count as working sets until decision 4 ships. The old
+`applyProgression` (dead on three independent conditions — see spec §A) is
+deleted. WorkoutSummary branches on the returned result: token-styled
+success/failure banner, no native `alert()`, and "Saved" only on real
+success (decisions 8/9).
+
+**Backend.** `PUT /api/templates/{id}` (`routers/templates.py`) — same auth
+dependency and ownership 404 as DELETE, same response schema as POST;
+payload reuses `TemplateCreate`. No schema/migration change.
+
 ---
 
 *Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery); S27 added Section 13 (session lifetime & sync recovery). Last updated: S27, 2026-08-24.*
