@@ -156,6 +156,7 @@ Ephemeral session state:
 
 Progression state:
   smartProgressionEnabled, progressionMode, progressionType, progressionIncrement
+  (staged plans for the progression system: docs/PROGRESSION_ROADMAP.md)
 
 Guided mode state:
   currentExerciseIndex, currentSetIndex (persisted into activeWorkout object)
