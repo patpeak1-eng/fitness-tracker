@@ -103,6 +103,19 @@ const Settings = () => {
     // truthy value means this build was pointed at the deployed backend.
     const apiConnected = Boolean(import.meta.env.VITE_API_URL);
 
+    // Dead-lettered sync ops (ARCHITECTURE.md §13): server-rejected pushes
+    // parked in localStorage. Read-only surfacing so a beta tester can see —
+    // and report — that something didn't reach the cloud. Guarded parse: a
+    // corrupt value must never break the Settings page.
+    const deadLetterCount = (() => {
+        try {
+            const list = JSON.parse(localStorage.getItem('fitness_sync_deadletter') || '[]');
+            return Array.isArray(list) ? list.length : 0;
+        } catch {
+            return 0;
+        }
+    })();
+
     // --- AI Coach settings (device-level, persisted immediately via StorageService) ---
     const [coachEnabled, setCoachEnabled] = useState(StorageService.loadCoachEnabled());
     const [coachVoiceInput, setCoachVoiceInput] = useState(StorageService.loadCoachVoiceInput());
@@ -464,8 +477,13 @@ const Settings = () => {
             )}
 
             <div className="version-info">
-                <p>App: FitTrack v1.0</p>
-                <p>Version {__APP_VERSION__}</p>
+                {deadLetterCount > 0 && (
+                    <p>
+                        {deadLetterCount} item{deadLetterCount === 1 ? '' : 's'} could not
+                        sync and {deadLetterCount === 1 ? 'is' : 'are'} kept on this device
+                    </p>
+                )}
+                <p>FitTrack — {__APP_VERSION__}</p>
                 <p>
                     Backend:{' '}
                     <span className={`backend-status ${apiConnected ? 'connected' : 'local'}`}>
