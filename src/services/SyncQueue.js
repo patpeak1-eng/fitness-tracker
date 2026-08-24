@@ -13,6 +13,11 @@
 // skipped and kept for a later flush.
 
 const QUEUE_KEY = 'fitness_sync_queue';
+// Ops the server rejected with a non-auth 4xx. Retrying can't succeed, but
+// discarding a finished workout outright is permanent data loss — park the
+// payload here instead so it stays recoverable. Never replayed automatically.
+const DEADLETTER_KEY = 'fitness_sync_deadletter';
+const DEADLETTER_MAX = 20; // oldest dropped beyond this — bounded growth
 
 const safeParse = (raw, fallback) => {
     try {
@@ -28,6 +33,21 @@ const persistQueue = (ops) => {
         localStorage.setItem(QUEUE_KEY, JSON.stringify(ops));
     } catch (e) {
         console.warn('[SyncQueue] could not persist queue (quota?):', e);
+    }
+};
+
+const deadLetter = (op, err) => {
+    const list = safeParse(localStorage.getItem(DEADLETTER_KEY), []);
+    list.push({
+        ...op,
+        deadLetteredAt: new Date().toISOString(),
+        error: String(err?.message || err)
+    });
+    while (list.length > DEADLETTER_MAX) list.shift();
+    try {
+        localStorage.setItem(DEADLETTER_KEY, JSON.stringify(list));
+    } catch (e) {
+        console.warn('[SyncQueue] could not persist dead-letter (quota?):', e);
     }
 };
 
@@ -110,8 +130,10 @@ const SyncQueue = {
                     }
                     if (err?.status >= 400 && err.status < 500 && err.status !== 429) {
                         // Non-auth 4xx: the payload itself is rejected —
-                        // retrying forever can't succeed. Drop it, loudly.
-                        console.warn(`[SyncQueue] dropping rejected op ${op.id}:`, err);
+                        // retrying forever can't succeed. Park it in the
+                        // dead-letter store instead of discarding, loudly.
+                        console.warn(`[SyncQueue] dead-lettering rejected op ${op.id}:`, err);
+                        deadLetter(op, err);
                         persistQueue(loadQueue().filter(o => o.id !== op.id));
                     } else {
                         // Network / 5xx / 429: keep for the next flush.
