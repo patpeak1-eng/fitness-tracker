@@ -250,22 +250,30 @@
 /* Age box (S21 DOB feature): visible read-only number + transparent native
    date input overlaying it — tapping anywhere in the box opens the OS date
    picker; the picker chrome itself is deliberately OS-native. */
-.dob-age-field {
-    position: relative;
+/* Date-of-birth selects (S27) — one scroll per field, no calendar paging */
+.dob-selects {
+    display: flex;
+    gap: 8px;
 }
 
-.dob-age-field input[type="date"] {
-    position: absolute;
-    inset: 0;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
+.dob-selects select {
+    min-width: 0;
 }
 
-/* Keyboard focus lands on the invisible date input — surface it on the
-   visible box so focus isn't lost to the eye. */
-.dob-age-field:focus-within input[type="text"] {
-    border-color: var(--primary);
+.dob-selects select:nth-child(1) {
+    flex: 1.4; /* month names are the widest values */
+}
+
+.dob-selects select:nth-child(2),
+.dob-selects select:nth-child(3) {
+    flex: 1;
+}
+
+.dob-age-display {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
 }
 
 .form-group textarea {

@@ -197,14 +197,79 @@ const Profile = () => {
         return age;
     };
 
-    // Desktop browsers only open the calendar from the field's icon by
-    // default; showPicker() opens it from anywhere in the box. Mobile opens
-    // natively on tap without it.
-    const openDobPicker = (e) => {
-        if (typeof e.target.showPicker === 'function') {
-            try { e.target.showPicker(); } catch (err) { /* needs gesture; focus is enough */ }
+    // --- Date-of-birth selects (S27) ---
+    // Three explicit selects replace the native date input: Android's picker
+    // opens on the calendar view, so reaching a 1980s year meant paging month
+    // by month. Local selection state allows partial picks; nothing is
+    // written to userStats until all three parts are set.
+    const [dobSel, setDobSel] = useState(() => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(userStats.dateOfBirth || '');
+        return m
+            ? { year: +m[1], month: +m[2], day: +m[3] }
+            : { year: '', month: '', day: '' };
+    });
+
+    // Re-sync from storage when it changes underneath us (profile hydration,
+    // cloud pull). The equality check keeps our own writes from looping.
+    useEffect(() => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(userStats.dateOfBirth || '');
+        if (!m) return;
+        const next = { year: +m[1], month: +m[2], day: +m[3] };
+        setDobSel(prev => (
+            prev.year === next.year && prev.month === next.month && prev.day === next.day
+                ? prev
+                : next
+        ));
+    }, [userStats.dateOfBirth]);
+
+    // Month lengths via the Date rollover trick: day 0 of the NEXT month is
+    // this month's last day — leap years come out correct for free.
+    const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+
+    // Clamp a selection to a real, non-future date. A month/year change that
+    // invalidates the picked day lands on the month's last valid day.
+    const clampDobSelection = (sel) => {
+        const t = new Date();
+        const next = { ...sel };
+        if (next.year === t.getFullYear() && next.month && next.month > t.getMonth() + 1) {
+            next.month = t.getMonth() + 1;
+        }
+        if (next.year && next.month) {
+            let maxDay = daysInMonth(next.year, next.month);
+            if (next.year === t.getFullYear() && next.month === t.getMonth() + 1) {
+                maxDay = Math.min(maxDay, t.getDate());
+            }
+            if (next.day && next.day > maxDay) next.day = maxDay;
+        }
+        return next;
+    };
+
+    const handleDobPartChange = (part, rawValue) => {
+        const next = clampDobSelection({
+            ...dobSel,
+            [part]: rawValue === '' ? '' : Number(rawValue),
+        });
+        setDobSel(next);
+        // Partial selection writes nothing; the stored format stays yyyy-MM-dd.
+        if (next.year && next.month && next.day) {
+            const iso = `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`;
+            setUserStats(prev => ({ ...prev, dateOfBirth: iso }));
+            triggerAutoSaved();
         }
     };
+
+    const DOB_MONTHS = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    const dobToday = new Date();
+    const dobYears = Array.from({ length: 101 }, (_, i) => dobToday.getFullYear() - i);
+    const dobMonthMax = dobSel.year === dobToday.getFullYear() ? dobToday.getMonth() + 1 : 12;
+    const dobDayMax = (dobSel.year && dobSel.month)
+        ? (dobSel.year === dobToday.getFullYear() && dobSel.month === dobToday.getMonth() + 1
+            ? Math.min(daysInMonth(dobSel.year, dobSel.month), dobToday.getDate())
+            : daysInMonth(dobSel.year, dobSel.month))
+        : 31;
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -348,32 +413,46 @@ const Profile = () => {
                 <h2><User size={16} /> Personal Information</h2>
                 <div className="form-card">
                     <div className="form-group">
-                        <label>Age</label>
-                        {/* The visible box shows just a number (computed from
-                            DOB when set, else the legacy manual age). The
-                            transparent native date input overlays it and owns
-                            all interaction: tap → native date picker. */}
-                        <div className="dob-age-field">
-                            <input
-                                type="text"
-                                readOnly
-                                tabIndex={-1}
-                                aria-hidden="true"
-                                value={userStats.dateOfBirth
-                                    ? computeAge(userStats.dateOfBirth)
-                                    : userStats.age}
-                                placeholder="Years"
-                            />
-                            <input
-                                type="date"
-                                name="dateOfBirth"
-                                aria-label="Age — set from date of birth"
-                                value={userStats.dateOfBirth}
-                                max={format(new Date(), 'yyyy-MM-dd')}
-                                onChange={handleChange}
-                                onClick={openDobPicker}
-                            />
+                        <label>Date of birth</label>
+                        <div className="dob-selects">
+                            <select
+                                aria-label="Birth month"
+                                value={dobSel.month}
+                                onChange={(e) => handleDobPartChange('month', e.target.value)}
+                            >
+                                <option value="">Month</option>
+                                {DOB_MONTHS.slice(0, dobMonthMax).map((name, i) => (
+                                    <option key={name} value={i + 1}>{name}</option>
+                                ))}
+                            </select>
+                            <select
+                                aria-label="Birth day"
+                                value={dobSel.day}
+                                onChange={(e) => handleDobPartChange('day', e.target.value)}
+                            >
+                                <option value="">Day</option>
+                                {Array.from({ length: dobDayMax }, (_, i) => i + 1).map(d => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
+                            </select>
+                            <select
+                                aria-label="Birth year"
+                                value={dobSel.year}
+                                onChange={(e) => handleDobPartChange('year', e.target.value)}
+                            >
+                                <option value="">Year</option>
+                                {dobYears.map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
                         </div>
+                        {/* DOB wins over the legacy manual age string whenever it
+                            is set (spec: docs/dob_age_spec_s21.md). */}
+                        <span className="dob-age-display">
+                            Age: {userStats.dateOfBirth
+                                ? computeAge(userStats.dateOfBirth)
+                                : (userStats.age || '--')}
+                        </span>
                     </div>
                     <div className="form-group">
                         <label>Height ({unitLabels.height})</label>
