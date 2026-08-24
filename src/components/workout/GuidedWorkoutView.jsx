@@ -255,7 +255,13 @@ const GuidedWorkoutView = () => {
     const openInputModal = () => {
         setInputValues({
             weight: currentSet.weight || 0,
-            reps: activeRepCount > 0 ? activeRepCount : (currentSet.reps || currentSet.targetReps || 0),
+            // Rep-based sets never pre-fill the goal: targetReps is a target,
+            // not a performance, and a pre-filled confirm fabricates data.
+            // activeRepCount (counted) and currentSet.reps (re-edit) are real.
+            reps: activeRepCount > 0
+                ? activeRepCount
+                : (isDurationBased ? (currentSet.reps || currentSet.targetReps || 0)
+                                   : (currentSet.reps || '')),
             distance: currentSet.distance || currentSet.targetDistance || 0,
             time: currentSet.time || currentSet.targetTime || 0
         });
@@ -287,6 +293,12 @@ const GuidedWorkoutView = () => {
     };
 
     const confirmSetCompletion = () => {
+        // Empty reps = nothing recorded (mirrors commitActualReps): dismiss
+        // without completing — Number('') would otherwise write a false zero.
+        if (String(inputValues.reps).trim() === '') {
+            setShowInputModal(false);
+            return;
+        }
         const updates = {};
         if (inputValues.weight !== currentSet.weight) updates.weight = Number(inputValues.weight);
         if (inputValues.reps !== currentSet.reps) updates.reps = Number(inputValues.reps);
