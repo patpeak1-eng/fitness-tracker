@@ -64,6 +64,23 @@ def create_access_token(
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def get_token_expiry(token: str) -> Optional[datetime]:
+    """Return a valid token's ``exp`` as an aware datetime, or None.
+
+    Verifies the signature (and expiry) with the same parameters as
+    get_current_user — an invalid or already-expired token yields None, so
+    callers can never extend a token that would not authenticate.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    exp = payload.get("exp")
+    if exp is None:
+        return None
+    return datetime.fromtimestamp(exp, tz=timezone.utc)
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),

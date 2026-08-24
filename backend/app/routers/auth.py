@@ -3,17 +3,23 @@ import base64
 import hashlib
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    bearer_scheme,
     create_access_token,
     get_current_user,
+    get_token_expiry,
     hash_password,
     verify_password,
 )
@@ -33,6 +39,21 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 # Sentinel hash stored for Google OAuth users (they have no local password).
 # Must match the value written in google_callback below.
 GOOGLE_OAUTH_SENTINEL = "google_oauth_no_password"
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    """Set the HttpOnly session cookie. Single definition of the attributes —
+    used by the OAuth callback and the /me sliding re-issue, so the two can
+    never drift apart. See google_callback for why SameSite=None is required.
+    """
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        max_age=2592000,  # 30 days
+        samesite="none",
+        secure=True,
+    )
 
 
 def _client_ip(request: Request) -> str:
@@ -291,27 +312,47 @@ async def google_callback(
     # different domains, so the /api/me call is a cross-site request. A Lax
     # cookie would be withheld on that cross-site fetch and /api/me would 401.
     response = RedirectResponse(url=f"{frontend_url}/", status_code=302)
-    response.set_cookie(
-        key="session_token",
-        value=jwt_token,
-        httponly=True,
-        max_age=2592000,  # 30 days
-        samesite="none",
-        secure=True,
-    )
+    _set_session_cookie(response, jwt_token)
     response.delete_cookie(key="oauth_state", samesite="lax", secure=True)
     response.delete_cookie(key="oauth_verifier", samesite="lax", secure=True)
     return response
 
 
 @router.get("/me")
-async def get_current_user_info(user: User = Depends(get_current_user)):
+async def get_current_user_info(
+    request: Request,
+    response: Response,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    user: User = Depends(get_current_user),
+):
     """Return the current user's info.
 
     Auth goes through the shared get_current_user dependency, so this accepts
     either transport: the Bearer header or the HttpOnly session cookie (Google
     OAuth users hit this with the cookie only).
+
+    Sliding session (S26): cookie-transport sessions whose token is past half
+    its configured lifetime get a fresh token re-set on the cookie, so anyone
+    who opens the app before the halfway mark never hits the exp boundary
+    mid-workout. Idle users still expire on the configured window. Bearer
+    transport is deliberately untouched — that token lives in localStorage
+    and the frontend would never see a re-issued cookie. The transport test
+    mirrors get_current_user exactly: the Bearer header wins when present
+    (``credentials`` here is the same cached bearer_scheme dependency), the
+    cookie is the fallback. get_current_user has already 401'd by this point
+    if the token was invalid or expired, and get_token_expiry re-verifies —
+    a dead token can never be resurrected here.
     """
+    if credentials is None:
+        cookie_token = request.cookies.get("session_token")
+        if cookie_token:
+            expires_at = get_token_expiry(cookie_token)
+            if expires_at is not None:
+                remaining = expires_at - datetime.now(timezone.utc)
+                if remaining < timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES / 2):
+                    _set_session_cookie(
+                        response, create_access_token(subject=str(user.id))
+                    )
     return {
         "id": str(user.id),
         "email": user.email,
