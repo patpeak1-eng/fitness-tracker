@@ -294,23 +294,36 @@ are small (cap at, say, 20 exercises).
 5. **D** — largest surface, benefits from A-C being settled; last in Stage 2.
 6. **G** — independent; any time.
 
-## Open questions for the coordinator
+## Coordinator decisions (S27)
 
-1. **Backend `PUT /api/templates/{id}`** (shared with Prompt B): approve
-   adding it, or accept delete+recreate churn? (Spec recommends the PUT.)
-2. **Increment table values** (§E): confirm the lb/kg numbers — product
-   judgment, not code fact. Should Machine be 5 or 10 lb?
-3. **Rep-range entry UI** (§D): two inputs (min/max) on the prep GOAL
-   column, or a single "8-12" text affordance? The prep table is dense at
-   360px.
-4. Persisting `setType` into templates (§B): confirm — it changes what
-   "Save Template" captures for warm-up sets (currently they flatten to
-   normal sets).
-5. Should `hold` recommendations render an Apply button (no-op write) or
-   display-only? Spec assumes display-only.
-6. Retire `getSuggestedLoad` (dead export, §C)? Spec recommends deletion.
-7. Bodyweight/duration exercises: this pass recommends rep/time progression
-   only via §D/§E fallbacks — confirm weight recs are suppressed for them.
+All seven open questions are resolved; this section is the authority.
+
+1. **`PUT /api/templates/{id}` — APPROVED. Build it.** Delete+recreate is
+   rejected: it churns `backendId` and races the SyncQueue `'template'`
+   executor.
+2. **Increment table — governed by a rule, not fixed opinion:** the
+   recommended increment must be **PHYSICALLY LOADABLE** on that equipment.
+   Dumbbells 5 lb / 2.5 kg · Barbell 5 lb / 2.5 kg · Machine 10 lb / 5 kg ·
+   Cable 5 lb / 2.5 kg · Bodyweight none (see decision 7). **Fallback:**
+   exercises with no equipment value (custom exercises created before S27)
+   use the **barbell** increment.
+3. **Rep-range ENTRY UI — DEFERRED.** The §D data model is specced now; the
+   prep GOAL column input design is decided after pieces A-C ship. Do not
+   build the entry UI in this stage without a further coordinator decision.
+4. **Persist `setType` into template sets — APPROVED.** Warm-up sets
+   flattening to normal on save is a data-loss bug independent of
+   progression.
+5. **Hold recommendations — DISPLAY ONLY. No Apply button.** A button that
+   writes nothing is the pattern this stage exists to remove.
+6. **`getSuggestedLoad` — DELETE.** Third parallel suggestion engine, zero
+   consumers. Retire it with piece C.
+7. **Bodyweight and duration exercises — SUPPRESS weight recommendations
+   entirely.** Their progression is reps or time (§D). Never recommend
+   added weight for them.
+
+**Additional ruling:** `WorkoutSummary.jsx:73`'s unconditional success alert
+is a **P1 defect for piece A** — the apply path must report real success or
+real failure, never assume.
 
 ---
 
