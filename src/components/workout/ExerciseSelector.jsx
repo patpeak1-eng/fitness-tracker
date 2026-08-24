@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Search, Filter, Check } from 'lucide-react';
-import { useWorkout } from '../../context/WorkoutContext';
+import { X, Plus, Search, Check } from 'lucide-react';
 import ExerciseIllustration from '../common/ExerciseIllustration';
+import CustomExerciseForm from './CustomExerciseForm';
 import {
     CATEGORIES, MUSCLE_GROUPS, EQUIPMENT,
     matchesSearch, matchesCategory, matchesMuscle, matchesEquipmentTerm,
@@ -20,16 +20,10 @@ const ExerciseSelector = ({
     activeMuscle,
     setActiveMuscle,
 }) => {
-    const { addCustomExercise } = useWorkout();
     const [searchTerm, setSearchTerm] = useState('');
     // Multi-select: exercise IDs staged for adding this open cycle
     const [selectedIds, setSelectedIds] = useState(() => new Set());
     const [showCustomForm, setShowCustomForm] = useState(false);
-
-    // Custom Form State
-    const [customName, setCustomName] = useState('');
-    const [customCategory, setCustomCategory] = useState('Weights');
-    const [customMuscle, setCustomMuscle] = useState('Full Body');
 
     const filteredExercises = useMemo(() => {
         return exercises.filter(ex =>
@@ -39,27 +33,6 @@ const ExerciseSelector = ({
             matchesEquipmentTerm(ex, activeEquipment)
         );
     }, [exercises, searchTerm, activeCategory, activeMuscle, activeEquipment]);
-
-    const handleCreateCustom = (e) => {
-        e.preventDefault();
-        if (!customName.trim()) return;
-
-        const newExercise = {
-            name: customName,
-            category: customCategory, // canonical labels ARE the data values now
-            primary_muscle: customMuscle, // Use correct property name
-            instructions: 'Custom user exercise',
-            isCustom: true
-        };
-
-        addCustomExercise(newExercise);
-        // We'll rely on the context update to refresh the list, and then we could select it
-        // Or we pass it directly to onSelect? 
-        // Let's just reset form and let user select it (it will appear in search/list)
-        setShowCustomForm(false);
-        setCustomName('');
-        setSearchTerm(customName); // Pre-fill search to find it immediately
-    };
 
     const toggleSelect = (id) => {
         setSelectedIds(prev => {
@@ -217,45 +190,15 @@ const ExerciseSelector = ({
                         )}
                     </>
                 ) : (
-                    /* CUSTOM FORM */
-                    <form className="custom-exercise-form" onSubmit={handleCreateCustom}>
-                        <div className="form-group">
-                            <label>Exercise Name</label>
-                            <input
-                                type="text"
-                                autoFocus
-                                value={customName}
-                                onChange={(e) => setCustomName(e.target.value)}
-                                placeholder="e.g. Weighted Pullup"
-                                required
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>Category</label>
-                            <select value={customCategory} onChange={(e) => setCustomCategory(e.target.value)}>
-                                {CATEGORIES.filter(c => c !== 'All').map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label>Muscle Focus</label>
-                            <select value={customMuscle} onChange={(e) => setCustomMuscle(e.target.value)}>
-                                {MUSCLE_GROUPS.filter(m => m !== 'All').map(m => (
-                                    <option key={m} value={m}>{m}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="form-actions">
-                            <button type="button" className="secondary-btn" onClick={() => setShowCustomForm(false)}>
-                                Cancel
-                            </button>
-                            <button type="submit" className="primary-btn">
-                                Create Exercise
-                            </button>
-                        </div>
-                    </form>
+                    /* CUSTOM FORM — shared component, also used by the Exercise Library page */
+                    <CustomExerciseForm
+                        exercises={exercises}
+                        onCancel={() => setShowCustomForm(false)}
+                        onCreated={(name) => {
+                            setShowCustomForm(false);
+                            setSearchTerm(name); // pre-fill search to find it immediately
+                        }}
+                    />
                 )}
             </div>
         </div>

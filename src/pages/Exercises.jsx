@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Search, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown, Plus } from 'lucide-react';
 import { useWorkout } from '../context/WorkoutContext';
 import BackButton from '../components/common/BackButton';
 import ExerciseIllustration from '../components/common/ExerciseIllustration';
+import CustomExerciseForm from '../components/workout/CustomExerciseForm';
+import Modal from '../components/common/Modal';
 import {
     CATEGORIES, MUSCLE_GROUPS,
     matchesSearch, matchesCategory, matchesMuscle, matchesEquipmentProfile,
@@ -20,6 +22,7 @@ const Exercises = () => {
     const [equipmentProfileId, setEquipmentProfileId] = useState('all');
     const [activeMuscle, setActiveMuscle] = useState('All');
     const [expandedId, setExpandedId] = useState(null);
+    const [showCreate, setShowCreate] = useState(false);
 
     const filtered = useMemo(() => {
         let equipmentList = null; // null = no equipment filter
@@ -42,6 +45,13 @@ const Exercises = () => {
             <header className="ex-header">
                 <BackButton />
                 <h1>Exercise Library</h1>
+                <button
+                    type="button"
+                    className="ex-new-btn"
+                    onClick={() => setShowCreate(true)}
+                >
+                    <Plus size={16} /> New
+                </button>
             </header>
 
             <div className="ex-search">
@@ -143,6 +153,23 @@ const Exercises = () => {
                     <div className="ex-empty">No exercises match your search.</div>
                 )}
             </div>
+
+            <Modal
+                isOpen={showCreate}
+                onClose={() => setShowCreate(false)}
+                title="Create Custom Exercise"
+            >
+                <CustomExerciseForm
+                    exercises={exercises}
+                    onCancel={() => setShowCreate(false)}
+                    onCreated={(name) => {
+                        setShowCreate(false);
+                        // Surface the new exercise immediately: context state has
+                        // already gained it; searching by name scrolls it into view.
+                        setSearch(name);
+                    }}
+                />
+            </Modal>
         </div>
     );
 };

@@ -7,12 +7,33 @@
 .ex-header {
     display: flex;
     align-items: center;
+    flex-wrap: wrap; /* narrow screens: the New button wraps below the title */
     gap: 15px;
     margin-bottom: 20px;
 }
 
 .ex-header h1 {
     font-size: 1.8rem;
+}
+
+/* Create-custom entry point (S27) — pushed to the header's right edge */
+.ex-new-btn {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ex-new-btn:hover {
+    border-color: var(--primary);
 }
 
 /* Search */

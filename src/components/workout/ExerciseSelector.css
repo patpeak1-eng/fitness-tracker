@@ -244,6 +244,24 @@
     outline: none;
 }
 
+/* Timed-exercise toggle (S27) — checkbox + label on one row */
+.form-toggle-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.form-toggle-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    flex-shrink: 0;
+}
+
 .form-actions {
     display: flex;
     gap: 15px;
