@@ -285,11 +285,16 @@ const GuidedWorkoutView = () => {
         if (set.completed) {
             // Re-edit: update reps, never toggle back to incomplete.
             if (reps !== set.reps) updateSet(currentExerciseInstance.id, set.id, { reps });
+            // Successful commit: release focus so the mobile IME closes. A
+            // no-op when the commit came through onBlur; load-bearing when it
+            // came through an IME action that moved focus instead of blurring.
+            inputEl.blur();
             return;
         }
         // Reps must land before the completion toggle (PR check reads the set).
         updateSet(currentExerciseInstance.id, set.id, { reps });
         toggleSetComplete(currentExerciseInstance.id, set.id, false);
+        inputEl.blur();
     };
 
     const confirmSetCompletion = () => {
@@ -529,13 +534,22 @@ const GuidedWorkoutView = () => {
                                         type="text"
                                         inputMode="numeric"
                                         pattern="[0-9]*"
+                                        /* "done" dismisses the Android IME; the default is "Next"
+                                           when another input follows, which ADVANCES focus and
+                                           keeps the keypad up over the rest timer. */
+                                        enterKeyHint="done"
                                         className="active-set-actual-input"
                                         aria-label={`Actual reps for set ${index + 1}`}
                                         /* Deliberately empty until completed: pre-filling the goal
                                            invites reflexive taps and fabricates data. */
                                         defaultValue={set.completed ? (set.reps ?? '') : ''}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') e.currentTarget.blur();
+                                            if (e.key === 'Enter') {
+                                                // Suppress the advance-to-next-field default
+                                                // before releasing focus.
+                                                e.preventDefault();
+                                                e.currentTarget.blur();
+                                            }
                                         }}
                                         onBlur={(e) => commitActualReps(set, e.currentTarget)}
                                     />
