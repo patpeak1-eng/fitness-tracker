@@ -162,12 +162,15 @@
     width: 30%;
 }
 
-.col-set {
+/* Scoped to .sets-table: .col-set/.col-weight/.col-reps are also used as grid
+   cells in ExerciseResult; unscoped width rules here leak into that component
+   once this (lazy History chunk) stylesheet loads. */
+.sets-table .col-set {
     width: 10%;
     text-align: center;
 }
 
-.col-weight {
+.sets-table .col-weight {
     width: 30%;
     font-family: monospace;
     font-size: 0.95rem;
@@ -175,8 +178,8 @@
     text-align: center;
 }
 
-.col-goal,
-.col-reps {
+.sets-table .col-goal,
+.sets-table .col-reps {
     width: 30%;
     font-family: monospace;
     font-size: 0.95rem;
@@ -184,7 +187,7 @@
     text-align: center;
 }
 
-.col-goal {
+.sets-table .col-goal {
     color: var(--text-secondary);
 }
 

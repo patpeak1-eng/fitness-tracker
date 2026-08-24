@@ -142,24 +142,8 @@
     grid-template-columns: 40px 1fr 1fr 1fr 80px;
 }
 
-/* PREP MODE GRIDS (No Actuals) */
-/* Standard Prep: Set, Weight, Goal, Actions */
-.sets-header.header-prep,
-.set-row.row-prep {
-    grid-template-columns: 40px 1fr 1fr 80px;
-}
-
-/* Cardio Prep: Set, GoalDist, GoalTime, Actions */
-.sets-header.header-cardio-prep,
-.set-row.row-cardio-prep {
-    grid-template-columns: 40px 1fr 1fr 80px;
-}
-
-/* Yoga Prep: Set, GoalTime, Actions */
-.sets-header.header-yoga-prep,
-.set-row.row-yoga-prep {
-    grid-template-columns: 40px 1fr 80px;
-}
+/* Prep-mode grid sizing lives in the JSX inline gridStyle (ExerciseResult.jsx);
+   no .row-prep/.header-prep classes exist anymore. */
 
 /* Yoga Grid Override */
 /* Uses default grid logic but hides some columns in JSX if needed, or adjust here */
