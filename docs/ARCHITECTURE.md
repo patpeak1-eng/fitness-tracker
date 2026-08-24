@@ -762,6 +762,44 @@ chars, falling back to `'dev'` for local builds. Rendered in Settings'
 `.version-info` block ("Version <sha7>"), so any tester can report exactly
 which build they are on.
 
+## 13. SESSION LIFETIME & SYNC RECOVERY (S26/S27)
+
+Background: docs/session_expiry_spec_s26.md. The JWT lives 7 days
+(`ACCESS_TOKEN_EXPIRE_MINUTES`, backend/app/auth.py) inside a 30-day
+HttpOnly `session_token` cookie; there is no refresh endpoint.
+
+**Sliding session (cookie transport only).** `GET /api/auth/me`
+(backend/app/routers/auth.py) re-issues the cookie when BOTH hold: the
+request authenticated via the cookie (no `Authorization: Bearer` header —
+the transport test mirrors `get_current_user`, header wins), AND the
+token's remaining lifetime is below 50% of `ACCESS_TOKEN_EXPIRE_MINUTES`.
+The fresh token is minted by `create_access_token` and set via
+`_set_session_cookie` — the single definition of the cookie attributes,
+shared with the OAuth callback so they cannot drift. `get_token_expiry`
+(backend/app/auth.py) verifies signature+expiry with the same parameters as
+authentication, so an invalid or expired token can never be extended — /me
+has already 401'd before the sliding branch runs. Effect: opening the app
+before the halfway mark renews the session; idle users still expire on the
+configured window. Bearer transport (email/password, token in localStorage)
+is deliberately not renewed — it would require frontend token-replacement
+work that has not been done.
+
+**SyncQueue dead-letter.** A queued op rejected with a non-auth 4xx
+(not 401/429) is no longer discarded: it moves to
+`localStorage['fitness_sync_deadletter']` with the failing error and an ISO
+timestamp, capped at 20 entries (oldest dropped). Dead-lettered ops are
+never replayed automatically; they exist so a rejected finished workout
+remains recoverable by hand. 401 (halt + `authExpired`), 5xx/429/network
+(retry) behavior is unchanged (src/services/SyncQueue.js).
+
+**Expiry toast.** SyncStatusBadge's expired state copy is
+"Signed out. Workouts saved — log in to sync." and it is suppressed while
+`activeWorkout.status` is `'active'` or `'paused'` — the same rule as the
+Section 12 update banner, for the same Fire Station reason (a paused
+workout parks on the Dashboard where the badge renders). While suppressed,
+the neutral "N not synced" pill still shows. Tap-to-flush behavior is
+unchanged.
+
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery). Last updated: S26, 2026-08-24.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery); S27 added Section 13 (session lifetime & sync recovery). Last updated: S27, 2026-08-24.*

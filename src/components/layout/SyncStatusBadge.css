@@ -10,6 +10,12 @@
     min-height: 44px;
     padding: 8px 14px;
     border-radius: 999px;
+    /* Absolute positioning with left:50% shrinks the fit basis to half the
+       viewport, wrapping the pill at narrow widths. Let it take its natural
+       width (capped to the viewport) and keep the label on one line. */
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    white-space: nowrap;
     background: var(--bg-card);
     border: 1px solid var(--border);
     color: var(--text-secondary);
