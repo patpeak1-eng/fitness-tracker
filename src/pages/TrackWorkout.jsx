@@ -5,7 +5,7 @@ import CreateTemplateModal from '../components/workout/CreateTemplateModal';
 import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
 import PlateCalculator from '../components/workout/PlateCalculator';
 import Modal from '../components/common/Modal'; // Import reusable Modal
-import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings } from 'lucide-react';
+import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings, Save } from 'lucide-react';
 import '../styles/filter-chips.css';
 import './TrackWorkout.css';
 
@@ -41,11 +41,15 @@ const exerciseFocusTags = (ex) => {
     return tags;
 };
 
+// Template exercise entries are either bare exercise-id strings (default
+// templates) or objects carrying an `id` (custom templates).
+const templateExerciseId = (item) => (typeof item === 'string' ? item : item?.id);
+
 // Union of focus tags across a template's exercises.
 const templateFocusTags = (template, exMap) => {
     const tags = new Set();
-    (template.exercises || []).forEach(id => {
-        const ex = exMap[id];
+    (template.exercises || []).forEach(item => {
+        const ex = exMap[templateExerciseId(item)];
         if (ex) exerciseFocusTags(ex).forEach(t => tags.add(t));
     });
     return tags;
@@ -54,8 +58,8 @@ const templateFocusTags = (template, exMap) => {
 // Distinct primary muscles a template covers (for the preview).
 const templateMuscles = (template, exMap) => {
     const set = new Set();
-    (template.exercises || []).forEach(id => {
-        const ex = exMap[id];
+    (template.exercises || []).forEach(item => {
+        const ex = exMap[templateExerciseId(item)];
         if (ex && ex.primary_muscle) set.add(ex.primary_muscle);
     });
     return [...set];
@@ -86,7 +90,7 @@ const matchesMuscleFocus = (tags, selected) => {
 
 const TrackWorkout = () => {
     const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation,
-        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems } = useContext(WorkoutContext);
+        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveWorkoutAsTemplate } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -127,6 +131,55 @@ const TrackWorkout = () => {
         templateName: ''
     });
 
+    // --- Save-as-template from the prep screen ---
+    // Only for sessions with no source template: workouts started FROM a saved
+    // template already sync weight edits back via syncToTemplate, so a Save
+    // button there would mint a duplicate template on every tap.
+    const canSaveTemplate = !!activeWorkout
+        && activeWorkout.status === 'preparing'
+        && !activeWorkout.sourceTemplateId;
+    const [savedTemplate, setSavedTemplate] = useState(false);
+    const [saveTplModal, setSaveTplModal] = useState({ isOpen: false, name: '' });
+    const [saveNotice, setSaveNotice] = useState('');
+
+    // New session → fresh save state (the page persists across workouts).
+    useEffect(() => {
+        setSavedTemplate(false);
+        setSaveNotice('');
+        setSaveTplModal({ isOpen: false, name: '' });
+    }, [activeWorkout?.id]);
+
+    // The zero-weight notice is transient, not a permanent banner.
+    useEffect(() => {
+        if (!saveNotice) return;
+        const t = setTimeout(() => setSaveNotice(''), 4000);
+        return () => clearTimeout(t);
+    }, [saveNotice]);
+
+    const confirmSaveTemplate = () => {
+        const trimmed = saveTplModal.name.trim();
+        if (!trimmed || savedTemplate) return;
+        setSavedTemplate(true);
+        setSaveTplModal({ isOpen: false, name: '' });
+        // Local persistence inside is synchronous; only the cloud push is async
+        // and already falls back to SyncQueue — never block or throw here.
+        saveWorkoutAsTemplate(trimmed).catch(() => {});
+        if (!prepValidation.canStartGuidedWorkout) {
+            setSaveNotice('Saved. Some sets have no weight yet.');
+        }
+    };
+
+    // Both START WORKOUT buttons: auto-save the template first (once) so a
+    // built-from-scratch session isn't lost, then start. A failed cloud push
+    // must never prevent the workout from starting.
+    const handleStartWorkout = () => {
+        if (canSaveTemplate && !savedTemplate) {
+            setSavedTemplate(true);
+            saveWorkoutAsTemplate(activeWorkout.name).catch(() => {});
+        }
+        startGuidedSession();
+    };
+
     const exMap = useMemo(() => {
         const map = {};
         exercises.forEach(ex => { map[ex.id] = ex; });
@@ -156,7 +209,7 @@ const TrackWorkout = () => {
         const compatibleIds = new Set(getCompatibleExercises().map(e => e.id));
         const visibleTemplates = templates.filter(t =>
             (t.exercises || []).length > 0 &&
-            t.exercises.every(id => compatibleIds.has(id)) &&
+            t.exercises.every(item => compatibleIds.has(templateExerciseId(item))) &&
             matchesMuscleFocus(templateFocusTags(t, exMap), selectedMuscles) &&
             matchesDuration(templateDuration(t), selectedDuration)
         );
@@ -364,7 +417,7 @@ const TrackWorkout = () => {
                     {/* Top Actions in Prep Mode */}
                     <div style={{ padding: '0 20px', marginBottom: '10px' }}>
                         <button
-                            onClick={startGuidedSession}
+                            onClick={handleStartWorkout}
                             disabled={!prepValidation.canStartGuidedWorkout}
                             className="finish-btn"
                             style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: prepValidation.canStartGuidedWorkout ? 1 : 0.5, cursor: prepValidation.canStartGuidedWorkout ? 'pointer' : 'not-allowed' }}
@@ -431,7 +484,7 @@ const TrackWorkout = () => {
 
                     <div style={{ padding: '0 20px', marginTop: '20px' }}>
                         <button
-                            onClick={startGuidedSession}
+                            onClick={handleStartWorkout}
                             disabled={!prepValidation.canStartGuidedWorkout}
                             className="finish-btn"
                             style={{ width: '100%', padding: '15px 0', fontSize: '1.2rem', background: 'var(--primary)', color: 'black', marginBottom: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: prepValidation.canStartGuidedWorkout ? 1 : 0.5, cursor: prepValidation.canStartGuidedWorkout ? 'pointer' : 'not-allowed' }}
@@ -439,14 +492,79 @@ const TrackWorkout = () => {
                             <Play size={20} fill="currentColor" />
                             START WORKOUT
                         </button>
+                        {canSaveTemplate && (
+                            <button
+                                onClick={() => setSaveTplModal({ isOpen: true, name: activeWorkout.name || '' })}
+                                disabled={savedTemplate}
+                                style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    padding: '12px 0',
+                                    background: 'transparent',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '10px',
+                                    color: savedTemplate ? 'var(--text-muted)' : 'var(--text-primary)',
+                                    cursor: savedTemplate ? 'default' : 'pointer',
+                                    fontSize: '1rem'
+                                }}
+                            >
+                                {savedTemplate
+                                    ? <><Check size={18} /> Template Saved</>
+                                    : <><Save size={18} /> Save Template</>}
+                            </button>
+                        )}
+                        {saveNotice && (
+                            <p style={{ margin: '10px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>
+                                {saveNotice}
+                            </p>
+                        )}
                     </div>
-
-                    {!activeWorkout.isCustom && (
-                        <div style={{ padding: '20px' }}>
-                            {/* Placeholder for Save Template logic if needed later */}
-                        </div>
-                    )}
                 </div>
+
+                {/* Save Template name confirm */}
+                <Modal
+                    isOpen={saveTplModal.isOpen}
+                    onClose={() => setSaveTplModal({ isOpen: false, name: '' })}
+                    title="Save Template"
+                    actions={
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
+                            <button
+                                className="secondary-btn"
+                                onClick={() => setSaveTplModal({ isOpen: false, name: '' })}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="primary-btn"
+                                onClick={confirmSaveTemplate}
+                                disabled={!saveTplModal.name.trim()}
+                                style={{ padding: '8px 16px', opacity: saveTplModal.name.trim() ? 1 : 0.5 }}
+                            >
+                                <Save size={16} /> Save
+                            </button>
+                        </div>
+                    }
+                >
+                    <input
+                        type="text"
+                        value={saveTplModal.name}
+                        onChange={(e) => setSaveTplModal(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Template name"
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '10px',
+                            color: 'var(--text-primary)',
+                            fontSize: '1rem'
+                        }}
+                    />
+                </Modal>
             </div>
         );
     }

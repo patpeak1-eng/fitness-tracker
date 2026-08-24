@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { X, Save, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import ExerciseSelector from '../workout/ExerciseSelector';
 import Modal from '../common/Modal';
 import './TemplateSelector.css'; // Reusing styles
 
 const CreateTemplateModal = ({ onClose }) => {
-    const { saveCustomTemplate, startWorkoutFromTemplate, exercises: availableExercises } = useWorkout();
+    const { startWorkoutFromTemplate, exercises: availableExercises } = useWorkout();
     const [name, setName] = useState('');
     const [exercises, setExercises] = useState([]);
     const [showExerciseSelector, setShowExerciseSelector] = useState(false);
@@ -45,42 +45,23 @@ const CreateTemplateModal = ({ onClose }) => {
             return;
         }
 
-        // Format for context
-        // Context expects: { id, sets: [...] } OR plain ID string (legacy)
-        // We will send the rich object structure to support default sets/reps if we want to expand later
-        // But for now context's saveCustomTemplate expects 'exercisesList'
+        // Nothing persists here — the draft goes straight to the prep screen,
+        // where saveWorkoutAsTemplate captures the real weights/reps. The
+        // template-level `id` is deliberately omitted: startWorkoutFromTemplate
+        // records it as sourceTemplateId, and an undefined id keeps
+        // syncToTemplate dormant for this unsaved draft.
+        const draftTemplate = {
+            name,
+            exercises: exercises.map(ex => ({
+                id: ex.id,           // Required for Context compatibility
+                exerciseId: ex.id,   // Requested by User (redundant but explicit)
+                name: ex.name,       // Requested by User (Snapshot name)
+                sets: 3 // Starting shape only; real numbers are entered on the prep screen
+            }))
+        };
 
-        // Actually, looking at WorkoutContext structure:
-        // saveCustomTemplate takes (name, exercisesList)
-        // where exercisesList is array of objects { id: exerciseId, sets: numSets } or just ID strings
-
-        // Let's standardise on the object format the context uses:
-        // { id: "ex_id", sets: 3 } (simple) or full object?
-        // Context `startWorkoutFromTemplate` handles "typeof exItem === 'object' && item.exercise" ??
-        // Let's look at `startWorkoutFromTemplate`:
-        // const exId = (typeof item === 'object' && item.exercise) ? item.exercise.id : item;
-        // Wait, if it's an object, it expects `item.exercise.id`? 
-        // OR `const exId = typeof exItem === 'string' ? exItem : exItem.id;` (Line 784 in context)
-
-        // Let's stick to the cleanest format supported by `startWorkoutFromTemplate` at line 782:
-        // It maps over template.exercises. 
-        // If exItem has .id, it uses that.
-        // So we should save an array of { id: exerciseId, sets: 3 }
-
-        const templateData = exercises.map(ex => ({
-            id: ex.id,           // Required for Context compatibility
-            exerciseId: ex.id,   // Requested by User (redundant but explicit)
-            name: ex.name,       // Requested by User (Snapshot name)
-            sets: 3 // Default for now
-        }));
-
-        const newTemplate = saveCustomTemplate(name, templateData);
-        if (newTemplate) {
-            startWorkoutFromTemplate(newTemplate);
-            onClose();
-        } else {
-            alert("Failed to save template. Please check that a profile is active.");
-        }
+        startWorkoutFromTemplate(draftTemplate);
+        onClose();
     };
 
     return (
@@ -160,7 +141,7 @@ const CreateTemplateModal = ({ onClose }) => {
                         disabled={!name.trim() || exercises.length === 0}
                         style={{ opacity: (!name.trim() || exercises.length === 0) ? 0.5 : 1 }}
                     >
-                        Save Template
+                        Next: Set Weights
                     </button>
                 </div>
 
