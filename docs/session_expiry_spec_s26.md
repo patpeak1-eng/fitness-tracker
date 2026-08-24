@@ -103,6 +103,16 @@ cannot distinguish these.
   helpers (`ApiService.js:136, 147`) but **no frontend code calls them** —
   grep for `ApiService.saveActiveWorkout` returns zero call sites. Nothing
   mid-set touches the network.
+
+  > **CORRECTION (S27): the "no callers / active workout is local-only"
+  > claim above is WRONG.** `saveActiveWorkout` and `clearActiveWorkout`
+  > ARE reached via named imports — `StorageService.js:448-450`
+  > (`syncToApi`), called from `WorkoutContext.jsx:1122-1128` on every app
+  > boot and workout finish; the S26 grep searched only the namespaced
+  > `ApiService.saveActiveWorkout` form and missed them. The per-set-updates
+  > claim survives; the local-only premise does not.
+  > **docs/missing_greenlet_spec_s27.md §4 supersedes this section for
+  > /api/workouts/active** — do not cite this section as authority.
 - **Template saves:** `saveWorkoutAsTemplate` persists locally first, then
   cloud-pushes with SyncQueue fallback (`WorkoutContext.jsx:2245-2303`,
   enqueue at 2295). Safe.
