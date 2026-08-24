@@ -4,6 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    // Vite injects define values as raw source text, so they must be
+    // JSON-stringified. Railway sets RAILWAY_GIT_COMMIT_SHA at build time;
+    // local builds fall back to 'dev'.
+    __APP_VERSION__: JSON.stringify(
+      (process.env.RAILWAY_GIT_COMMIT_SHA || 'dev').slice(0, 7)
+    ),
+  },
   plugins: [
     react(),
     {
@@ -55,7 +63,11 @@ export default defineConfig({
       }
     },
     VitePWA({
-      registerType: 'autoUpdate',
+      // Prompt-mode updates: UpdateBanner imports virtual:pwa-register/react,
+      // which registers the SW itself — injectRegister null stops the plugin
+      // from also injecting a registration script (double registration).
+      registerType: 'prompt',
+      injectRegister: null,
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [

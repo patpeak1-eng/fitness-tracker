@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import UpdateBanner from './components/common/UpdateBanner';
 import { WorkoutProvider, useWorkout } from './context/WorkoutContext';
 import { TimerProvider } from './context/TimerContext';
 
@@ -67,6 +68,7 @@ const AppRoutes = ({ timerApiRef }) => {
                 </Route>
             </Routes>
         </Suspense>
+        <UpdateBanner />
         </TimerProvider>
     );
 };

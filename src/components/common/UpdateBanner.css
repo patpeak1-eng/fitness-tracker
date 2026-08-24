@@ -1,0 +1,55 @@
+/* Update-available banner. Sits above the floating bottom nav (bottom 20px,
+   height 70px) and below it in stacking order so it can never cover the nav. */
+.update-banner {
+    position: fixed;
+    bottom: 112px; /* clears the nav's minimize chevron, which floats above the bar */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 95%;
+    max-width: 500px;
+    z-index: 990;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px 10px 16px;
+
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary);
+}
+
+.update-banner-text {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.update-banner-reload {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: var(--bg-app);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.update-banner-dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}

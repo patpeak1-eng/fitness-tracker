@@ -465,6 +465,7 @@ const Settings = () => {
 
             <div className="version-info">
                 <p>App: FitTrack v1.0</p>
+                <p>Version {__APP_VERSION__}</p>
                 <p>
                     Backend:{' '}
                     <span className={`backend-status ${apiConnected ? 'connected' : 'local'}`}>
