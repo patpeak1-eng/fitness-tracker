@@ -325,6 +325,27 @@ All seven open questions are resolved; this section is the authority.
 is a **P1 defect for piece A** — the apply path must report real success or
 real failure, never assume.
 
+Post-device-verification decisions (S27, continued):
+
+8. **Replace native `alert()` in the Apply path** with an in-app
+   confirmation using the app's existing design tokens. Native `alert()`
+   renders the Railway URL as browser-supplied header chrome that cannot be
+   styled or removed — the only fix is to stop calling `alert()`. Copy:
+   "Updated Face Pulls to 55 lbs for next time" with no URL chrome.
+9. **The confirmation MUST reflect real success or real failure.**
+   `applyRecommendation` must return a success/failure result and the UI
+   must branch on it. A failed write must say so.
+10. **The other 7 native `alert()` call sites**
+    (`WorkoutContext.jsx:1348, 1549, 2248`;
+    `CreateTemplateModal.jsx:40, 44`; `CoachView.jsx:697`;
+    `ProfileSelector.jsx:20`) are a separate LOW-zone sweep. NOT in scope
+    for piece A.
+11. **LIVE CONFIRMATION (Patrick, Android, SHA 1ccbf38):** the dead Apply
+    path in §A was reproduced end to end. Recommendation generated
+    (Face Pulls 50 → 55), Apply tapped, success alert shown, button changed
+    to "Saved", and the prep screen still showed 50 lbs. Finding A is
+    confirmed against production, not only code reading.
+
 ---
 
 *Investigated read-only from: src/context/WorkoutContext.jsx,
