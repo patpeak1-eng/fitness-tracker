@@ -145,6 +145,12 @@ const CoachView = () => {
     const streamDoneRef = useRef(false); // WS closed (all audio received) → safe to endOfStream
     const audioElRef = useRef(null); // hidden <audio> sink for MSE playback
     const recognitionRef = useRef(null); // Web Speech recognition instance
+    // Voice-path sends fire from timers armed at mic-tap time — as long after
+    // that render as the user keeps talking. Calling through this ref (kept
+    // fresh every render, same pattern as voiceEnabledRef) makes those sends
+    // see current photoAttachments/isStreaming/messages instead of the
+    // mic-tap render's snapshot.
+    const handleSendRef = useRef(null);
     const srTranscriptRef = useRef(''); // accumulated final transcript for the open mic session
     const srSilenceTimerRef = useRef(null); // pending endpoint timer (SILENCE_MS)
     const srIntentionalStopRef = useRef(false); // deliberate stop → onend must not restart
@@ -466,7 +472,14 @@ const CoachView = () => {
         const attachedImages = photoAttachments.map(({ image, media_type }) => ({
             image, media_type,
         }));
-        if ((!trimmed && attachedImages.length === 0) || isStreaming) return;
+        if (!trimmed && attachedImages.length === 0) return;
+        if (isStreaming) {
+            // Voice sends (silence timer, tap-off, post-stop flush) can land
+            // while a reply is still streaming. Don't discard the words —
+            // surface them in the input so the user can send manually.
+            if (trimmed) setInput(trimmed);
+            return;
+        }
         const displayMessage = trimmed
             || `Shared ${attachedImages.length} equipment photo${attachedImages.length === 1 ? '' : 's'}.`;
 
@@ -511,9 +524,20 @@ const CoachView = () => {
             );
 
             if (!res.ok) {
-                let detail = `Coach request failed (${res.status}).`;
-                try { const body = await res.json(); if (body?.detail) detail = body.detail; } catch { /* keep default */ }
-                setLastAssistant({ content: detail, streaming: false, error: true });
+                if (res.status === 401) {
+                    // Signed out, not a network problem — say so, and hand the
+                    // typed message back instead of losing it.
+                    setLastAssistant({
+                        content: 'Signed out — log in to keep chatting. Your message is back in the box below.',
+                        streaming: false,
+                        error: true,
+                    });
+                    if (trimmed) setInput(trimmed);
+                } else {
+                    let detail = `Coach request failed (${res.status}).`;
+                    try { const body = await res.json(); if (body?.detail) detail = body.detail; } catch { /* keep default */ }
+                    setLastAssistant({ content: detail, streaming: false, error: true });
+                }
                 if (voiceActive) { stopSpeaking(); voiceActive = false; }
                 return;
             }
@@ -613,17 +637,30 @@ const CoachView = () => {
                     'Photos were sent to Coach and cleared from this device for privacy. Add them again if you want to identify and save this location.'
                 );
             }
-        } catch {
-            setLastAssistant({
-                content: 'Could not reach the coach. Check your connection and try again.',
-                streaming: false,
-                error: true,
-            });
+        } catch (err) {
+            if (err?.status === 401) {
+                setLastAssistant({
+                    content: 'Signed out — log in to keep chatting. Your message is back in the box below.',
+                    streaming: false,
+                    error: true,
+                });
+                if (trimmed) setInput(trimmed);
+            } else {
+                setLastAssistant({
+                    content: 'Could not reach the coach. Check your connection and try again.',
+                    streaming: false,
+                    error: true,
+                });
+            }
             if (voiceActive) { stopSpeaking(); voiceActive = false; }
         } finally {
             setIsStreaming(false);
         }
     };
+
+    // Keep the ref pointing at this render's handleSend (no deps: handleSend
+    // is recreated every render and closes over fresh state).
+    useEffect(() => { handleSendRef.current = handleSend; });
 
     const toggleVoice = () => {
         // Turning on: unlock audio within this user gesture for reliable playback.
@@ -650,7 +687,8 @@ const CoachView = () => {
         // copy of an utterance that never got a final result, and letting it
         // land re-arms the timer so the words still send.
         try { recognition?.stop(); } catch { /* not running */ }
-        if (text) handleSend(text);
+        // Through the ref: this closure may be as old as the mic session.
+        if (text) handleSendRef.current(text);
     };
 
     const toggleMic = () => {
