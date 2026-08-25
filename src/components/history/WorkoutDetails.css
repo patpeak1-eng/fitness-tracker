@@ -87,7 +87,10 @@
 }
 
 /* LEFT ALIGNMENT FIX */
-.exercise-header {
+/* Scoped to .exercise-detail-card: .exercise-header is also ExerciseResult's
+   card header; unscoped rules here would leak cross-chunk once the History
+   chunk loads (see docs/skills/lazy-chunk-css-leak-diagnosis.md). */
+.exercise-detail-card .exercise-header {
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -112,7 +115,7 @@
 }
 
 /* LEFT ALIGNMENT FIX */
-.exercise-header h3 {
+.exercise-detail-card .exercise-header h3 {
     margin: 0;
     font-size: 1rem;
     color: var(--text-primary);

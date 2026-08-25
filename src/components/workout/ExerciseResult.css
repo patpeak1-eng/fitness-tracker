@@ -11,7 +11,9 @@
     border-color: rgba(var(--primary-rgb), 0.2);
 }
 
-.exercise-header {
+/* Scoped to .exercise-result-card: WorkoutDetails uses the same class name
+   in another lazy chunk — see the matching note in WorkoutDetails.css. */
+.exercise-result-card .exercise-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -26,7 +28,7 @@
     gap: 0.5rem;
 }
 
-.exercise-header h3 {
+.exercise-result-card .exercise-header h3 {
     margin: 0;
     font-size: 1.1rem;
     color: var(--primary);
