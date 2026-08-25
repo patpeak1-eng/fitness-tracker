@@ -2341,6 +2341,19 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }));
     };
 
+    // Per-set snapshot of a workout in template shape. Single source for both
+    // template-create paths and the prep-screen in-place update (S28).
+    const templateExercisesFromWorkout = (workout) => workout.exercises.map(ex => ({
+        id: ex.exercise.id,
+        // Save detailed set info so it can be restored
+        sets: ex.sets.map(s => ({
+            weight: s.weight,
+            targetReps: s.reps > 0 ? s.reps : (s.targetReps || 0), // Use performed reps as next target, or fallback
+            targetDistance: s.distance > 0 ? s.distance : (s.targetDistance || 0),
+            targetTime: s.time > 0 ? s.time : (s.targetTime || 0)
+        }))
+    }));
+
     const saveWorkoutAsTemplate = async (templateName) => {
         if (!activeWorkout) return;
         if (!currentProfile) {
@@ -2352,16 +2365,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             id: 'tpl_custom_' + generateId(), // Robust ID
             name: templateName,
             isCustom: true,
-            exercises: activeWorkout.exercises.map(ex => ({
-                id: ex.exercise.id,
-                // Save detailed set info so it can be restored
-                sets: ex.sets.map(s => ({
-                    weight: s.weight,
-                    targetReps: s.reps > 0 ? s.reps : (s.targetReps || 0), // Use performed reps as next target, or fallback
-                    targetDistance: s.distance > 0 ? s.distance : (s.targetDistance || 0),
-                    targetTime: s.time > 0 ? s.time : (s.targetTime || 0)
-                }))
-            }))
+            exercises: templateExercisesFromWorkout(activeWorkout)
         };
 
         const updatedTemplates = [...templates, newTemplate];
@@ -2473,6 +2477,46 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
 
         return newTemplate;
+    };
+
+    // Prep-screen save (S28 spec: docs/template_save_update_spec_s28.md).
+    // The NAME decides update vs fork: own custom template with an unchanged
+    // name updates in place (id/backendId preserved); any other case creates.
+    // Built-ins are never written — an unchanged built-in name is refused.
+    // Local persistence is the success criterion (ARCHITECTURE §14); the
+    // cloud leg inside writeTemplate/saveCustomTemplate stays fire-and-forget
+    // with SyncQueue fallback.
+    const saveTemplateFromPrep = async (name) => {
+        if (!activeWorkout) return { ok: false, error: 'No active workout.' };
+        if (!currentProfile) return { ok: false, error: 'Select a profile to save templates.' };
+        const trimmed = (name || '').trim();
+        if (!trimmed) return { ok: false, error: 'The template needs a name.' };
+
+        const source = activeWorkout.sourceTemplateId
+            ? templates.find(t => t.id === activeWorkout.sourceTemplateId)
+            : null;
+
+        if (source && !source.isCustom && trimmed === source.name) {
+            return { ok: false, error: `"${source.name}" is a built-in template. Change the name to save your own copy.` };
+        }
+
+        if (source && source.isCustom && trimmed === source.name) {
+            const result = await writeTemplate(source.id, tpl => ({
+                ...tpl,
+                exercises: templateExercisesFromWorkout(activeWorkout)
+            }));
+            return result.ok ? { ...result, mode: 'updated' } : result;
+        }
+
+        // Fork or brand-new: reuse the existing create path (synchronous
+        // local write, fire-and-forget cloud).
+        const created = saveCustomTemplate(trimmed, templateExercisesFromWorkout(activeWorkout));
+        if (!created) return { ok: false, error: 'Could not save the template.' };
+        // Re-point the session at the saved copy so live set edits
+        // (syncToTemplate) and post-workout recommendations target it —
+        // the original template must stay untouched from here on.
+        setActiveWorkout(prev => (prev ? { ...prev, sourceTemplateId: created.id } : prev));
+        return { ok: true, template: created, mode: 'created' };
     };
 
     // --- ASSESSMENT LOGIC ---
@@ -2825,6 +2869,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         updateProfile,
         addCustomExercise,
         saveWorkoutAsTemplate,
+        saveTemplateFromPrep,
         deleteTemplate,
         saveCustomTemplate, // NEW
         exportData, // NEW

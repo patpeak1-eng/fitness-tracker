@@ -835,3 +835,42 @@
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
+
+/* --- Prep-screen template save (S28) --- */
+/* Token-styled result notices, same pattern as WorkoutSummary's
+   apply-notice but defined locally: TrackWorkout and WorkoutSummary live in
+   different lazy chunks, and cross-chunk class reuse is load-order dependent
+   (see docs/skills/lazy-chunk-css-leak-diagnosis.md). */
+.prep-save-notice {
+    margin: 10px 0 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.prep-save-notice.success {
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--success) 50%, transparent);
+    color: var(--success);
+}
+
+.prep-save-notice.error {
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+    color: var(--danger);
+}
+
+.save-tpl-hint {
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.save-tpl-error {
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+    color: var(--danger);
+    line-height: 1.4;
+}

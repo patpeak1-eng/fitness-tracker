@@ -837,6 +837,24 @@ success (decisions 8/9).
 dependency and ownership 404 as DELETE, same response schema as POST;
 payload reuses `TemplateCreate`. No schema/migration change.
 
+**Prep-screen save (S28).** Spec: docs/template_save_update_spec_s28.md.
+`saveTemplateFromPrep(name)` (WorkoutContext) is the queued Prompt B,
+built exactly as anticipated above: the NAME decides update vs fork.
+Own custom template + unchanged name → `writeTemplate` transform replacing
+`exercises` with `templateExercisesFromWorkout(activeWorkout)` (the per-set
+snapshot extracted from `saveWorkoutAsTemplate`; both now share it) —
+id/backendId preserved. Any other case → create via `saveCustomTemplate`;
+an unchanged built-in name is refused (`{ok:false}`), so built-ins are never
+written and never silently forked. On every successful create the session's
+`activeWorkout.sourceTemplateId` is re-pointed at the new template so
+syncToTemplate live edits and recommendations target the copy, not the
+original. TrackWorkout's Save button now shows for EVERY prep workout (the
+old `!sourceTemplateId` gate was a design error, removed S28); START
+auto-saves through the same function (own custom → in-place, ad-hoc →
+create once, built-in → never), skipped after an explicit save so
+save-then-start performs exactly one write. `saveWorkoutAsTemplate` is
+behavior-frozen and now has no in-repo caller (kept as context API).
+
 ---
 
 *Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery); S27 added Section 13 (session lifetime & sync recovery). Last updated: S27, 2026-08-24.*

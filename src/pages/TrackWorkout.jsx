@@ -90,7 +90,7 @@ const matchesMuscleFocus = (tags, selected) => {
 
 const TrackWorkout = () => {
     const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation,
-        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveWorkoutAsTemplate } = useContext(WorkoutContext);
+        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -131,51 +131,68 @@ const TrackWorkout = () => {
         templateName: ''
     });
 
-    // --- Save-as-template from the prep screen ---
-    // Only for sessions with no source template: workouts started FROM a saved
-    // template already sync weight edits back via syncToTemplate, so a Save
-    // button there would mint a duplicate template on every tap.
-    const canSaveTemplate = !!activeWorkout
-        && activeWorkout.status === 'preparing'
-        && !activeWorkout.sourceTemplateId;
+    // --- Save-as-template from the prep screen (S28) ---
+    // Visible for EVERY prep workout. The NAME decides what saving does
+    // (saveTemplateFromPrep): own custom + unchanged name updates in place,
+    // anything else creates; built-ins must be renamed and are never written.
+    const canSaveTemplate = !!activeWorkout && activeWorkout.status === 'preparing';
+    const sourceTemplate = useMemo(() => (
+        activeWorkout?.sourceTemplateId
+            ? templates.find(t => t.id === activeWorkout.sourceTemplateId) || null
+            : null
+    ), [templates, activeWorkout?.sourceTemplateId]);
+    const isBuiltInSource = !!sourceTemplate && !sourceTemplate.isCustom;
     const [savedTemplate, setSavedTemplate] = useState(false);
-    const [saveTplModal, setSaveTplModal] = useState({ isOpen: false, name: '' });
-    const [saveNotice, setSaveNotice] = useState('');
+    const [saveTplModal, setSaveTplModal] = useState({ isOpen: false, name: '', error: '' });
+    const [saveNotice, setSaveNotice] = useState(null); // { kind: 'success'|'error', text }
 
     // New session → fresh save state (the page persists across workouts).
     useEffect(() => {
         setSavedTemplate(false);
-        setSaveNotice('');
-        setSaveTplModal({ isOpen: false, name: '' });
+        setSaveNotice(null);
+        setSaveTplModal({ isOpen: false, name: '', error: '' });
     }, [activeWorkout?.id]);
 
-    // The zero-weight notice is transient, not a permanent banner.
+    // The save notice is transient, not a permanent banner.
     useEffect(() => {
         if (!saveNotice) return;
-        const t = setTimeout(() => setSaveNotice(''), 4000);
+        const t = setTimeout(() => setSaveNotice(null), 4000);
         return () => clearTimeout(t);
     }, [saveNotice]);
 
-    const confirmSaveTemplate = () => {
+    const confirmSaveTemplate = async () => {
         const trimmed = saveTplModal.name.trim();
-        if (!trimmed || savedTemplate) return;
-        setSavedTemplate(true);
-        setSaveTplModal({ isOpen: false, name: '' });
-        // Local persistence inside is synchronous; only the cloud push is async
-        // and already falls back to SyncQueue — never block or throw here.
-        saveWorkoutAsTemplate(trimmed).catch(() => {});
-        if (!prepValidation.canStartGuidedWorkout) {
-            setSaveNotice('Saved. Some sets have no weight yet.');
+        if (!trimmed) return;
+        // Local persistence inside is synchronous; only the cloud push is
+        // async and already falls back to SyncQueue.
+        const result = await saveTemplateFromPrep(trimmed)
+            .catch(() => ({ ok: false, error: 'Could not save the template.' }));
+        if (result?.ok) {
+            setSavedTemplate(true);
+            setSaveTplModal({ isOpen: false, name: '', error: '' });
+            const base = result.mode === 'updated' ? `"${trimmed}" updated.` : 'Template Saved.';
+            setSaveNotice({
+                kind: 'success',
+                text: prepValidation.canStartGuidedWorkout ? base : `${base} Some sets have no weight yet.`
+            });
+        } else {
+            // Honest failure: dialog stays open, no "Template Saved" anywhere.
+            setSaveTplModal(prev => ({ ...prev, error: result?.error || 'Could not save the template.' }));
         }
     };
 
-    // Both START WORKOUT buttons: auto-save the template first (once) so a
-    // built-from-scratch session isn't lost, then start. A failed cloud push
-    // must never prevent the workout from starting.
+    // Both START WORKOUT buttons: starting also saves (decision 3) — an own
+    // custom template updates in place, an ad-hoc draft is created once —
+    // EXCEPT built-ins, which are never silently forked, and sessions already
+    // saved explicitly (save-then-start performs exactly one write). The
+    // local write is synchronous; a failed cloud push never blocks the start.
     const handleStartWorkout = () => {
-        if (canSaveTemplate && !savedTemplate) {
-            setSavedTemplate(true);
-            saveWorkoutAsTemplate(activeWorkout.name).catch(() => {});
+        if (!savedTemplate) {
+            if (sourceTemplate && sourceTemplate.isCustom) {
+                saveTemplateFromPrep(sourceTemplate.name).catch(() => {});
+            } else if (!sourceTemplate) {
+                saveTemplateFromPrep(activeWorkout.name).catch(() => {});
+            }
         }
         startGuidedSession();
     };
@@ -494,7 +511,7 @@ const TrackWorkout = () => {
                         </button>
                         {canSaveTemplate && (
                             <button
-                                onClick={() => setSaveTplModal({ isOpen: true, name: activeWorkout.name || '' })}
+                                onClick={() => setSaveTplModal({ isOpen: true, name: sourceTemplate?.name || activeWorkout.name || '', error: '' })}
                                 disabled={savedTemplate}
                                 style={{
                                     width: '100%',
@@ -517,8 +534,8 @@ const TrackWorkout = () => {
                             </button>
                         )}
                         {saveNotice && (
-                            <p style={{ margin: '10px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>
-                                {saveNotice}
+                            <p className={`prep-save-notice ${saveNotice.kind}`}>
+                                {saveNotice.text}
                             </p>
                         )}
                     </div>
@@ -527,13 +544,13 @@ const TrackWorkout = () => {
                 {/* Save Template name confirm */}
                 <Modal
                     isOpen={saveTplModal.isOpen}
-                    onClose={() => setSaveTplModal({ isOpen: false, name: '' })}
+                    onClose={() => setSaveTplModal({ isOpen: false, name: '', error: '' })}
                     title="Save Template"
                     actions={
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
                             <button
                                 className="secondary-btn"
-                                onClick={() => setSaveTplModal({ isOpen: false, name: '' })}
+                                onClick={() => setSaveTplModal({ isOpen: false, name: '', error: '' })}
                                 style={{ padding: '8px 16px' }}
                             >
                                 Cancel
@@ -552,7 +569,7 @@ const TrackWorkout = () => {
                     <input
                         type="text"
                         value={saveTplModal.name}
-                        onChange={(e) => setSaveTplModal(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) => setSaveTplModal(prev => ({ ...prev, name: e.target.value, error: '' }))}
                         placeholder="Template name"
                         style={{
                             width: '100%',
@@ -564,6 +581,16 @@ const TrackWorkout = () => {
                             fontSize: '1rem'
                         }}
                     />
+                    {sourceTemplate && !saveTplModal.error && (
+                        <p className="save-tpl-hint">
+                            {isBuiltInSource
+                                ? `"${sourceTemplate.name}" is a built-in template. Change the name to save your own copy.`
+                                : `Keeping the name updates "${sourceTemplate.name}". A new name saves a copy.`}
+                        </p>
+                    )}
+                    {saveTplModal.error && (
+                        <p className="save-tpl-error">{saveTplModal.error}</p>
+                    )}
                 </Modal>
             </div>
         );
