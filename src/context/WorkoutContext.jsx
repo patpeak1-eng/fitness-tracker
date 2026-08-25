@@ -2870,6 +2870,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         addCustomExercise,
         saveWorkoutAsTemplate,
         saveTemplateFromPrep,
+        // Exported so the prep screen can serialize exactly what a save
+        // would persist (dirty-state detection) — never re-derive this shape.
+        templateExercisesFromWorkout,
         deleteTemplate,
         saveCustomTemplate, // NEW
         exportData, // NEW

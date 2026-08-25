@@ -851,9 +851,15 @@ syncToTemplate live edits and recommendations target the copy, not the
 original. TrackWorkout's Save button now shows for EVERY prep workout (the
 old `!sourceTemplateId` gate was a design error, removed S28); START
 auto-saves through the same function (own custom → in-place, ad-hoc →
-create once, built-in → never), skipped after an explicit save so
-save-then-start performs exactly one write. `saveWorkoutAsTemplate` is
-behavior-frozen and now has no in-repo caller (kept as context API).
+create once, built-in → never). "Saved" is dirty-state, not a one-shot
+flag (S28 follow-up): TrackWorkout serializes
+`templateExercisesFromWorkout(activeWorkout)` (helper exported for exactly
+this) and compares against the snapshot captured at the last successful
+save — clean state disables Save and suppresses START's auto-save (no
+duplicate write); any prep edit re-enables both, and repeated saves of an
+own custom template always hit the in-place branch, never a duplicate.
+`saveWorkoutAsTemplate` is behavior-frozen and now has no in-repo caller
+(kept as context API).
 
 ---
 

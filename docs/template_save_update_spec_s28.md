@@ -69,3 +69,22 @@ acceptance 10 needs no change), backend (PUT route exists since S27).
 The 12 acceptance criteria in the session prompt, asserted against stored
 JSON (localStorage custom-templates key) and a localStorage write-counter
 for the exactly-one-write criteria; build clean; four screenshots.
+
+## Addendum — dirty-state re-save (S28 follow-up)
+
+Coordinator clarification: "save then START = exactly one write" meant "no
+duplicate template," not "no second save." The boolean `savedTemplate` flag
+suppressed all persistence after one explicit save, so post-save prep edits
+were silently lost — the same loss class this spec exists to fix.
+
+Replacement: TrackWorkout keeps `savedSnapshot`, the serialized
+`templateExercisesFromWorkout(activeWorkout)` captured on each successful
+save (helper now exported from WorkoutContext so the comparison uses the
+exact bytes that were saved — no parallel mapping to drift). `isSaved` =
+current serialization equals the snapshot. Save button disables and reads
+"Template Saved" only while clean; any prep edit makes it dirty again, and
+START auto-saves dirty state through the same saveTemplateFromPrep matrix
+(own custom in-place, ad-hoc create-once, built-in never). Repeated saves
+of an own custom template always route to the in-place update branch (and
+after a fork the re-pointed sourceTemplateId keeps it that way), so no path
+mints a duplicate.

@@ -90,7 +90,7 @@ const matchesMuscleFocus = (tags, selected) => {
 
 const TrackWorkout = () => {
     const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation,
-        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep } = useContext(WorkoutContext);
+        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep, templateExercisesFromWorkout } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -142,13 +142,22 @@ const TrackWorkout = () => {
             : null
     ), [templates, activeWorkout?.sourceTemplateId]);
     const isBuiltInSource = !!sourceTemplate && !sourceTemplate.isCustom;
-    const [savedTemplate, setSavedTemplate] = useState(false);
+    // Dirty-state tracking (S28 follow-up): the serialized save payload at
+    // the moment of the last successful save. "Saved" holds only while the
+    // current prep content still serializes to the same bytes — any edit
+    // re-enables Save and re-arms START's auto-save. A boolean flag here
+    // silently dropped post-save edits.
+    const [savedSnapshot, setSavedSnapshot] = useState(null);
+    const prepSerialized = canSaveTemplate
+        ? JSON.stringify(templateExercisesFromWorkout(activeWorkout))
+        : null;
+    const isSaved = savedSnapshot !== null && savedSnapshot === prepSerialized;
     const [saveTplModal, setSaveTplModal] = useState({ isOpen: false, name: '', error: '' });
     const [saveNotice, setSaveNotice] = useState(null); // { kind: 'success'|'error', text }
 
     // New session → fresh save state (the page persists across workouts).
     useEffect(() => {
-        setSavedTemplate(false);
+        setSavedSnapshot(null);
         setSaveNotice(null);
         setSaveTplModal({ isOpen: false, name: '', error: '' });
     }, [activeWorkout?.id]);
@@ -168,7 +177,7 @@ const TrackWorkout = () => {
         const result = await saveTemplateFromPrep(trimmed)
             .catch(() => ({ ok: false, error: 'Could not save the template.' }));
         if (result?.ok) {
-            setSavedTemplate(true);
+            setSavedSnapshot(prepSerialized);
             setSaveTplModal({ isOpen: false, name: '', error: '' });
             const base = result.mode === 'updated' ? `"${trimmed}" updated.` : 'Template Saved.';
             setSaveNotice({
@@ -183,11 +192,11 @@ const TrackWorkout = () => {
 
     // Both START WORKOUT buttons: starting also saves (decision 3) — an own
     // custom template updates in place, an ad-hoc draft is created once —
-    // EXCEPT built-ins, which are never silently forked, and sessions already
-    // saved explicitly (save-then-start performs exactly one write). The
+    // EXCEPT built-ins, which are never silently forked, and clean state
+    // (nothing changed since the last save, so no duplicate write). The
     // local write is synchronous; a failed cloud push never blocks the start.
     const handleStartWorkout = () => {
-        if (!savedTemplate) {
+        if (!isSaved) {
             if (sourceTemplate && sourceTemplate.isCustom) {
                 saveTemplateFromPrep(sourceTemplate.name).catch(() => {});
             } else if (!sourceTemplate) {
@@ -512,7 +521,7 @@ const TrackWorkout = () => {
                         {canSaveTemplate && (
                             <button
                                 onClick={() => setSaveTplModal({ isOpen: true, name: sourceTemplate?.name || activeWorkout.name || '', error: '' })}
-                                disabled={savedTemplate}
+                                disabled={isSaved}
                                 style={{
                                     width: '100%',
                                     display: 'flex',
@@ -523,12 +532,12 @@ const TrackWorkout = () => {
                                     background: 'transparent',
                                     border: '1px solid var(--border)',
                                     borderRadius: '10px',
-                                    color: savedTemplate ? 'var(--text-muted)' : 'var(--text-primary)',
-                                    cursor: savedTemplate ? 'default' : 'pointer',
+                                    color: isSaved ? 'var(--text-muted)' : 'var(--text-primary)',
+                                    cursor: isSaved ? 'default' : 'pointer',
                                     fontSize: '1rem'
                                 }}
                             >
-                                {savedTemplate
+                                {isSaved
                                     ? <><Check size={18} /> Template Saved</>
                                     : <><Save size={18} /> Save Template</>}
                             </button>
