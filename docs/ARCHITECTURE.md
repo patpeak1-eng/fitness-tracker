@@ -833,6 +833,24 @@ deleted. WorkoutSummary branches on the returned result: token-styled
 success/failure banner, no native `alert()`, and "Saved" only on real
 success (decisions 8/9).
 
+**Hold and deload (S28, spec piece C).** Detection in `finishWorkout` is no
+longer hit-only. Recommendations now carry `type: 'increase' | 'hold' |
+'deload'` (entries predating the field render as increases — backward
+compatible). A missed target (same judged sets as the hit predicate: real
+rep target + real weight, warm-ups excluded, per-mode) emits a `hold`
+(`newWeight === oldWeight`) — display-only, no Apply (decision 5). Two
+CONSECUTIVE missed sessions on the same exercise emit a `deload` (~10%,
+rounded to the 2.5 kg / 5 lb plate grain; equipment-aware grains are piece
+E) — applyable like an increase. Consecutiveness is DERIVED at detection
+time from history (newest-first scan for the previous completed entry
+carrying the catalog exercise id — this workout is not yet in history), no
+new stored state. Bodyweight (isBodyweight / Calisthenics / Yoga /
+equipment None) and duration exercises (no set with a rep target) are gated
+out of ALL weight recommendations (decision 7). `getSuggestedLoad` — the
+third parallel suggestion engine, zero consumers — is deleted (decision 6).
+WorkoutSummary renders type tags, per-rec message for hold/deload, and
+hides Apply for holds.
+
 **Backend.** `PUT /api/templates/{id}` (`routers/templates.py`) — same auth
 dependency and ownership 404 as DELETE, same response schema as POST;
 payload reuses `TemplateCreate`. No schema/migration change.

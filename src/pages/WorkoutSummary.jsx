@@ -91,7 +91,9 @@ const WorkoutSummary = () => {
     // predate that field, and template-less workouts have nothing to write).
     // Existence/custom-ness is judged at tap time by applyRecommendation so a
     // deleted template produces an honest failure message, not a hidden button.
-    const canApply = (rec) => Boolean(rec.templateId);
+    // Hold recs are display-only (S27 decision 5): same weight, nothing to
+    // write. Recs without a type predate piece C and behave as increases.
+    const canApply = (rec) => Boolean(rec.templateId) && rec.type !== 'hold';
 
     return (
         <div className="page summary-page">
@@ -150,19 +152,32 @@ const WorkoutSummary = () => {
                             <h3>Smart Recommendations</h3>
                         </div>
                         <p style={{ color: 'var(--text-secondary)', marginBottom: '15px' }}>
-                            You crushed your goals on these exercises! Apply updates for next time:
+                            Based on this session, for next time:
                         </p>
 
                         <div className="recs-list">
                             {recommendations.map((rec, idx) => (
                                 <div key={idx} className="rec-item">
                                     <div className="rec-info">
-                                        <h4>{rec.exerciseName}</h4>
-                                        <div className="rec-change">
-                                            <span>{rec.oldWeight}</span>
-                                            <ArrowRight size={14} />
-                                            <span className="new-val">{rec.newWeight} {wUnit}</span>
-                                        </div>
+                                        <h4>
+                                            {rec.exerciseName}
+                                            {rec.type === 'hold' && <span className="rec-tag hold">Hold</span>}
+                                            {rec.type === 'deload' && <span className="rec-tag deload">Deload</span>}
+                                        </h4>
+                                        {rec.type === 'hold' ? (
+                                            <div className="rec-change">
+                                                <span className="new-val">{rec.oldWeight} {wUnit}</span>
+                                            </div>
+                                        ) : (
+                                            <div className="rec-change">
+                                                <span>{rec.oldWeight}</span>
+                                                <ArrowRight size={14} />
+                                                <span className="new-val">{rec.newWeight} {wUnit}</span>
+                                            </div>
+                                        )}
+                                        {(rec.type === 'hold' || rec.type === 'deload') && rec.message && (
+                                            <p className="rec-message">{rec.message}</p>
+                                        )}
                                     </div>
                                     {canApply(rec) && (
                                         <button

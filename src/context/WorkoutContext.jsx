@@ -1574,6 +1574,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             // Guard against empty sets
             if (workingSets.length === 0) return;
 
+            // Decision 7 (S27): bodyweight and duration exercises never get a
+            // weight recommendation of ANY kind (increase/hold/deload) —
+            // their progression is reps or time (spec §D, later piece).
+            const catalogEx = ex.exercise || {};
+            const isBodyweightEx = catalogEx.isBodyweight
+                || catalogEx.category === 'Calisthenics'
+                || catalogEx.category === 'Yoga'
+                || catalogEx.equipment === 'None';
+            const isDurationEx = workingSets.every(s => !(s.targetReps > 0));
+            if (isBodyweightEx || isDurationEx) return;
+
             let lastSet = workingSets[workingSets.length - 1]; // Default reference for weight
 
             if (effectiveMode === 'double') {
@@ -1611,6 +1622,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                 newWeight = Math.round(newWeight * 100) / 100;
 
                 recommendations.push({
+                    type: 'increase',
                     exerciseId: ex.exercise.id,
                     exerciseName: ex.exercise.name,
                     setId: lastSet.id,
@@ -1624,6 +1636,72 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                     exerciseIndex,
                     message: `Recommend +${incrementValue}${units === 'metric' ? 'kg' : 'lbs'} (${newWeight})`
                 });
+            } else {
+                // Piece C (spec §C): a missed target is never silent. A miss
+                // is judged on the same sets the hit predicate uses — a set
+                // counts only when it had a real rep target and real weight.
+                const missedIn = (sets) => {
+                    const working = (sets || []).filter(s => s.setType !== 'warmup');
+                    if (effectiveMode === 'double') {
+                        return working.some(s => s.targetReps > 0 && s.weight > 0 && s.reps < s.targetReps);
+                    }
+                    const finalSet = working[working.length - 1];
+                    return !!finalSet && finalSet.targetReps > 0 && finalSet.weight > 0 && finalSet.reps < finalSet.targetReps;
+                };
+                if (missedIn(ex.sets)) {
+                    // Consecutive misses are DERIVED from history, not stored:
+                    // the previous session for this exercise is the first
+                    // completed entry carrying the catalog id (history is
+                    // newest-first, and this workout is not in it yet).
+                    const prevEntry = history.find(w => w.status === 'completed'
+                        && w.exercises && w.exercises.some(e => e && e.exercise && e.exercise.id === ex.exercise.id));
+                    const prevExData = prevEntry
+                        ? prevEntry.exercises.find(e => e && e.exercise && e.exercise.id === ex.exercise.id)
+                        : null;
+                    const prevMissed = !!prevExData && missedIn(prevExData.sets);
+
+                    const unit = units === 'metric' ? 'kg' : 'lbs';
+                    const holdRec = {
+                        type: 'hold',
+                        exerciseId: ex.exercise.id,
+                        exerciseName: ex.exercise.name,
+                        setId: lastSet.id,
+                        oldWeight: lastSet.weight,
+                        newWeight: lastSet.weight,
+                        templateId: activeWorkout.sourceTemplateId || null,
+                        exerciseIndex,
+                        message: `Target missed — hold at ${lastSet.weight}${unit} next session.`
+                    };
+
+                    if (prevMissed) {
+                        // Two consecutive missed sessions: ~10% deload,
+                        // rounded to the standard plate grain (equipment-
+                        // aware increments are piece E).
+                        const grain = units === 'metric' ? 2.5 : 5;
+                        let deloadWeight = Math.round((lastSet.weight * 0.9) / grain) * grain;
+                        if (deloadWeight >= lastSet.weight) deloadWeight = lastSet.weight - grain;
+                        deloadWeight = Math.round(deloadWeight * 100) / 100;
+                        if (deloadWeight > 0) {
+                            recommendations.push({
+                                type: 'deload',
+                                exerciseId: ex.exercise.id,
+                                exerciseName: ex.exercise.name,
+                                setId: lastSet.id,
+                                oldWeight: lastSet.weight,
+                                newWeight: deloadWeight,
+                                templateId: activeWorkout.sourceTemplateId || null,
+                                exerciseIndex,
+                                message: `Two sessions below target — deload to ${deloadWeight}${unit} and rebuild.`
+                            });
+                        } else {
+                            // Weight too small to deload by a full plate
+                            // step; holding is the honest fallback.
+                            recommendations.push(holdRec);
+                        }
+                    } else {
+                        recommendations.push(holdRec);
+                    }
+                }
             }
         });
 
@@ -1801,64 +1879,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
             return newTemplates;
         });
-    };
-
-    const getSuggestedLoad = (exerciseId) => {
-        // 1. Find last workout with this exercise
-        const lastWorkout = history.find(w => w.exercises && w.exercises.some(e => e.exercise.id === exerciseId));
-        if (!lastWorkout) return null;
-
-        const exData = lastWorkout.exercises.find(e => e.exercise.id === exerciseId);
-        if (!exData || !exData.sets || exData.sets.length === 0) return null;
-
-        const completedSets = exData.sets.filter(s => s.completed);
-        if (completedSets.length === 0) return null;
-
-        // 2. Check Success Criteria
-        const allMetGoal = completedSets.every(s => {
-            // Logic for "Goal Met"
-            const repsMet = s.targetReps > 0 && s.reps >= s.targetReps;
-            const timeMet = s.targetTime > 0 && s.time >= s.targetTime;
-            return repsMet || timeMet;
-        });
-
-        if (allMetGoal) {
-            // 3. Generate Suggestion
-            const lastSet = completedSets[completedSets.length - 1]; // Base off last set
-            const isWeight = exData.exercise.category === 'Weight Lifting' || (lastSet.weight > 0 && !exData.exercise.isBodyweight);
-            const wUnit = units === 'metric' ? 'kg' : 'lbs';
-            const increment = units === 'metric' ? 2.5 : 5;
-
-            if (isWeight) {
-                return {
-                    type: 'weight',
-                    value: increment,
-                    unit: wUnit,
-                    baseWeight: lastSet.weight,
-                    reason: `You crushed it last time! Try +${increment}${wUnit}?`
-                };
-            } else {
-                // Duration or Reps
-                if (lastSet.targetTime > 0) {
-                    return {
-                        type: 'time',
-                        value: 5,
-                        unit: 'sec',
-                        baseTime: lastSet.targetTime,
-                        reason: `Great hold! Try +5 sec?`
-                    };
-                } else {
-                    return {
-                        type: 'reps',
-                        value: 1,
-                        unit: 'rep',
-                        baseReps: lastSet.targetReps,
-                        reason: `Easy peasy! Add +1 rep?`
-                    };
-                }
-            }
-        }
-        return null;
     };
 
     const checkPersonalRecord = (exerciseId, currentWeight, currentReps) => {
@@ -2892,9 +2912,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         saveAssessment, // NEW
         lastPerformance: getLastExerciseStats, // Alias for legacy if needed, or just use below
         getLastExerciseStats, // NEW
-        checkPersonalRecord, // NEW - Phase E
-        getSuggestedLoad, // NEW - Phase F
-        getMuscleVolumeDistribution, // NEW - Phase B
+        checkPersonalRecord, // NEW - Phase E        getMuscleVolumeDistribution, // NEW - Phase B
         // Guided Mode Exports
         currentExerciseIndex,
         setCurrentExerciseIndex,
