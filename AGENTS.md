@@ -55,6 +55,23 @@ is not auth or schema. Requires a written spec before code
 
 HIGH requires TWO_STAGE_HIGH_ZONE_RULE and human sign-off.
 
+## AUTONOMOUS_LOOP_RULE
+
+You may run autonomously across two or three scoped tasks **only when the
+session prompt explicitly authorizes it**. Hard stop and report to the human
+coordinator before any of:
+
+- a task not in the defined session scope
+- any database schema change (ALTER TABLE, migration)
+- any read or write of user data (any table with `user_id`)
+- any auth or session handling change
+- any architectural decision not already in a spec
+- any production environment variable change
+- any change touching more than three systems at once
+
+*Prevents:* authorized autonomy silently expanding into unreviewed HIGH-zone
+work because the agent was already moving.
+
 ## ZONE_OVERRIDE_RULE
 
 A task prompt's own claim about its zone is **advisory only**. The real zone
@@ -183,6 +200,30 @@ coordinator sign-off regardless. Permission modes are set by
 `.traycer/agent-selection-guide.md` — that file is a safety control, not a
 preference. Aggregate every child's summary before reporting up.
 
+## LOOP_ORCHESTRATION_RULE
+
+A repeating task with a clear definition of done is a loop candidate. All
+four must hold before building one: it repeats; done is verifiable pass/fail;
+the token cost is acceptable to repeat unattended; every tool it needs is
+actually available. Then it goes in `docs/skills/loops/` and appends a run
+entry to `docs/skills/logs/` after each execution.
+
+Never build a loop on top of execution steps that have not already been
+battle-tested as a skill in `docs/skills/`.
+
+## LOOP_TRAINING_MODE_RULE
+
+Every new loop runs in training mode for its first three executions, pausing
+for explicit coordinator approval at each major checkpoint:
+
+```
+LOOP CHECKPOINT [N/total]: About to [action].
+Estimated tokens so far: ~[N]. Confirm or abort?
+```
+
+Training mode ends only after three clean validated runs **and** explicit
+coordinator sign-off. Never self-exit training mode.
+
 ---
 
 ## GIT_STAGING_RULE
@@ -220,15 +261,29 @@ they read "not merged" but their code reached main by cherry-pick.
 Deploy is push-to-main; Railway builds on push. Docs-only commits deploy too —
 poll anyway.
 
-Verify that the **live build reports the pushed commit**. Poll roughly every
-30 s for up to 5 minutes. On no match, check the host's deploy queue before
-concluding anything — queued is not missed.
+Verify that the **live build reports the pushed commit**. Ground truth is the
+Railway CLI, which reports the deployed commit hash directly:
 
-A `curl` 200 proves nothing: the SPA fallback returns 200 for every path.
-Comparing live and local asset hashes is also unreliable — different build
-env, and bundle-neutral refactors do not change hashes. Ground truth for a
-frontend deploy is the Railway dashboard's Deployments panel ACTIVE card.
-Backend schema changes are confirmed at `/openapi.json`.
+```bash
+git ls-remote origin main                                    # remote moved?
+railway deployment list --service fitness-tracker --limit 3 --json
+railway deployment list --service "Fitness Tracker Backend" --limit 3 --json
+```
+
+Verified when the newest entry's `meta.commitHash` starts with your SHA and
+`status` is `SUCCESS`. Poll roughly every 30 s for up to 5 minutes. No match
+yet is not a failure — look for a `BUILDING`/`DEPLOYING` entry first; queued
+is not missed. Backend schema changes are additionally confirmed at
+`/openapi.json`; a green deploy does not prove the migration ran.
+
+**Always pass `--service`.** The CLI resolves the project by walking up the
+directory tree, and `C:\Users\PC` is linked with Mission Control's service as
+its default — so an unqualified `railway down` / `redeploy` / `variables set`
+/ `up` run from anywhere under the home folder hits the wrong service.
+
+A `curl` 200 proves nothing: `server.js` serves the SPA fallback for every
+path. Live-vs-local asset hash comparison is unreliable in both directions.
+Full detail in `docs/skills/railway-deploy-verification.md`.
 
 ---
 
@@ -278,6 +333,16 @@ standard reviews passed.
 
 ## APP INVARIANTS
 
+**Live surfaces**
+
+| Surface | URL / identifier |
+|---|---|
+| Frontend | https://fitness-tracker-production-54a4.up.railway.app |
+| Backend schema | https://astonishing-laughter-production-de7d.up.railway.app/openapi.json |
+| PWA service worker | https://fitness-tracker-production-54a4.up.railway.app/sw.js |
+| Railway project | `877335d0-ecc2-4460-9800-291ffcb3f660` (named *peak-ops-q*; shared with Mission Control) |
+| Railway services | `fitness-tracker` (frontend), `Fitness Tracker Backend` |
+
 - **No emojis anywhere in the app.** Icons come from `lucide-react`.
 - `docs/DESIGN_TOKENS.md` is the source of truth for visual tokens. Purpose
   per token, self-hosted fonts, no CDN.
@@ -310,7 +375,7 @@ TASK COMPLETE — [Task Name]
 Files modified:      [list with line delta]
 ARCHITECTURE.md:     [updated — <what changed>  |  no architectural change this task]
 Zero regressions:    [CONFIRMED / issues found]
-Verification method: [how it was checked — build, lint, endpoint probe, live browser]
+Verification method: [how it was checked — build, lint, endpoint probe, railway deployment list, disposable account]
 Commit SHA:          [sha]
 Deployed SHA:        [sha] — status=[ok/failed] deploy=[green/red]
 Surprises / gotchas: [list or NONE]

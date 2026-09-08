@@ -12,6 +12,14 @@ happens to use. Where a practice originates in one vendor's tooling, the
 the two running-state documents it points to — `docs/ARCHITECTURE.md` (how the
 app is built) and `SESSION_START.md` (what happened last and what is open).
 
+**Where the rules themselves live (added 2026-09-08):** this document explains
+*why* the process is shaped the way it is. The enforceable rules are in
+`AGENTS.md` at the repository root, which is canonical for every coding agent —
+Codex and OpenCode read `AGENTS.md` and nothing else, so a rule kept anywhere
+else is invisible to them. `CLAUDE.md` imports it and adds only harness-specific
+notes. Where this document and `AGENTS.md` differ, `AGENTS.md` wins and this
+document should be corrected.
+
 **A note on accuracy:** every factual claim below was checked against the actual
 repository (commits, migration files, source, and the project's own session
 log) before being written. Where something could not be verified, it is flagged
@@ -222,12 +230,10 @@ consciously decide whether the doc needs updating. This is the general lesson:
 *to make a cross-cutting rule stick, bind it to a required field in a process
 step, not to a sentence someone is supposed to remember.*
 
-**Honest status of this field (verified):** as of this writing, the
-completion-report template recorded in the project's build-rules file
-(`CLAUDE.md`, `COMPLETION_REPORT_FORMAT`) does **not yet list** this
-ARCHITECTURE.md line. This document formalizes it as required; the template in
-`CLAUDE.md` should be updated to match. Section 10 reproduces the template with
-the field included.
+**Status of this field (verified 2026-09-08):** resolved. The
+`COMPLETION_REPORT_FORMAT` template now lives in `AGENTS.md` and lists the
+ARCHITECTURE.md line as required, so every agent on the repo — not only Claude
+Code — sees it. Section 10 reproduces the same template.
 
 ---
 
@@ -398,9 +404,9 @@ Stated explicitly, per the project's own "verify or flag, don't guess" rule:
    alongside it as the project-specific complement (Section 7). No longer an open
    gap.
 2. **The ARCHITECTURE.md completion-report field is now in the template
-   (resolved).** It was formalized in this document (Sections 6, 10) and added to
-   the `CLAUDE.md` `COMPLETION_REPORT_FORMAT` template in the same commit, so the
-   two now agree. No longer an open gap.
+   (resolved).** It was formalized in this document (Sections 6, 10) and now sits
+   in the canonical `AGENTS.md` `COMPLETION_REPORT_FORMAT` template, visible to
+   every agent. No longer an open gap.
 3. **Isolated-worktree parallelism is a stated requirement, not yet a guaranteed
    practice** — S18 ran in a shared checkout and relied on discipline (Section 8).
 4. Role assignments ("currently an AI coding agent running such-and-such model")
