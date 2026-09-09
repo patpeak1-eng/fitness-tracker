@@ -333,9 +333,18 @@ priority-ranked open item with enough context to act on later.
 
 ## NO_MODEL_NAMES_RULE
 
-Do not name specific models in rules, docs, prompts, or commit messages.
-Refer to tiers: strongest available, mid-tier. Model names date instantly and
-migrate badly. Existing docs that name models are legacy, not precedent.
+Do not name specific models in rules, docs, prompts, or commit messages —
+including in `.traycer/agent-selection-guide.md`. Refer to capability:
+*most capable available*, *mid-tier*.
+
+The standing instruction is to **always pick the most capable model
+available at the time**, whatever it is called. Discover what exists at
+session start (`traycer_list_harness_models`) rather than carrying a
+remembered name forward.
+
+*Prevents:* a name written down today quietly capping the work months later
+at whatever happened to be current when someone typed it. Existing docs that
+name models are legacy, not precedent.
 
 ## MODEL_RESERVATION_RULE
 
@@ -354,9 +363,9 @@ top-tier; a mid-tier reviewer is not acceptable on HIGH zone. If only one
 strong seat is available, spend it on the review — catching a bad plan is
 worth more than writing the code slightly better.
 
-The concrete model-to-tier mapping is deliberately **not** recorded here
-(see NO_MODEL_NAMES_RULE); it lives in `.traycer/agent-selection-guide.md`,
-dated, because it changes far faster than these rules do.
+No model-to-tier mapping is recorded anywhere in this repo, by design — see
+NO_MODEL_NAMES_RULE. Rank by capability at session start against whatever
+the harness actually offers that day.
 
 ---
 

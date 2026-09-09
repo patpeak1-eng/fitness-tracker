@@ -43,25 +43,26 @@ plus one adversarial review pass before merge.
 Pin a mid-tier model explicitly when creating routine children; the harness
 default is top-tier and burns quota fast.
 
-## Current tier mapping (owner's direction, 2026-09-09)
+## Choosing a tier (owner's direction, 2026-09-09)
 
-`AGENTS.md` deliberately speaks only in tiers, because model names date fast.
-This is the concrete mapping as of the date above — **re-check availability
-before relying on it**, and update this block rather than editing `AGENTS.md`.
+**No model is named anywhere in this repo, on purpose.** New and better
+models ship constantly; a name written down today is wrong within months and
+quietly caps the work at whatever was current when someone typed it. The
+standing instruction is *always pick the most capable model available at the
+time*, whatever it happens to be called.
 
-| Tier | Claude side | Codex side |
+Discover what exists at session start — `traycer_list_harness_models` for
+each harness — and rank by capability then. Do not carry a remembered name
+forward from a previous session, and do not record one here.
+
+| Zone | Builder | Reviewer |
 |---|---|---|
-| Strongest | `claude-fable-5-1[1m]` | `gpt-6-astra` |
-| Mid | `sonnet` | `gpt-5.6-*` family |
-| Light | `haiku` | `gpt-5.5` |
+| HIGH | most capable available | most capable available |
+| MEDIUM | mid-tier acceptable | most capable available |
+| LOW | mid or light tier | optional |
 
-- **HIGH zone:** strongest on both sides — builder and reviewer.
-- **MEDIUM zone:** at least one strongest-tier seat, and if only one is
-  available it goes to the **reviewer**, not the builder.
-- **LOW zone:** mid or light tier, reviewer optional.
-
-Verify what is actually available with `traycer_list_harness_models` at
-session start; do not assume this table is still accurate.
+When only one top-capability seat is available, it goes to the **reviewer**.
+Catching a bad plan is worth more than writing the code slightly better.
 
 ## Run location
 
