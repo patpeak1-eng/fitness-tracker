@@ -1,7 +1,51 @@
 # Spec — Profile list replacement orphans local profiles (S29)
 
-**Status:** spec only, no implementation. Awaiting decisions in §7 and the
-literal clearance phrase *"Cleared, proceed with implementation."*
+> **STATUS: CHANGES-REQUIRED — do not implement this plan as written.**
+> Cross-review by an independent top-tier agent (2026-09-09) returned
+> CHANGES-REQUIRED. The central premise below is **wrong**, and it is wrong
+> in the direction that makes the problem bigger, not smaller. Corrections,
+> each independently re-verified:
+>
+> 1. **There is no stable identity for password login.** `Login.jsx:65,90`
+>    read `result.user_id`, but `Token` (`backend/app/schemas.py:28-30`)
+>    carries only `access_token` and `token_type`, and both `/register` and
+>    `/login` return exactly that (`routers/auth.py:113-114,138-139`). The
+>    live deployed `/openapi.json` confirms it. So `'cloud_' + Date.now()`
+>    is not a fallback — it is **the** path. Every email/password login mints
+>    a new profile id and therefore a new data scope. `getMe` cannot repair
+>    it: it is cookie-only (`ApiService.js:70-77`) while password login
+>    holds a Bearer token. **This hits single-profile users**, which
+>    invalidates §7 Q1's framing that the bug only matters to people who
+>    deliberately keep more than one profile.
+> 2. **Retaining cloud siblings exposes a principal/data-scope mismatch.**
+>    `switchProfile` (`WorkoutContext.jsx:1357-1364`) changes the selected
+>    profile but never the credentials, so a pull can write account B's data
+>    into profile A's scope. Account deletion follows credentials too, so
+>    removing `currentProfile.id` is not necessarily removing the account
+>    actually deleted.
+> 3. **The sync queue crosses account transitions.** `SyncQueue` dispatches
+>    without an owner check and flushes on boot, so a failed operation for
+>    account A can replay against account B after a re-login.
+> 4. **Preserving siblings breaks the explicit-logout gate.**
+>    `getOrCreateProfiles` only consults `isLoggedOut()` inside the
+>    `profiles.length === 0` branch, and `refreshGlobalState:469-481` then
+>    selects `profilesData[0]` regardless.
+> 5. **A storage-only upsert leaves React's `profiles` state stale.** The
+>    boot branches never call `setProfiles`, so a later CRUD action rewrites
+>    storage from a stale snapshot and re-orphans what the upsert just fixed.
+>
+> Confirmed as originally written: the call-site locations (though the count
+> is **six**, not five — sign-out and delete are separate sites), the
+> rejection of the stale-null-closure hypothesis (independently reproduced
+> under a StrictMode harness), and "orphaned, not deleted" for the immediate
+> list-replacement operation.
+>
+> **Scope has grown past a single helper into identity, auth transport, sync
+> ownership, and the logout gate — four systems.** Per AUTONOMOUS_LOOP_RULE
+> that is a hard stop pending owner direction. A revised spec supersedes
+> this one before any code is written.
+
+**Status:** spec only, no implementation, now superseded pending revision.
 
 **Zone:** HIGH — touches the login flow, profile identity, and
 `WorkoutContext.jsx`. Two-stage gate applies.
