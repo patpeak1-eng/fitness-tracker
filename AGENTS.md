@@ -159,14 +159,31 @@ rows. Assume a test write is permanent.
 
 **The builder never reviews their own work as the review of record.** The
 inline self-review in TWO_STAGE_HIGH_ZONE_RULE step 4 is a pre-check, not a
-review. When two agents are available: one builds, the other reviews the
-**diff and the original task statement** — never the builder's summary.
+review. One agent builds, a second reviews the **diff and the original task
+statement** — never the builder's summary.
 
-A review conducted in a chat agent's own transcript *is* the proof artifact.
-A narration of a review that happened somewhere else is not.
+**MEDIUM and HIGH zone work is cross-reviewed twice, and the first one comes
+before any code exists:**
+
+| Stage | What the reviewer receives | Gate |
+|---|---|---|
+| **Plan** | the spec, and the task as originally stated | no implementation starts until the plan review returns |
+| **Code** | the full diff, and the task as originally stated | no commit until the code review returns |
+
+The plan review is the one people skip and the one that pays. Its job is to
+attack the approach while changing it is still free — and to independently
+re-verify the load-bearing claims in the spec rather than accept them.
+
+LOW-zone work does not require cross-review, but any finding a peer raises
+on it is still handled under CODEX_TRUST_RULE.
+
+A review conducted in a reviewing agent's own transcript *is* the proof
+artifact. A narration of a review that happened somewhere else is not.
 
 Review verdicts are one word: **APPROVE** / **APPROVE-WITH-NITS** /
-**CHANGES-REQUIRED**, with findings ranked most severe first.
+**CHANGES-REQUIRED**, with findings ranked most severe first. Brief the
+reviewer to be adversarial and to say so if it thinks the work is not worth
+doing at all — a reviewer that only confirms is not a control.
 
 ## CODEX_TRUST_RULE
 
@@ -324,10 +341,22 @@ migrate badly. Existing docs that name models are legacy, not precedent.
 
 Pin a mid-tier model explicitly for routine builds, research, and mechanical
 work; the harness default is a top-tier model that exhausts quota fast.
-Reserve the strongest tier for architecture decisions on shared or
-user-facing code, and for one adversarial review pass before merging such
-code. That adversarial pass has caught a real authorization gap that two
-standard reviews passed.
+
+**Both sides of a HIGH-zone task run the strongest available tier** — the
+builder and the reviewer. Architecture decisions on shared or user-facing
+code get the same treatment, plus one adversarial pass before merge. That
+adversarial pass has caught a real authorization gap two standard reviews
+passed.
+
+**At least one top-tier model is in play on every MEDIUM-or-higher task,
+whichever side it sits on.** A mid-tier builder is fine when the reviewer is
+top-tier; a mid-tier reviewer is not acceptable on HIGH zone. If only one
+strong seat is available, spend it on the review — catching a bad plan is
+worth more than writing the code slightly better.
+
+The concrete model-to-tier mapping is deliberately **not** recorded here
+(see NO_MODEL_NAMES_RULE); it lives in `.traycer/agent-selection-guide.md`,
+dated, because it changes far faster than these rules do.
 
 ---
 

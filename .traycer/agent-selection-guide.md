@@ -40,9 +40,28 @@ zone is advisory; the files touched decide.
 Architecture decisions on shared or user-facing code use the strongest tier,
 plus one adversarial review pass before merge.
 
-Never name a specific model — choose by tier. Pin a mid-tier model explicitly
-when creating routine children; the harness default is top-tier and burns
-quota fast.
+Pin a mid-tier model explicitly when creating routine children; the harness
+default is top-tier and burns quota fast.
+
+## Current tier mapping (owner's direction, 2026-09-09)
+
+`AGENTS.md` deliberately speaks only in tiers, because model names date fast.
+This is the concrete mapping as of the date above — **re-check availability
+before relying on it**, and update this block rather than editing `AGENTS.md`.
+
+| Tier | Claude side | Codex side |
+|---|---|---|
+| Strongest | `claude-fable-5-1[1m]` | `gpt-6-astra` |
+| Mid | `sonnet` | `gpt-5.6-*` family |
+| Light | `haiku` | `gpt-5.5` |
+
+- **HIGH zone:** strongest on both sides — builder and reviewer.
+- **MEDIUM zone:** at least one strongest-tier seat, and if only one is
+  available it goes to the **reviewer**, not the builder.
+- **LOW zone:** mid or light tier, reviewer optional.
+
+Verify what is actually available with `traycer_list_harness_models` at
+session start; do not assume this table is still accurate.
 
 ## Run location
 
