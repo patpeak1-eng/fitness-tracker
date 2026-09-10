@@ -1,5 +1,9 @@
 # Spec — Profile list replacement orphans local profiles (S29)
 
+> **SUPERSEDED by [`profile_identity_spec_s29_v2.md`](profile_identity_spec_s29_v2.md).**
+> Read that file instead. This one is kept only as the record of what the
+> first pass got wrong and how it was caught.
+>
 > **STATUS: CHANGES-REQUIRED — do not implement this plan as written.**
 > Cross-review by an independent top-tier agent (2026-09-09) returned
 > CHANGES-REQUIRED. The central premise below is **wrong**, and it is wrong

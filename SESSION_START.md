@@ -233,6 +233,51 @@ docs/preparation_controls_visual_contract_s25_3.md):
   Arnold Press's previous “No Visual Available” state was a field-name mismatch,
   not missing image files.
 
+## Session 29 — PAUSED IN PROGRESS (2026-09-09, not a session close)
+
+Work is mid-flight and will resume in a day or two. Nothing is closed.
+
+**Shipped this session (all docs/process, no app code):**
+`64e83f0` AGENTS.md + `.traycer/agent-selection-guide.md` — the rules were
+invisible to Codex, which reads only AGENTS.md.
+`a580f5f` CLAUDE.md de-duplicated to a thin `@AGENTS.md` import (7.5 KB →
+2.7 KB); deploy verification rewritten around the Railway CLI after the
+documented chrome-devtools path turned out not to be connected.
+`0612cfd` `scripts/poll_deploy.sh` — deploy check as a guarded poll.
+`dcf7ca6` first S29 spec. `06c6f47` same spec marked CHANGES-REQUIRED.
+`29a6465` cross-review mandatory for MEDIUM+, top-tier reviewer required.
+`6703e26` never name a model; always pick the most capable available.
+
+**OPEN — P1, the session's main find.** What was filed as a P3 "cloud login
+orphans local profiles" is actually **three P1 defects**, and the original
+framing was wrong. Full detail, verified evidence, staged plan and the
+remaining decisions are in **`docs/profile_identity_spec_s29_v2.md`** —
+start there, it is written for a session with no memory of this one.
+In one line each:
+  1. Email/password sign-in has no stable identity — `Token` carries no
+     `user_id`, so every sign-in mints `cloud_<timestamp>` and a new data
+     scope. Reaches ordinary single-profile users. Google/OAuth unaffected.
+  2. The sync queue dispatches without an ownership check and flushes on
+     boot, so account A's failed write can replay against account B.
+  3. Preserving any profile on sign-out breaks the explicit-logout gate —
+     the naive fix to (1) silently disables logout.
+  Plus a rollout trap: adding `user_id` to the backend response is NOT a
+  safe backend-only deploy, because deployed clients already read that field
+  and would switch data scopes instantly. See spec §4.
+  Owner decision recorded: devices are never shared, so the local
+  multi-profile feature has no forward use case — but existing stored
+  profiles must not be destroyed to remove it. See spec §2 and §5.
+  Reviewer agent `a85ddc71-6cd5-4a72-8da2-d1eefe1a83a1` holds both
+  cross-review transcripts; reuse it rather than starting cold.
+
+**OPEN — P3, environment.** `C:\Users\PC` is linked as a Railway project
+directory with Mission Control's service as its default, and the CLI
+resolves by walking up the tree — so an unqualified mutating `railway`
+command from any Traycer worktree targets the wrong service. `--service` is
+now mandatory in AGENTS.md; unlinking the home directory would remove the
+hazard structurally but touches the Mission Control setup. Owner aware,
+not yet actioned.
+
 ## Session 25+ Open Items (priority order)
 P1 - Real-device barcode camera test (blocks full Nutrition closure
      only). On a phone, live app → Log food → Barcode → Scan, point at a
