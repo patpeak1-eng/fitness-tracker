@@ -1,181 +1,204 @@
 # Spec — Video-sourced exercises and templates, first video (S30)
 
-> **STATUS: DRAFT — awaiting owner confirmation of §3 identifications and the
-> §7 decisions, then plan-stage cross-review.** No code written.
+> **STATUS: REVISED after plan-stage cross-review (CHANGES-REQUIRED).
+> Awaiting owner decisions in §7. No code written.**
+> Revision 2, 2026-09-10. Revision 1 mis-modelled the timed exercise and
+> would have logged a 30-second hold as 30 reps; that and every other
+> correction below were caught by the independent review and re-verified
+> against source before being accepted.
 
-**Zone:** MEDIUM. Edits `src/context/WorkoutContext.jsx` (the single-writer
-file) and adds assets under `public/illustrations/`. No auth, schema, user
-data, or `ApiService.js`. Spec-first and plan review apply; the two literal
-clearance phrases do not, but the owner still signs off before commit.
+**Zone:** MEDIUM. Edits `DEFAULT_EXERCISES` and `DEFAULT_TEMPLATES` in
+`src/context/WorkoutContext.jsx` (the single-writer file) and adds assets
+under `public/illustrations/`. No auth, schema, user data, or
+`ApiService.js`. Stays MEDIUM **only because the timed exercise is deferred**
+— see §5.
 
 **Owner's intent (2026-09-10):** add exercises found in short workout videos
-as (a) individual library exercises and (b) a pre-loaded template per video,
-matching the existing data format and illustration style exactly. **Never
-use the creator's footage or likeness** — take only the form and positions,
-and render them as AI illustrations in the house style. One video at a time,
-this one first.
+as individual library exercises and a pre-loaded template per video,
+matching the existing data format and illustration style. **Never the
+creator's footage or likeness** — form and positions only, rendered as AI
+illustrations consistent with the existing 73. One video at a time.
 
 ---
 
 ## 1. Source
 
-`https://www.tiktok.com/@starboy_camair/video/7676897102261193998` —
-"Dumbbell full body workout", 29 s, 1080×1920, no speech (music only). All
-detail is on-screen text plus a Fitbod app overlay visible on some segments.
-Watched via the `/watch` skill: 28 frames at 1 s intervals, transcript
-confirmed empty.
+`https://www.tiktok.com/@starboy_camair/video/7676897102261193998` — 29 s,
+no speech. Watched via `/watch`: 28 one-second frames, read independently
+by two agents before comparing notes. The creator's Fitbod overlay shows
+**4 × 10 at 25 lb, 1:15 rest** where visible; this is *his log*, distinct
+from the large on-screen prescription text, and the two disagree for the
+rows and the V-up. The prescription text is what we model.
 
-Fitbod overlay (where visible): **4 sets × 10 reps at 25 lb, 1:15 rest**.
+## 2. Existing data, verified
 
-## 2. How the existing data is shaped (verified)
+**Exercise** (`WorkoutContext.jsx:50-123`, 73 entries):
+`id, name, category, primary_muscle, equipment, instructions, illustration`
+plus optional `isBodyweight` (28 entries) and `isDurationBased` (19: six
+calisthenics, Running, twelve Yoga). **No duration-based entry carries an
+external load.** Instructions are one short imperative sentence ending in a
+period. `wt_` / `cal_` id prefixes; `"Dumbbells"` equipment on 8 entries.
 
-**Exercise** — `DEFAULT_EXERCISES`, `WorkoutContext.jsx:50-125`, 73 entries:
+**Template** (`:172-218`): `id, name, exercises, sets, equipmentTier,
+estimatedDuration`. An `exercises` entry may be a bare id, `{ id, sets: N }`,
+or `{ id, sets: [ { weight, targetReps, targetTime }, … ] }` — exactly those
+three per-set keys are read (`:1508-1520`). `restTime` and `setType` are not
+restored by the loader, so the video's 1:15 rest is **not** reproducible
+through the template. `equipmentTier` has **no consumer anywhere** — inert
+metadata; real compatibility reads `exercise.equipment` (`:238-247`).
 
-```
-{ "id": "wt_ohp", "name": "Overhead Press", "category": "Weights",
-  "primary_muscle": "Shoulders", "equipment": "Barbell/Dumbbells",
-  "instructions": "<one sentence, imperative, cue-focused>",
-  "illustration": "/illustrations/wt_ohp.jpg" }
-```
+**Illustration:** `public/illustrations/<id>.jpg`, 1400×700. Rendered by
+`ExerciseIllustration.jsx` on most surfaces **and** by `InstructionModal.jsx`
+with its own `<img>` — both honour the same `illustration || imageUrl` path
+contract (`docs/skills/exercise-visual-contract.md`).
 
-Optional flags: `"isBodyweight": true` (22 entries — gates the exercise out
-of weight recommendations, per S27), `"isDurationBased": true` (Plank, Side
-Plank, Bear Crawl, Hollow Hold, Wall Sit — the guided view then treats the
-set's rep target as seconds).
-
-Id prefixes: `wt_` weights, `cal_` calisthenics. Category values in use:
-Weights / Calisthenics / Cardio / Yoga. Primary-muscle values: Abs, Arms,
-Back, Cardio, Chest, Full Body, Legs, Recovery, Shoulders. Equipment is a
-free string; `"Dumbbells"` is used by 8 entries.
-
-**Template** — `DEFAULT_TEMPLATES`, `WorkoutContext.jsx:172-270`:
-
-```
-{ id: 'powerhouse', name: 'The Powerhouse',
-  exercises: [ 'wt_deadlift', ... ],   // bare id, OR
-               { id, sets: N },        // set count, OR
-               { id, sets: [ { targetReps, weight }, ... ] } ],  // per-set
-  sets: 3, equipmentTier: 'full_gym', estimatedDuration: 55 }
-```
-
-Per-exercise rep schemes are therefore expressible without any schema
-change (`startWorkoutFromTemplate`, `:1477-1512`). For a duration-based
-exercise, `targetReps` is read as seconds (`GuidedWorkoutView.jsx:263`).
-
-**Illustration** — `public/illustrations/<id>.jpg`, **1400×700**, and every
-surface renders through the single `ExerciseIllustration.jsx` component.
-`docs/skills/exercise-visual-contract.md` governs the contract.
-
-### House illustration style (from viewing `cal_v_up.jpg`, `wt_lunge.jpg`)
-
-- Landscape triptych: three equal vertical panels, thin dark dividers.
-- Pure black studio background; dark rubber gym mat beneath the subject.
-- One photorealistic athletic man, same person in every image: short dark
-  hair, trimmed beard, fitted black t-shirt, black shorts, black trainers
-  with white soles (black socks, no shoes, for floor work).
-- Soft directional studio light from the side; subject shown side-on or
-  three-quarter; consistent camera height across panels.
-- Each panel is one phase of the movement, labelled bottom-centre in white
-  uppercase sans-serif: e.g. START / RISE / TOP, START / STEP / BOTTOM.
-- Equipment rendered as black hex dumbbells.
+**House style** (from `cal_v_up.jpg`, `wt_lunge.jpg`): three-panel triptych,
+black studio, dark mat, one athletic man in black t-shirt and shorts, one
+movement phase per panel, white uppercase label bottom-centre, black hex
+dumbbells. The two references **differ** in the model's hair and in divider
+colour (dark vs bright white) — "same person, same dividers" is not
+actually true today. See §7 Q6.
 
 ## 3. The workout, as read from the frames
 
-| # | Time | On-screen | Overlay label | What the frames show | Library status |
+| # | Time | On-screen | Overlay | Movement (two independent reads reconciled) | Status |
 |---|---|---|---|---|---|
-| 1 | 0:01–0:05 | 4 × 10-12 (5-6 each side) | Dumbbell Thruster | Dumbbells racked at shoulders, front squat, drive up and press **one** dumbbell overhead; alternate sides each rep | **New** |
-| 2 | 0:06–0:09 | 4 × 6-10 | Gorilla Rows | Wide stance, deep hinge, both dumbbells on the floor; row one dumbbell to the hip while the other stays planted; alternate | **New** — existing Single Arm Row is bench-supported, a different movement |
-| 3 | 0:10–0:15 | 4 × 8-10 | *(none)* | Hinge with dumbbells at shins → clean to shoulders → front squat → stand → lower and repeat | **New — identification uncertain.** Best read: *Dumbbell Squat Clean* (clean-to-front-squat complex). Owner to confirm |
-| 4 | 0:16–0:18 | 4 × 20 | V-Up | V-up holding **one dumbbell in both hands**, touching it to the feet at the top | **Exists** as `cal_v_up` (bodyweight). See §7 Q2 |
-| 5 | 0:19–0:24 | 4 × 8-10 | *(none)* | Push-up with hands on dumbbells → feet hop in → stand with dumbbells → alternating reverse lunge → back to the floor | **New — identification uncertain.** Best read: *Dumbbell Push-up to Reverse Lunge* (a Man Maker variant without the row and press). Owner to confirm |
-| 6 | 0:25–0:28 | 4 × 30 secs | *(none)* | Both dumbbells locked out overhead, wide stance, isometric hold | **New**, `isDurationBased` |
+| 1 | 0:01–0:05 | 4 × 10-12 (5-6 each side) | Dumbbell Thruster | Dumbbells racked, front squat, drive up into a **single-arm** overhead press with a visible torso pivot; alternate sides | New. Name and cue must say *alternating* |
+| 2 | 0:06–0:09 | 4 × 6-10 | Gorilla Rows | Wide stance, deep hinge, low alternating single-dumbbell rows | New. Do **not** cue "other dumbbell stays planted" — frame 8 shows both off the floor |
+| 3 | 0:10–0:15 | 4 × 8-10 | — | Hinge to shin level → dumbbells travel to shoulders → front squat → stand → lower | **New — uncertain.** Reads: *squat clean* (momentum) vs *RDL-curl-squat* (curl path, elbows tucked in frames 12/16). Stills cannot settle it |
+| 4 | 0:16–0:18 | 4 × 20 | V-Up | V-up holding one dumbbell in both hands; **knees bend at the top**, dumbbell lowers to the **upper chest**, not behind the head as in `cal_v_up.jpg` | Exists as bodyweight `cal_v_up`; §7 Q2 |
+| 5 | 0:19–0:24 | 4 × 8-10 | — | Push-up on the dumbbells → feet in → stand → lunge left → stand → lunge right → dumbbells back to the floor. **One push-up + two lunges = one rep.** Direction (reverse vs forward) not fully shown | **New — sequence agreed by both reads; name and direction to confirm** |
+| 6 | 0:25–0:28 | 4 × 30 secs | — | Overhead dumbbell support, wide flexed-knee stance, for a timed segment. Elbows and knees visibly flexed across the three frames — a static locked-out hold is **not** established | **New — uncertain, and DEFERRED** (§5) |
 
-Two identifications are flagged uncertain because the video gives no label
-for them and the movements are compound. Everything else is read directly
-from on-screen text or the Fitbod label.
+Also present: "Save for Later" text on the last two frames; adjustable
+round-ended dumbbells in the title shot only. Neither is content.
 
-## 4. Proposed additions
+## 4. Proposed additions (revision 2)
 
-Five new exercises (ids provisional; `wt_` because all are dumbbell work):
+Five exercises, all `category: "Weights"`, `equipment: "Dumbbells"`:
 
-| id | name | primary_muscle | flags |
-|---|---|---|---|
-| `wt_db_thruster` | Dumbbell Thruster | Full Body | — |
-| `wt_gorilla_row` | Gorilla Row | Back | — |
-| `wt_db_squat_clean` | Dumbbell Squat Clean | Full Body | — |
-| `wt_pushup_lunge` | Dumbbell Push-up to Reverse Lunge | Full Body | — |
-| `wt_overhead_hold` | Overhead Dumbbell Hold | Shoulders | `isDurationBased` |
+| id | name (provisional) | primary_muscle |
+|---|---|---|
+| `wt_db_thruster_alt` | Alternating Dumbbell Thruster | Full Body |
+| `wt_gorilla_row` | Gorilla Row | Back |
+| `wt_db_clean_squat` | *(pending #3 confirmation)* | Full Body |
+| `wt_v_up` | Weighted V-Up | Abs |
+| `wt_pushup_lunge` | Dumbbell Push-up to Lunge *(pending #5 direction)* | Full Body |
 
-Plus, depending on §7 Q2, `wt_v_up` "Weighted V-Up" (Abs).
-
-All `category: "Weights"`, `equipment: "Dumbbells"`, one-sentence imperative
-`instructions` in the existing voice, `illustration` at
-`/illustrations/<id>.jpg`.
-
-One new template:
+One template:
 
 ```
 { id: 'dumbbell_full_body', name: 'Dumbbell Full Body',
   exercises: [
-    { id: 'wt_db_thruster',    sets: [ {targetReps: 12}, ×4 ] },
-    { id: 'wt_gorilla_row',    sets: [ {targetReps: 10}, ×4 ] },
-    { id: 'wt_db_squat_clean', sets: [ {targetReps: 10}, ×4 ] },
-    { id: <v-up id>,           sets: [ {targetReps: 20}, ×4 ] },
-    { id: 'wt_pushup_lunge',   sets: [ {targetReps: 10}, ×4 ] },
-    { id: 'wt_overhead_hold',  sets: [ {targetReps: 30}, ×4 ] }   // seconds
+    { id: 'wt_db_thruster_alt', sets: [ {targetReps: 12}, ×4 ] },
+    { id: 'wt_gorilla_row',     sets: [ {targetReps: 10}, ×4 ] },
+    { id: 'wt_db_clean_squat',  sets: [ {targetReps: 10}, ×4 ] },
+    { id: 'wt_v_up',            sets: [ {targetReps: 20}, ×4 ] },
+    { id: 'wt_pushup_lunge',    sets: [ {targetReps: 10}, ×4 ] }
   ],
-  sets: 4, equipmentTier: <see Q4>, estimatedDuration: 40 }
+  sets: 4, estimatedDuration: 35 }
 ```
 
-Rep targets take the top of each on-screen range. Weight left unset so the
-app's smart-load from history applies (§7 Q3).
+- Rep targets are the top of each on-screen range. Weight unset; note that
+  smart-load matches **exact exercise id** (`:1408`), so brand-new ids have
+  no history and preparation will require a weight to be typed on first use
+  (`ExerciseResult.jsx:34-45`). That is expected, and is in §6.
+- `equipmentTier` omitted — it is inert, and `'dumbbells_only'` would be a
+  new invented value.
+- Provenance recorded in this spec and the commit message, **not** in a UI
+  field: `TemplateSelector.jsx:43-45` renders name and count only, so a
+  `source` field would be invisible without UI work (§7 Q4).
+- Five illustrations, generated in the house style (§7 Q5, Q6).
 
-Six illustrations to generate in the house style, one per new exercise.
+## 5. Why the overhead hold is deferred
 
-## 5. Verification plan
+Changing the per-set key from `targetReps` to `targetTime` fixes the timer
+(`GuidedWorkoutView.jsx:245`) and nothing else. Verified across the app:
 
-- `DEFAULT_EXERCISES` count and `public/illustrations/` file count both
-  increase by the same number; every new `illustration` path resolves to a
-  file (the visual-contract check).
-- `npm run dev`, then a Python Playwright script (installed: 1.49.1 with
-  Chromium) screenshots the library entry, the template card, the
-  preparation screen, and the guided view for the hold — proving the
-  duration path renders seconds, not reps.
-- Start the template, confirm six exercises load with the right set counts.
-- Deploy poll via `scripts/poll_deploy.sh`, then the same screenshots on the
-  live URL.
-
-## 6. Risks
-
-| Risk | Mitigation |
+| Surface | What a loaded 30-second hold does today |
 |---|---|
-| A generated illustration drifts from the house style and the library looks inconsistent | Side-by-side check against two existing images before commit; regenerate rather than accept |
-| Wrong identification of #3 or #5 gets a wrong name and illustration into the library | Owner confirms §3 before any image is generated |
-| `isDurationBased` + template `targetReps` semantics are inferred from one line of the guided view | Verify on dev before commit (§5) |
-| `WorkoutContext.jsx` is 2972 lines and single-writer | Two contiguous insertions only; no other terminal on the file |
+| Preparation (`ExerciseResult.jsx:59,91-95`) | column is REPS; `targetTime` not editable |
+| Guided target pill (`GuidedWorkoutView.jsx:464-467`) | with no rep target shows **"8 REPS"** |
+| Completion modal (`:263,668`) | prefills reps; no actual-seconds input |
+| Summary (`WorkoutSummary.jsx:59,137`) | volume = weight × reps; PRs labelled "× N reps" |
+| Analytics (`Analytics.jsx:79,86`) | estimated 1RM from weight and reps |
+| PR engine (`WorkoutContext.jsx:1884-1930`) | no duration exclusion |
+| Progression (`:1585`) | duration inferred from *absence* of `targetReps`, not the flag |
+| Coach catalogue (`CoachView.jsx:187-201`) | omits `isDurationBased`/`default_duration`; backend accepts reps or seconds without enforcing either |
+
+The nineteen existing timed exercises survive this because every one is
+bodyweight, and a separate bodyweight guard shields them from progression
+and makes their volume meaningless-but-harmless. **A dumbbell hold is the
+first timed exercise with an external load, and nothing shields it.** It
+would produce false volume, a false estimated 1RM, false PRs, and a
+weight-increase recommendation from a 30-second static hold — into the
+owner's history.
+
+Fixing that properly means a "timed loaded exercise" contract across prep,
+guided, completion, summary, analytics, PR, progression, and coach — eight
+surfaces, user-data computations, HIGH zone by the rules. That is real work
+and worth doing, but it is not a content addition and must not ride in on
+one. **Recommendation: ship five exercises now; log the hold and the
+contract as their own backlog item.** Alternative in §7 Q3.
+
+## 6. Verification
+
+- Counts: exercises 73 → 78; illustration files 73 → 78; every new
+  `illustration` path resolves (visual-contract check).
+- `npm run build` and lint pass in the worktree (node_modules via junction
+  from the main checkout, read-only build).
+- Playwright driving installed Chrome (`channel="chrome"`; the bundled
+  browser is a version mismatch and is not used) against `npm run dev` on
+  a clean profile: screenshot each of the five library entries, the
+  template card, the preparation screen showing five exercises × four sets
+  with rep targets filled and weight empty, and one guided-view start.
+  Desktop and 375 px. Console clean.
+- Start the template, type a first-use weight, complete one set of the
+  V-up, confirm the summary shows weight × reps for it — proving the
+  weighted variant is tracked where the bodyweight one would not be.
+- Deploy via `scripts/poll_deploy.sh`; repeat the library and template
+  screenshots on the live URL.
+- No live writes to the owner's account; the dev-server profile is
+  disposable.
 
 ## 7. Decisions
 
-1. **Confirm or correct #3 and #5.** Watching the video yourself takes 30
-   seconds and settles both.
-2. **The weighted V-up.** Reuse `cal_v_up` and lose the dumbbell (its
-   bodyweight flag suppresses weight tracking), or add `wt_v_up` "Weighted
-   V-Up" as a distinct exercise? **Recommend the new variant** — it is a
-   genuinely different exercise and the flag makes reuse lossy.
-3. **Preload 25 lb** from the creator's log, or leave weight unset and let
-   smart-load use your own history? **Recommend unset.**
-4. **Equipment tier** for a dumbbells-only template — see the value list
-   the plan review will confirm.
-5. **Credit the source?** A `source` field or a line in the template
-   description naming the creator costs nothing and is honest; the owner
-   said no creator imagery, which this respects. Recommend yes, text only.
-6. **Who generates the illustrations.** Previous ones came from an AI image
-   model driven by the owner. The plan review will establish whether the
-   Codex reviewer can generate them directly; if not, this spec's §2 style
-   block is the prompt for the owner to run.
+1. **#3 — which movement is it?** Squat clean (explosive, momentum) or
+   hinge-curl-squat (controlled curl to the shoulders)? Name and
+   instructions follow from this. Watch 0:10–0:15.
+2. **#5 — lunge direction**, reverse or forward? Watch 0:19–0:24. The
+   "one push-up + two lunges = one rep" definition is proposed as fact for
+   the instructions text.
+3. **Defer the hold** (recommended), or hold the whole template until the
+   timed-loaded contract is built? If deferred, the template ships with
+   five exercises and a note.
+4. **Source credit** — docs and commit message only (recommended), or spec
+   a visible UI field as separate work?
+5. **Who generates the five illustrations.** The reviewer confirmed it has
+   an image-generation tool available and would use the existing local
+   illustrations as style references with text-only movement descriptions —
+   no creator frames in the generator input. Exact 1400×700 output is not
+   guaranteed by the tool and would be verified and resized. Alternatively
+   the owner generates them as before, from a prompt this spec supplies.
+6. **Reference appearance.** The existing set is not perfectly consistent.
+   Pick **one** existing image as the appearance and divider reference for
+   all five new ones — `wt_lunge.jpg` (standing, white dividers) is the
+   natural choice since four of five are standing dumbbell movements.
+7. **Weighted V-Up as a new exercise** — confirm. Reusing `cal_v_up` is
+   lossy: preparation derives bodyweight from category and equipment
+   (`ExerciseResult.jsx:16`) and disables the weight input (`:73-80`), so
+   the dumbbell could never be entered.
 
 ## 8. Not in scope
 
-Video or animated illustrations (owner: lower priority, separate
-investigation). Other videos. Any change to how exercises or templates are
-stored.
+The timed-loaded-exercise contract (deferred, §5). Video or animated
+illustrations. Further videos. Any change to storage or sync.
+
+## 9. Provenance
+
+Frames read independently by the Claude session and by the Codex reviewer
+(Traycer agent `6554b7a8-2a8a-48e1-90fc-712cc438aa64`, read-only, own
+worktree on `codex/review-s30-tiktok-exercises`) before comparing. The
+reviewer's transcript is the review artifact. Its plan review returned
+CHANGES-REQUIRED; every finding accepted here was re-verified against
+source by the author first.
