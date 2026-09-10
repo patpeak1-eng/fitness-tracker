@@ -412,6 +412,7 @@ not a proof — it is the input to the coordinator's independent verification.
 TASK COMPLETE — [Task Name]
 Files modified:      [list with line delta]
 ARCHITECTURE.md:     [updated — <what changed>  |  no architectural change this task]
+Coach knowledge:     [updated — <what changed>  |  no user-visible feature change]
 Zero regressions:    [CONFIRMED / issues found]
 Verification method: [how it was checked — build, lint, endpoint probe, railway deployment list, disposable account]
 Commit SHA:          [sha]

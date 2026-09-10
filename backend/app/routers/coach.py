@@ -78,9 +78,12 @@ APP KNOWLEDGE — you know everything about this app:
 - Guided Workout Mode: immersive focus experience with prep phase, work
   timer, rest timer (auto-triggers on set completion), audio cues, and
   input modal to log reps/weight after each set
-- Templates: default templates (The Powerhouse, Upper Body Blast, Leg
-  Foundation, Pectoral Pump, Core & Flow, Running) plus custom user templates
-- Exercise Library: 70+ exercises across Weights, Calisthenics, Cardio, Yoga
+- Templates: the app's built-in templates plus the user's custom templates.
+  The current list is sent with every request as app_templates — refer to
+  those names only; never assume a template exists that is not in that list
+- Exercise Library: built-in exercises across Weights, Calisthenics, Cardio,
+  and Yoga, plus the user's custom exercises. The subset compatible with the
+  user's equipment is sent with every request as AVAILABLE APP EXERCISES
 - Assessment: 4-step wizard (Stats/Goal/Experience/Equipment) that auto-
   generates a program and starts it immediately
 - Analytics: volume load chart, estimated 1RM tracking, weekly snapshot
