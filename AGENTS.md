@@ -317,6 +317,16 @@ the completion report carries a **required** `ARCHITECTURE.md:` line, so
 "I forgot" is not an available answer. There is no CI doc-sync gate in this
 repo; the required field is the whole enforcement.
 
+**Documentation that lives inside code counts too.** The Coach's system
+prompt (`COACH_SYSTEM_PROMPT`, APP KNOWLEDGE block, in
+`backend/app/routers/coach.py`) describes the app to the model in prose. It
+drifted the same way the architecture doc did — it listed templates by name
+and an exercise count. Any change that adds, removes, or renames a feature
+the Coach could be asked about updates that block in the same commit, and
+the completion report's `Coach knowledge:` line says so. Prefer pointing the
+model at data it already receives (`app_templates`, `available_exercises`)
+over restating facts that will go stale.
+
 ## SKILL_CAPTURE_RULE
 
 A session that produces a reusable pattern writes it to `docs/skills/` as
@@ -412,7 +422,7 @@ not a proof — it is the input to the coordinator's independent verification.
 TASK COMPLETE — [Task Name]
 Files modified:      [list with line delta]
 ARCHITECTURE.md:     [updated — <what changed>  |  no architectural change this task]
-Coach knowledge:     [updated — <what changed>  |  no user-visible feature change]
+Coach knowledge:     [updated — <what changed>  |  no coach-relevant change]
 Zero regressions:    [CONFIRMED / issues found]
 Verification method: [how it was checked — build, lint, endpoint probe, railway deployment list, disposable account]
 Commit SHA:          [sha]
