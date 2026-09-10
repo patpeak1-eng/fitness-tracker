@@ -120,7 +120,13 @@ const DEFAULT_EXERCISES = [
     { "id": "yoga_boat", "name": "Boat Pose", "category": "Yoga", "primary_muscle": "Abs", "isDurationBased": true, "instructions": "Balance on your sit bones with legs lifted and arms extended forward, forming a 'V' shape.", "illustration": "/illustrations/yoga_boat.jpg" },
     { "id": "yoga_child", "name": "Child's Pose", "category": "Yoga", "primary_muscle": "Recovery", "isDurationBased": true, "instructions": "Kneel and sit on your heels, then fold forward and rest your forehead on the floor.", "illustration": "/illustrations/yoga_child.jpg" },
     { "id": "yoga_corpse", "name": "Corpse Pose", "category": "Yoga", "primary_muscle": "Recovery", "isDurationBased": true, "instructions": "Lie flat on your back, palms up, and focus on deep breathing and total body relaxation.", "illustration": "/illustrations/yoga_corpse.jpg" },
-    { "id": "yoga_triangle", "name": "Triangle Pose", "category": "Yoga", "primary_muscle": "Legs", "isDurationBased": true, "instructions": "With legs wide, reach one hand toward your foot while extending the other hand toward the ceiling.", "illustration": "/illustrations/yoga_triangle.jpg" }
+    { "id": "yoga_triangle", "name": "Triangle Pose", "category": "Yoga", "primary_muscle": "Legs", "isDurationBased": true, "instructions": "With legs wide, reach one hand toward your foot while extending the other hand toward the ceiling.", "illustration": "/illustrations/yoga_triangle.jpg" },
+    { "id": "wt_db_thruster_alt", "name": "Alternating Dumbbell Thruster", "category": "Weights", "primary_muscle": "Full Body", "equipment": "Dumbbells", "instructions": "Front squat with the dumbbells racked at your shoulders, then drive up and press one dumbbell overhead, alternating arms each rep.", "illustration": "/illustrations/wt_db_thruster_alt.jpg" },
+    { "id": "wt_gorilla_row", "name": "Gorilla Row", "category": "Weights", "primary_muscle": "Back", "equipment": "Dumbbells", "instructions": "Take a wide stance, hinge at the hips with a flat back, and row one dumbbell to your hip while the other stays low, alternating sides.", "illustration": "/illustrations/wt_gorilla_row.jpg" },
+    { "id": "wt_db_squat_clean", "name": "Dumbbell Squat Clean", "category": "Weights", "primary_muscle": "Full Body", "equipment": "Dumbbells", "instructions": "Hinge to bring the dumbbells to shin height, pull them explosively to your shoulders as you drop into a front squat, then stand tall.", "illustration": "/illustrations/wt_db_squat_clean.jpg" },
+    { "id": "wt_v_up", "name": "Weighted V-Up", "category": "Weights", "primary_muscle": "Abs", "equipment": "Dumbbells", "instructions": "Lie flat holding one dumbbell at your chest, then lift your legs and torso together into a V, reaching the dumbbell toward your shins.", "illustration": "/illustrations/wt_v_up.jpg" },
+    { "id": "wt_pushup_lunge", "name": "Dumbbell Push-up to Reverse Lunge", "category": "Weights", "primary_muscle": "Full Body", "equipment": "Dumbbells", "instructions": "Do a push-up gripping the dumbbells, step up to standing, lunge back on each leg, then return to the floor; one full cycle is one rep.", "illustration": "/illustrations/wt_pushup_lunge.jpg" },
+    { "id": "wt_db_jack_press", "name": "Dumbbell Jumping Jack Press", "category": "Weights", "primary_muscle": "Shoulders", "equipment": "Dumbbells", "instructions": "Start with the dumbbells racked and feet together, then jump your feet wide as you press both dumbbells overhead, and jump back in as you lower.", "illustration": "/illustrations/wt_db_jack_press.jpg" }
 ];
 
 const DEFAULT_EQUIPMENT_PROFILES = [
@@ -217,6 +223,22 @@ const DEFAULT_TEMPLATES = [
         sets: 1,
         equipmentTier: 'bodyweight_only',
         estimatedDuration: 30
+    },
+    {
+        // S30 — six video-sourced dumbbell movements. Rep targets are the top of
+        // each prescribed range; weight is left unset so first use asks for it.
+        id: 'dumbbell_full_body',
+        name: 'Dumbbell Full Body',
+        exercises: [
+            { id: 'wt_db_thruster_alt', sets: [{ targetReps: 12 }, { targetReps: 12 }, { targetReps: 12 }, { targetReps: 12 }] },
+            { id: 'wt_gorilla_row', sets: [{ targetReps: 10 }, { targetReps: 10 }, { targetReps: 10 }, { targetReps: 10 }] },
+            { id: 'wt_db_squat_clean', sets: [{ targetReps: 10 }, { targetReps: 10 }, { targetReps: 10 }, { targetReps: 10 }] },
+            { id: 'wt_v_up', sets: [{ targetReps: 20 }, { targetReps: 20 }, { targetReps: 20 }, { targetReps: 20 }] },
+            { id: 'wt_pushup_lunge', sets: [{ targetReps: 10 }, { targetReps: 10 }, { targetReps: 10 }, { targetReps: 10 }] },
+            { id: 'wt_db_jack_press', sets: [{ targetReps: 20 }, { targetReps: 20 }, { targetReps: 20 }, { targetReps: 20 }] }
+        ],
+        sets: 4,
+        estimatedDuration: 40
     }
 ];
 

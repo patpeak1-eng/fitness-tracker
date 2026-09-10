@@ -124,8 +124,8 @@ Provider nesting (App.jsx): `BrowserRouter > ErrorBoundary > WorkoutProvider > T
 
 ```
 Shared/global data:
-  exercises        — DEFAULT_EXERCISES (73 built-in) + custom, per-profile
-  templates        — DEFAULT_TEMPLATES (6 built-in) + custom, per-profile
+  exercises        — DEFAULT_EXERCISES (79 built-in) + custom, per-profile
+  templates        — DEFAULT_TEMPLATES (7 built-in) + custom, per-profile
 
 Profile state:
   profiles         — array of all local profiles
@@ -404,7 +404,8 @@ Cloud/authenticated profiles additionally carry an `email` field — this is wha
 }
 ```
 
-73 built-in exercises. ID prefix indicates category: `wt_` (weights), `cal_` (calisthenics), `yoga_`, `cardio_`.
+79 built-in exercises. ID prefix indicates category: `wt_` (weights), `cal_` (calisthenics), `yoga_`, `cardio_`.
+Six were added in S30 from a short workout video (`docs/tiktok_exercises_spec_s30.md`): all `Weights` / `Dumbbells`, rep-based, with illustrations generated in the house style (per-panel phase labels, no title; `wt_lunge.jpg` is the appearance reference). A built-in template entry may carry per-set targets — `{ id, sets: [{ targetReps }] }` — and `dumbbell_full_body` is the first built-in to use that form. A timed set with an external load is **not** supported end to end (preparation, summary, analytics, PR, and progression all assume reps); see that spec §5 before adding one.
 
 ### 5.3 Template Object ✅ VERIFIED
 
