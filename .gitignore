@@ -13,3 +13,5 @@ backup workout files/
 fitness_data.json
 *.zip
 *.bat
+__pycache__/
+*.pyc
