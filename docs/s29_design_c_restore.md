@@ -1,4 +1,27 @@
-# S29 Design C — Backup restore transaction (revision 3)
+# S29 Design C — Backup restore transaction (revision 4)
+
+> **Revision 4 (2026-09-11) — three corrections from the adversarial pass.**
+> 1. **The destination mapping could collapse data.** Revision 3 sent a
+>    whole backup to one `restored_<hash>` namespace while promoting the
+>    profiles list and selection verbatim. A backup containing **two**
+>    source scopes with history would have merged them into one target.
+>    §3a now defines an **injective source→target map**, rewrites list and
+>    selection ids through it, keeps conflicting raw representations, and
+>    checks each target for freshness against discovered keys *and*
+>    bindings under the lock — the deterministic name could already exist,
+>    and Design A can transfer an unbound scope on a later login.
+> 2. **The journal narrowed crashes but not quota failure or other tabs.**
+>    Staging can fit while the promoted set does not, so a live-write
+>    failure could replay forever; and `paused` is one tab's in-memory
+>    state, so a second tab could write during the commit. §3 now keeps
+>    rollback values, reserves capacity, and puts a **durable barrier key**
+>    plus the shared `fitness-sync` lock in front of hydration, mutation,
+>    and dispatch in *every* tab.
+> 3. **A same-snapshot re-import could not be detected** once the journal
+>    was deleted, so it could hit an already-bound destination. §3b adds a
+>    durable receipt. Trusted replacement now revalidates its captured
+>    account, scope, and generation at commit, exactly as Design A's
+>    transfer does.
 
 > C0 design document. No code. Consumes Design A revision 3's state and
 > events; uses Design B revision 3's hold format. Anchored to `59eb7a8`.
@@ -85,6 +108,38 @@ A durable journal at `fx_journal_<snapshotHash>` records
    `/me` and no pull.** Selection changes only as §2 allows, and Design A
    §5 re-derives status; the two documents now agree.
 
+## 3a. Destination mapping (injective)
+
+A backup may contain many source scopes. The transaction builds a map
+`sourceScopeId → targetScopeId`, one target per source, never shared:
+
+- Each target is `restored_<snapshotHash>_<sourceShort>`, and each is
+  checked for freshness under the shared lock against discovered storage
+  keys **and** the bindings store. A collision re-rolls the suffix.
+- Legacy-form keys (`base_uid`, `StorageService.js:92`) and modern-form
+  keys (`:91`) for the same source resolve to the same target; where both
+  exist and disagree, both are preserved — the modern form is promoted and
+  the legacy one is quarantined verbatim rather than silently dropped.
+- Global (non-scoped) data keys belong to no source scope and are
+  quarantined unless the user chose trusted replacement.
+- The profiles list and `currentProfileId` are **rewritten through the
+  map**: entries whose scope has a target are promoted with the target id;
+  entries with no mapped data are dropped from the list and recorded in
+  the receipt. This is why the list can no longer be promoted "verbatim".
+- **Trusted replacement targets exactly one source scope**, chosen by the
+  user, never an implicit merge of everything in the backup. Its captured
+  `(account, scope, generation)` are revalidated under the lock at commit,
+  and a mismatch aborts.
+
+## 3b. Durable receipt
+
+`fx_receipt_<snapshotHash>` is written in the same step that marks the
+journal `committed` and is **never deleted**: `{ snapshotHash, targets,
+committedAt, listRewrites, droppedEntries }`. A re-import of the same file
+is detected from the receipt after the journal is gone, and is a no-op
+with a message rather than a second promotion into a now-bound
+destination.
+
 **Boot recovery.** A journal in `phase: 'committing'` means a crash
 mid-write: staging still exists, so re-apply every `targetKey` from
 staging and finish the phases. `'staged'` means nothing was written:
@@ -94,6 +149,25 @@ remained. Recovery runs before any dispatch.
 **Peak storage** is live data **plus** staging **plus** the promoted set
 **plus** hold and quarantine — not "twice the incoming set". If staging
 cannot be written, the restore does not start.
+
+**Quota during the live writes, and rollback.** Staging fitting does not
+mean the promoted set fits alongside live data. Before entering
+`committing` the transaction **reserves capacity** by writing and deleting
+a probe of the promoted set's size, and it records the **previous value of
+every target key** in the journal. A live-write failure therefore rolls
+back from the journal instead of replaying forever; if rollback itself
+cannot complete, the barrier (below) stays set and the app opens in a
+read-only recovery mode rather than showing partial state as if it were
+real.
+
+**Every tab, not just this one.** `A.state.paused` is in-memory and local.
+The transaction additionally sets a **durable barrier key**
+(`fx_barrier`) and holds the shared `fitness-sync` lock (Design B §7).
+Every tab checks the barrier **before hydration, before any mutation, and
+before dispatch** — so a second tab cannot write into a half-committed
+device. The barrier is cleared only by `committed` or by a completed
+rollback; a crash leaves it set, and boot recovery runs **before** normal
+hydration.
 
 ## 4. Export
 

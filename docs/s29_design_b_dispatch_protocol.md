@@ -1,226 +1,231 @@
-# S29 Design B — Durable dispatch protocol (revision 3)
+# S29 Design B — Durable dispatch protocol (revision 4)
 
-> C0 design document. No code. Companion to the spec §6 item 6 and §3.2;
-> consumes Design A revision 3's state object. Anchored to `59eb7a8`.
+> C0 design document. No code. Consumes Design A revision 4's state.
+> Anchored to `6059452`.
 >
-> **Revision 3 (2026-09-11) — from the Codex adversarial pass, all four
-> findings verified in source before adoption:**
-> - Dedupe and acknowledgement were still keyed by `type:key`, which is
->   literally the existing op id (`SyncQueue.js:77,79`), so two accounts'
->   settings ops overwrite each other *before* any ownership check runs.
->   The owner gate cannot save an op that has already been deleted.
-> - Aborted requests were returned to `pending`, contradicting this
->   document's own ambiguity rule: an abort does not undo a commit the
->   server already made.
-> - Ops were sent **before** being persisted, so a crash could leave
->   neither a queue entry nor a hold entry.
-> - "Compare-and-remove is never lossy" was false: the old tab can write
->   between the final read and the removal.
-> Also fixed: coach chat was inventoried but unclassified; "PUT/DELETE are
-> idempotent by target" ignored stale ordering (an old active-workout
-> DELETE can erase a newer save).
+> **Revision 4 (2026-09-11) — the adversarial pass found that client-side
+> ordering cannot fix an already-sent stale mutation, and it is right.**
+> `backend/app/routers/workouts.py:133-141` is
+> `delete(ActiveWorkout).where(ActiveWorkout.user_id == current_user.id)` —
+> no version, no precondition, nothing to reject a late request with. A
+> DELETE that reached the server and stalled will erase whatever is there
+> when it finally executes, including a workout saved after it. Aborting
+> locally does not cancel server work, and a Web Lock dies with its tab.
+> **This requires a server-side fence** (§6), which is new backend scope.
+> Also fixed: unconditional replacement destroyed ambiguity evidence;
+> "supersedes" was never defined and was wrong for partial updates;
+> admission was unspecified for four of the six auth states; hold growth
+> was unbounded; and deferred producers read state after the user's action
+> rather than at it.
 
-## 1. Today (anchored, unchanged)
+## 1. Two record kinds (this is the revision-4 shape change)
 
-`fitness_sync_queue` (`SyncQueue.js:15`); dead letter `:19-20` (cap 20);
-`persistQueue` swallows quota failure `:31-36`; `enqueue` `:76-88` filters
-by `op.type === type && op.key === key` and sets **`id: \`${type}:${key}\`**
-— identity and dedupe are the same tuple, with no owner in it; `flush`
-`:105-151` sends with current credentials and removes by id after the
-await `:117-120`; non-401 4xx is dead-lettered `:131-137`. Triggers:
-`init` boot/online/visible `:154-162`; `WorkoutContext.jsx:413`, `:555`,
-`:1097`, `:2339`, `:2373`; manual `SyncStatusBadge.jsx:45`.
+Revision 3 had one record that was both "what the user wants" and "what we
+tried", and replaced it wholesale on the next edit — which discarded the
+evidence that an earlier create might already be on the server.
 
-Complete write inventory (unchanged from revision 2, re-verified): the ten
-queued executors `WorkoutContext.jsx:344-411`; every producer's direct
-call; the backfill `:1008-1097` (reconciles weights by `recorded_at`,
-assessments by `assessment_data.id`, `:1036-1093`); `syncToApi`
-(`:1148-1154` → `StorageService.js:429-457`, history save plus active
-workout **PUT or DELETE**); `Profile.jsx:99-101`; `WorkoutContext.jsx:2469`
-`deleteCustomTemplate`; `CoachView.jsx:518` coach chat; `Settings.jsx:203`
-account deletion; pull completion `:578-`, guarded only by scope at `:698`.
-
-Server idempotency exists only on `workout_history` and `food_log`
-(`models.py:138,145,253-259`).
-
-## 2. Storage
-
-`fitness_sync_queue_v2` (active) — each record:
+**Desired state** (`fitness_sync_desired_v1`) — replaceable:
 
 ```
-{ id,                       // uuid, NOT derived from type:key
-  dedupeKey,                // `${accountId|'-'}:${scopeId}:${type}:${key}`
-  revision,                 // per dedupeKey counter
-  resourceKey,              // `${family}:${resourceId}` for ordering (§5)
-  type, key, payload,
-  accountId, scopeId,       // ownership, stamped at mutation (§4)
-  producerVersion, createdAt,
-  attempts, lastError,
-  idempotencyKey,           // uuid; the server client_id where one exists
-  state }                   // 'pending' | 'inflight' | 'ambiguous'
+{ dedupeKey,            // `${accountId|'-'}:${scopeId}:${type}:${field}`
+  resourceKey,          // `${family}:${resourceId}` — owner-scoped
+  revision,             // per dedupeKey
+  type, field, key, payload,
+  accountId, scopeId, producerVersion, updatedAt }
 ```
 
-`fitness_sync_hold_v1` — `{ heldAt, reason, source, op }` with
-`reason ∈ 'legacy' | 'owner_mismatch' | 'ambiguous' | 'unowned'` and
-`source ∈ 'legacy_queue' | 'legacy_dead_letter' | 'restore' | 'v2'`.
+**Attempts** (`fitness_sync_attempts_v1`) — append-only, never replaced:
 
-Reserved prefixes excluded from discovery and from the scoped export,
-shared with A and C: `fitness_sync_`, `fitness_bindings_`, `fx_staging_`,
-`fx_quarantine_`, `fx_journal_`. **The hold is included in the full backup
-export and excluded from the recovery screen's scoped export** — matching
-Design C §4, which revision 2 contradicted.
+```
+{ attemptId,            // uuid
+  dedupeKey, resourceKey, revision,
+  idempotencyKey,       // the server client_id where one exists
+  startedAt, phase,     // 'persisted' | 'sent' | 'settled'
+  outcome }             // null | 'applied' | 'rejected' | 'ambiguous'
+```
 
-Every write is read-back verified; a quota failure or mismatch is reported
-(`syncPaused`) and leaves the caller's originals intact.
+An edit replaces desired state and leaves every attempt intact. An
+unresolved `ambiguous` attempt therefore survives edits, backfills, and
+restarts — which is what stops a duplicate create.
 
-## 3. Legacy migration — copy, never remove
+`fitness_sync_hold_v1` unchanged in shape; `reason ∈ 'legacy' |
+'owner_mismatch' | 'ambiguous' | 'unowned'`, `source ∈ 'legacy_queue' |
+'legacy_dead_letter' | 'restore' | 'v2'`.
 
-Revision 2 claimed compare-and-remove was safe. It is not: an old bundle's
-`enqueue` is a read-modify-write on the legacy key with no lock, so
-between the new tab's final read and its `removeItem` the old tab can
-write an op that removal then destroys.
+Reserved prefixes (shared with A and C): `fitness_sync_`,
+`fitness_bindings_`, `fx_staging_`, `fx_quarantine_`, `fx_journal_`.
 
-**The legacy keys are therefore never removed by the upgraded client.**
-Instead, on every boot, restore commit, and `storage` event:
+## 2. Supersession — defined per type, not assumed
 
-1. Read the legacy queue and dead letter.
-2. Append each entry not already present to the hold, keyed by a content
-   hash (`reason 'legacy'`, raw entry verbatim), and persist with
-   read-back verification. Re-running is a no-op for entries already held.
-3. Record the migrated hashes. Nothing is deleted.
+Revision 3 said a newer record "supersedes" an older one. That is false in
+two verified cases:
 
-The legacy keys are small and bounded; leaving them costs a few kilobytes
-and removes an entire class of race. They are deleted in stage 3, once no
-old bundle can still be running.
+- **Profile settings are partial.** `routers/profile.py:45-57` does
+  `model_dump(exclude_unset=True)` then `setattr` per field. A `theme`
+  update and a `units` update touch different columns; neither supersedes
+  the other. `dedupeKey` therefore includes **`field`**, not just `type`.
+- **An update cannot supersede an unsent create.** The `food_log_update`
+  executor (`WorkoutContext.jsx:395-407`) resolves a backend id and, when
+  there is none, **silently succeeds without writing anything**. Dropping
+  the create in favour of the update would lose the row entirely.
 
-Held legacy entries are labelled **"unconfirmed — may already have reached
-the server"**, never "unsent": an old tab iterating its own in-memory copy
-(`:112`) may have sent them. They are never auto-promoted.
+| Family | Supersedes an earlier unsent record? |
+|---|---|
+| `profile_settings` | only the **same field** |
+| `workout`, `food_log` (create) | never — server-keyed, both are real rows |
+| `weight`, `template`, `exercise`, `assessment` (create) | never |
+| `*_update`, `*_delete` | only a record for the **same resource id**, and only if that record is `persisted` and never sent |
+| active workout PUT/DELETE | same resource, never-sent only |
 
-## 4. Admission — persist before send
+Nothing that has reached `phase: 'sent'` is ever dropped by supersession.
 
-One path, `dispatch.mutate(type, key, payload, opts)`:
+## 3. Admission — all six auth states
 
-1. Stamp ownership from `A.state` **at the moment of the user's action**:
-   `accountId` is `A.state.principal` when `bindingStatus === 'trusted'`;
-   under `conflict` it is `A.state.scopeOwner` (or `null`), per Design A
-   §7 — never the currently signed-in account.
-2. **Persist the record as `pending`** with its `dedupeKey`, `revision`,
-   `resourceKey`, and `idempotencyKey`. Dedupe replaces any existing
-   record with the same `dedupeKey` and increments `revision`.
-3. Only then attempt the immediate send, marking the record `inflight`
-   with an attempt id.
-4. On success: acknowledge by **exact `id` + `revision`**, and only if
-   that record is still the newest for its `dedupeKey`.
-5. On a retryable failure: back to `pending`.
-6. On an ambiguous outcome (abort, network error after send, 5xx) or a
-   crash: the record is `ambiguous` (§5) — **not** `pending`.
+Ownership is captured **at the user's action**, not in an effect that runs
+later. Settings producers are effects (`WorkoutContext.jsx:1170-1185`), so
+the owner is passed **into** the effect from the action that caused it;
+reading `A.state` inside the effect is not mutation-time capture.
 
-A crash between 2 and 3 leaves a `pending` record that was never sent:
-safe. A crash after 3 leaves an `inflight` record, which boot recovery
-promotes to `ambiguous`, because the server may have committed.
+| `authState` / `bindingStatus` | Admission |
+|---|---|
+| `authenticated` + `trusted` | owned intent, `accountId = principal` |
+| `authenticated` + `conflict` | `accountId = A.state.scopeOwner` (may be `null`) |
+| `authenticated` + `unbound` | **no cloud intent**: local persistence only, `accountId = null` |
+| `expired` | local only, `accountId` = last trusted owner for that scope, else `null` |
+| `none` / `loggedOut` | local only, `accountId = null` |
 
-All nine inventory paths route through this in C4, including
-`syncToApi`'s active-workout DELETE, `deleteCustomTemplate`,
-`Profile.jsx`'s stats save, and coach chat. `canSyncToBackend` and every
-`currentProfile?.email` gate are replaced in C4 — Design C §2 explains
-why they cannot be replaced earlier.
+A `null` owner **never** manufactures an intent and never dispatches. It
+waits in the hold as `unowned` with an explicit user action to resolve it.
 
-## 5. Dispatch, ordering, and idempotency classes
+**One lifecycle for mismatches** (revision 3 said "hold" in one place and
+"wait then dispatch" in another): an op whose owner is not the current
+principal goes to the **hold** with `owner_mismatch`, and the recovery
+screen offers "send these when `<email>` signs in". Nothing dispatches
+automatically on an owner's return.
 
-**Durable precondition** (at dispatch and at every await boundary):
+## 4. Admission steps and crash behaviour (six, not five)
+
+1. Persist desired state. *Crash here: nothing was promised; the local
+   mutation is already in app storage and is reconstructed from it.*
+2. Append an attempt, `phase: 'persisted'`. *Crash: safe to retry.*
+3. Mark `phase: 'sent'` **and verify that write** before calling `fetch`.
+   *Crash before fetch: conservatively `ambiguous`. Crash after: the
+   server may or may not have committed.*
+4. Await the response. *Crash: `ambiguous`.*
+5. On success, write any `backendId` write-back (executors do this at
+   `WorkoutContext.jsx:347-384`) **and then** durably settle the attempt
+   `applied`. A crash between them re-reads as `ambiguous`, which is
+   correct — the write-back is what makes a later update addressable.
+6. On an explicit rejection known not to have applied (4xx that is not
+   403/409), settle `rejected` and return desired state to eligible.
+
+Boot recovery promotes every `sent`-but-unsettled attempt to `ambiguous`.
+**Exactly-once HTTP execution is not promised and is not claimed**;
+server-keyed types tolerate a second execution without duplicating a row.
+
+## 5. Dispatch gate
+
 `op.accountId === A.state.principal && op.scopeId === A.state.scopeId &&
 bindingStatus === 'trusted' && authState === 'authenticated' && !paused`.
-Owner mismatch → hold (`owner_mismatch`); `op.accountId === null` → hold
-(`unowned`); status not yet trusted → **stays queued** and drains when it
-becomes trusted (the generation is *not* part of this test — that was
-revision 1's bug, which meant nothing ever drained after a reload).
+Checked at dispatch and at every await boundary. Owner mismatch → hold;
+`null` owner → hold (`unowned`); not-yet-trusted → stays eligible and
+drains when it becomes trusted (never generation-gated — that was
+revision 1's bug). Generation gates in-flight work only.
 
-**In-flight only:** requests are created under generation N with
-`A.state.signal`; a bump aborts them and their completions are discarded.
+Triggers: `A.subscribe` on any transition into trusted + authenticated +
+not paused, plus online, visible, and the manual badge — **all** subject
+to the `crossTabSafe` guard in §7.
 
-**Resource ordering.** Each record carries `resourceKey`. Dispatch is
-serial per `resourceKey`, and a record is **dropped rather than sent** if
-a newer record exists for the same `resourceKey` and the newer one
-supersedes it. This is what stops a stale active-workout DELETE from
-erasing a workout saved after it — "PUT and DELETE are idempotent by
-target" is true in isolation and false against a newer mutation.
+## 6. Resource fencing — the part that needs the server
 
-**Idempotency classes — every type and direct path:**
+**Stated plainly: no client-side rule can make this safe.** Once a request
+is in flight, the client cannot recall it, and the server has no way to
+tell a stale one from a current one:
 
-| Class | Members | On ambiguity |
-|---|---|---|
-| Server-keyed, safe to retry | `workout`, `food_log` (unique `(user_id, client_id)`) | retry |
-| Target-idempotent **and** ordering-checked | `profile_settings`, `template_update`, `food_log_update`, `food_log_delete`, active-workout PUT/DELETE, `deleteCustomTemplate`, `saveProfile({stats})` | retry only if newest for its `resourceKey` |
-| **Not safe** — no server key | `weight`, `template`, `exercise`, `assessment` creates, **and coach chat** (`CoachView.jsx:518` appends a message; a blind resend duplicates a conversation turn) | hold `ambiguous`; offer the recovery screen's reconcile |
+- active workout DELETE: `workouts.py:133-141`, deletes by `user_id` only.
+- active workout PUT: `:96-127`, overwrites with no precondition.
 
-Reconcile uses fingerprints the backfill already computes
-(`:1036-1093`): weights by `recorded_at`, assessments by
-`assessment_data.id`, templates and exercises by name plus content, coach
-messages by timestamp plus text. **A server idempotency key alone does not
-establish ownership** — a legacy or restored held op is only ever resumed
-into the account the user names, never inferred from the key.
+Two changes, both stage-1 backend work and both new scope this revision
+introduces:
 
-**403 from `require_account_match`** → hold `owner_mismatch`, replacing
-the blanket 4xx dead-letter at `:131-137`.
+1. **A monotonic fence per resource.** `active_workout` gains
+   `client_seq BIGINT NOT NULL DEFAULT 0`. Every PUT and DELETE carries
+   the client's sequence for that resource; the server applies the change
+   only `WHERE client_seq < :incoming` and returns 409 otherwise. A late
+   DELETE with an old sequence is a no-op instead of data loss. Schema +
+   migration + both handlers + the client.
+2. **Until that ships, block the resource.** A resource with an
+   unresolved `ambiguous` attempt admits no further dispatch — local edits
+   continue, nothing is sent for that resource — and the recovery screen
+   shows "one change to your active workout is unconfirmed". A pull cannot
+   prove a still-running request has ended, so the block clears only on an
+   authoritative outcome or an explicit user action.
 
-**Triggers:** `A.subscribe` on any transition into trusted + authenticated
-+ not paused (replacing the post-`/me` and post-backfill flushes), plus
-online, visible, and the manual badge.
+## 7. Two tabs
 
-## 6. Two tabs
+Desired state, attempts, hold, and dispatch all run under
+`navigator.locks.request('fitness-sync')`.
 
-Queue and hold read-modify-write, and dispatch, run under
-`navigator.locks.request('fitness-sync')`. Without Web Locks
-(`crossTabSafe === false`): mutations still persist as `pending`,
-automatic dispatch is disabled, and the UI says "sync paused — open the
-app in one tab". `storage` events invalidate in-memory copies; a bindings
-or marker change requests `A.transition('principalChanged')`.
+**Without Web Locks** (`crossTabSafe === false`) revision 3 still allowed
+shared-array writes, so two tabs could lose each other's records even with
+dispatch off. Revision 4: **cloud-intent admission is paused** and records
+are written under **per-operation keys** (`fitness_sync_attempts_v1:<uuid>`)
+rather than one shared array, so no tab can clobber another's. Local edits
+continue and are recoverable. The manual dispatch button obeys the same
+guard. "Open one tab" is advice, not a mechanism, and is not relied on.
 
-**Residual, stated exactly:** an old-bundle tab holds no lock and can
-still send with the shared cookie, and can still write the legacy key
-(which is why §3 never removes it). The header is optional in stage 1, so
-the server cannot reject those. Mitigated only by the update prompt and
-stage 2's rejection.
+`storage` events invalidate in-memory copies; a bindings or marker change
+requests `A.transition('principalChanged')`.
 
-## 7. Pull completion
+**Residual:** an old-bundle tab holds no lock, can still write the legacy
+key, and can still send with a valid token — rejecting old *login*
+endpoints does not revoke a token it already has. Stage-3 deletion of the
+legacy keys therefore needs positive evidence no old bundle can run, not
+just the login rejection.
 
-Issued under `(accountId, scopeId)` and the in-flight signal; completion
-writes apply only if both still match, the status is still trusted, and
-the generation is unchanged — covering A→B→A and same-scope auth changes.
-Replaces the scope-only guard at `:698`.
+## 8. Legacy migration — copy, never remove, with semantic identity
 
-## 8. Recovery screen
+Copied into the hold on every boot, restore, and `storage` event; **never
+removed** until stage 3 (an unlocked old tab can write between a read and
+a removal). Identity for idempotence is **semantic**: `type`, `key`,
+normalised `payload`, and `uid` — explicitly **excluding** `attempts`,
+`lastError`, `heldAt`, and any wrapper nesting, so an old tab's retry
+metadata does not manufacture a new entry and a repeated import does not
+grow the hold. Versions of a changed payload are preserved as distinct
+entries under the same semantic id.
 
-Counts by `reason` and `type`, oldest and newest `heldAt`, per-entry
-type/key/summary, "unconfirmed" wording for legacy and ambiguous entries,
-and a "check against the server" reconcile for the classes above. Shown
-even when there are no unbound scopes.
+**Bounded storage:** the hold has an explicit cap. On reaching it, nothing
+unresolved is evicted; instead admission of new cloud intent pauses and
+the UI reports "sync storage full". `SyncQueue.js:20` bounds only the dead
+letter today, and `enqueue` `:76-86` has no cap at all.
+
+Held entries are labelled "unconfirmed — may already have reached the
+server", never "unsent".
 
 ## 9. Fixtures (C1 red → C2/C4 green)
 
-1. `dedupe_is_per_owner_scope_type_key` — A's and B's settings ops coexist. *(C2)*
-2. `ack_requires_exact_id_and_revision` *(C2)*
-3. `legacy_is_copied_never_removed; old_tab_write_after_read_survives` *(C2)*
-4. `quota_failure_preserves_originals` *(C2)*
-5. `persist_before_send; crash_between_persist_and_send_is_pending` *(C2)*
-6. `inflight_recovered_at_boot_is_ambiguous_not_pending` *(C4)*
-7. `owned_at_mutation_not_at_failure` *(C4)*
-8. `conflict_mutation_stamped_scope_owner_or_null_never_current` *(C4)*
-9. `dispatch_fails_closed_on_owner_mismatch_and_unowned` *(C4)*
-10. `persisted_op_drains_after_reload` *(C4)*
-11. `stale_delete_dropped_when_newer_save_exists` *(C4)*
-12. `coach_chat_ambiguous_is_held_not_resent` *(C4)*
-13. `all_nine_write_paths_use_gate` *(C4)*
-14. `pull_completion_requires_account_scope_and_generation` *(C4)*
-15. `no_web_locks_disables_auto_dispatch` *(C4)*
-16. `x_account_header_matches_snapshot` *(C4)*
-17. `403_becomes_owner_mismatch_hold` *(C4)*
-18. `gate_transition_triggers_flush` *(C4)*
+Attempt/desired separation: `edit_does_not_discard_ambiguous_attempt`;
+`ambiguous_create_survives_backfill_and_restart`.
+Supersession: `theme_does_not_supersede_units`;
+`food_update_does_not_supersede_unsent_create`;
+`sent_records_are_never_superseded`.
+Admission: `crash_at_each_of_six_steps`;
+`backendId_writeback_crash_is_ambiguous`;
+`null_owner_never_dispatches`; `unbound_admits_no_cloud_intent`;
+`deferred_effect_uses_action_time_owner`.
+Fencing: `late_delete_after_newer_put_is_rejected_by_seq`;
+`resource_blocked_while_ambiguous_pre_fence`.
+Cross-tab: `no_web_locks_pauses_admission_and_uses_per_op_keys`;
+`two_unlocked_tabs_do_not_clobber`.
+Legacy: `semantic_identity_is_stable_across_retry_metadata`;
+`hold_cap_pauses_admission_without_evicting`.
+Plus the revision-3 set: owner-scoped dedupe, exact id+revision
+acknowledgement, legacy copy-never-remove, owner mismatch to hold, pull
+gated by account+scope+generation, 403 to `owner_mismatch`.
 
 ## 10. Contested
 
-1. Never removing the legacy keys until stage 3 (costs a few KB; removes a
-   race class).
-2. Holding ambiguous coach-chat turns rather than resending.
-3. Disabling automatic dispatch without Web Locks.
+1. Adding `client_seq` to `active_workout` — new schema, and the only
+   honest fix for §6.
+2. Blocking a resource after ambiguity until the fence exists.
+3. Pausing cloud-intent admission entirely without Web Locks.

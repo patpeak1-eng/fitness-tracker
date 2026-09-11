@@ -29,12 +29,13 @@
 > user's data already lives under a scope named by the server UUID. Under
 > the provenance rule that scope is *unbound*, so stage 1 either empties
 > every existing user's working app (the owner included) or offers a
-> **one-time explicit prompt** on the first upgraded sign-in — "This
-> device has workout data from a previous sign-in. Keep it with this
-> account?" — which records user-authorised adoption. Design A revision 2
-> takes the prompt. Without it, data that never re-pulls (an in-progress
-> workout, exercise prefs, progression settings, equipment profile,
-> custom equipment, nutrition targets) would sit in recovery only.
+> one-time **explicit transfer** on the first upgraded sign-in, naming the
+> destination account and previewing the data (Design A §4 — it is a
+> user-authorised transfer, not a claim of prior ownership, because
+> nothing on the device can prove that). Without it, data that never
+> re-pulls (an in-progress workout, exercise prefs, progression settings,
+> equipment profile, custom equipment, nutrition targets) would sit in
+> recovery only.
 >
 > Supersedes `profile_orphan_spec_s29.md`. Written for a session with no
 > memory of the conversation that produced it.
@@ -179,7 +180,7 @@ is not access; no automatic merging.
 | # | Stage | Fixes | Gate |
 |---|---|---|---|
 | 0 | C0 design set (A, B, C below) plan-reviewed and cleared | — | current |
-| 1 | Account-boundary safety, recovery, stop new profile creation — commits C1–C4 | 3.2, 3.3, 3.4, §5 | HIGH; test-first |
+| 1 | Account-boundary safety, recovery, stop new profile creation — commits C1–C4, with **C3b (backend, inert)** before C4 | 3.2, 3.3, 3.4, §5 | HIGH; test-first |
 | 2 | Stable identity via the §4 protocol — C5 plumbing, then a separately reviewed activation | 3.1 | gated on the §7 mixed-version matrix |
 | 3 | Retirement and cleanup — C6 | — | zone by diff |
 
@@ -252,7 +253,7 @@ binding as a side effect.
 | Design | Covers | Author |
 |---|---|---|
 | **A** — account/scope transition state machine | items 1, 4, 5: principal validation, credential precedence (Bearer over cookie, as `auth.py:103`), binding provenance and exclusivity, scope selection, session generation, offline/expired vs explicit logout, OAuth completion, late logout-cookie responses | Claude session |
-| **B** — durable dispatch protocol | item 6 in full, plus the direct paths and pull callbacks | Codex reviewer, writing in its worktree |
+| **B** — durable dispatch protocol | item 6 in full, plus the direct paths and pull callbacks | Claude session (the reviewer supplied the interface proposals and the hold-not-retry rule, then hit its usage limit before authoring; it has reviewed every revision since) |
 | **C** — restore transaction | item 7: which keys are data vs session/queue/binding authority; staging; validation; quota; the gate before refresh/dispatch | Claude session |
 
 Each is cross-reviewed by the other author before the set goes to the
@@ -278,6 +279,15 @@ against the acceptance details above.
   profile creation and its callers, docs and Coach prose. Discovery and
   recovery fixtures go green, including food-only, active-workout-only,
   and hold-only scopes.
+- **C3b** — `feat(auth): inert server prerequisites for the identity
+  boundary`. The identity-v1 endpoints, the `login_nonce` table and its
+  migration, `require_account_match` in optional-when-absent mode, and
+  Design B §6's `client_seq` fence on `active_workout` (schema + both
+  handlers). **Nothing changes for existing clients** — the new endpoints
+  are unused, the header is absent, and an omitted `client_seq` behaves as
+  today. This exists because revision 3 had C4's client calling endpoints
+  that only arrived in C5, which would have left a logged-out user on a
+  new client unable to sign in at all.
 - **C4** — `fix(auth): activate the account and scope transition
   boundary`. One reviewed, atomic integration: principal resolution,
   protected boot selection, bindings, logout/OAuth intent, session
@@ -329,5 +339,5 @@ top-tier Codex agents, read-only in their own worktrees (agent
 `6554b7a8-2a8a-48e1-90fc-712cc438aa64`, passes 3–4, 2026-09-10). Pass 4
 returned CHANGES-REQUIRED on revision 4, identified the binding-provenance
 error, and supplied the protocol pinning and the C0–C6 sequence adopted
-here. Design B is authored by that reviewer. Reviewer transcripts are the
+here. All three designs are authored by the Claude session. Reviewer transcripts are the
 proof artifacts.

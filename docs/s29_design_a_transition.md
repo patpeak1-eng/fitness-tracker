@@ -1,4 +1,29 @@
-# S29 Design A — Account/scope transition state machine (revision 3)
+# S29 Design A — Account/scope transition state machine (revision 4)
+
+> **Revision 4 (2026-09-11) — three corrections from the adversarial pass.**
+> 1. **The stage order was broken.** §6 has the client using identity-v1
+>    endpoints and the nonce, but the plan shipped those in C5 *after* the
+>    C4 client activation — so a logged-out user on a C4 client with a
+>    pre-C5 backend could not log in at all. **Server prerequisites now
+>    ship first, inert**: a new stage **C3b (backend, inert)** adds the
+>    identity-v1 endpoints, the `login_nonce` table, `require_account_match`
+>    (optional-when-absent), and Design B §6's `client_seq` fence — none of
+>    which changes behaviour for existing clients — and only then does C4
+>    switch the client onto them. Legacy-endpoint *rejection* stays in the
+>    separately gated stage 2.
+> 2. **The nonce was bound to an account, not a session.** Two browsers
+>    signed into the same account both satisfied "cookie resolves to that
+>    user", so one could consume the other's nonce; the JWT carries only
+>    `sub` and `exp` (`backend/app/auth.py:56-64`), so there is nothing
+>    session-shaped in it. Fixed in §6: the OAuth *start* sets a
+>    short-lived HttpOnly `login_attempt` cookie on the **backend** origin
+>    (the frontend never needs to read it), the callback stores that
+>    attempt id in the nonce row, and confirmation requires nonce **+**
+>    session user **+** matching attempt cookie, all inside the atomic
+>    consume so an invalid caller cannot burn a valid nonce.
+> 3. **The transition table went missing** in revision 3 and with it
+>    `restoreBegin` / `restoreCommitted`, which Design C calls. Restored in
+>    §4a.
 
 > C0 design document. No code. Companion to `profile_identity_spec_s29_v2.md`
 > §6 items 1, 4, 5. Anchored to `59eb7a8`.
@@ -106,6 +131,19 @@ source scope, the destination account, the generation, and the timestamp.
 No copy and no merge — the scope becomes that account's scope. Declining
 leaves it unbound and reachable in recovery, and allocates a fresh scope.
 
+## 4a. Transition table (restored; C depends on the last two rows)
+
+| Event | Guard | Result |
+|---|---|---|
+| `boot` | — | §5 |
+| `deliberateLogin` | credential validated; other transport cleared (§6) | bump; `clearLoggedOut()`; trusted binding → select; else transfer offer (§4) or fresh allocation |
+| `meRefresh` (same principal) | — | display fields + `setProfiles`; no scope change |
+| `principalChanged` (different principal) | — | bump; `conflict`; no allocation |
+| `unauthorized` (401) | generation of the issuing request is current (§7) | `expired`; clear stored Bearer; keep scope |
+| `explicitLogout` | user action | synchronous marker + credential clear + bump + dispatch stop, **then** await cookie logout |
+| `restoreBegin` | Design C staged | bump; `paused = true`; B stops dispatching |
+| `restoreCommitted` | C's journal committed | `paused = false`; re-run discovery; re-evaluate `bindingStatus`; **no** `/me`, **no** pull |
+
 ## 5. Boot resolution (precedence is explicit)
 
 1. **Nonce first** (§6) — a deliberate login is exactly what clears the
@@ -155,14 +193,27 @@ runs in the login handler, replacing `activateProfileAndGo`
 - **Issue:** at the end of the OAuth callback (`routers/auth.py:305-317`),
   alongside setting the session cookie, insert a row and append
   `?login_nonce=<opaque>` to the 302.
-- **Confirm:** the frontend reads the parameter, strips it with
+- **Session binding (revision 4).** At the *start* of the OAuth flow the
+  backend sets a short-lived HttpOnly `login_attempt=<random>` cookie on
+  its own origin, alongside the existing `oauth_state` and
+  `oauth_verifier`. The callback stores that value in the nonce row. The
+  frontend never reads it — it travels automatically because the confirm
+  call includes credentials. Account-only binding was not enough: two
+  browsers signed into the same account both satisfied it.
+- **Confirm:** the frontend reads the query parameter, strips it with
   `history.replaceState`, and calls `POST /api/auth/confirm-login {nonce}`
-  **with credentials included**. The server consumes it atomically —
-  `UPDATE … SET consumed_at = now() WHERE nonce_hash = :h AND consumed_at
-  IS NULL RETURNING user_id` — and additionally requires that the request's
-  **own session cookie resolves to that same `user_id`**. Possession of a
-  nonce alone therefore cannot clear the logout marker in a different
-  browser or session.
+  **with credentials included**. The server consumes it atomically, with
+  every condition inside one predicate so an invalid caller cannot burn a
+  valid nonce: `UPDATE login_nonce SET consumed_at = now() WHERE
+  nonce_hash = :h AND consumed_at IS NULL AND expires_at > now() AND
+  user_id = :cookie_user AND attempt_id = :cookie_attempt RETURNING
+  user_id`. No row updated → not a deliberate login, and the nonce is
+  still unconsumed for its rightful owner.
+- **Cleanup:** the row is deleted on consume; expired rows are swept
+  lazily; the `user_id` FK is `ON DELETE CASCADE`.
+- **Lost response / StrictMode double-call:** the loser of a concurrent
+  consume is treated as a replay and must not undo the winner's
+  transition.
 - **Expiry** 120 s; rows older than that are ignored and swept lazily.
 - **Failure** (replayed, expired, foreign session, or absent) → not a
   deliberate login; a surviving cookie cannot clear the marker.
