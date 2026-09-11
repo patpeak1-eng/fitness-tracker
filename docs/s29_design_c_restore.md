@@ -1,121 +1,137 @@
-# S29 Design C — Backup restore transaction (revision 2)
+# S29 Design C — Backup restore transaction (revision 3)
 
-> C0 design document. No code. Companion to the spec §6 item 7, Design A
-> revision 2 (vocabulary, transitions, bindings store), and Design B
-> revision 2 (hold format, field name `source`). Anchors read at `9cb2883`
-> / `2102e47`.
+> C0 design document. No code. Consumes Design A revision 3's state and
+> events; uses Design B revision 3's hold format. Anchored to `59eb7a8`.
 >
-> **Revision 2 (2026-09-11) — from the cold cross-review:** (F8) §3.6
-> said refresh runs through A's boot resolution while fixture 5 asserted
-> "no `/me`, no pull" — contradictory, and false: restored history in a
-> trusted scope fires `syncToApi` (`WorkoutContext.jsx:1148-1154`) and
-> the backfill (`:1008-1097`). (F9) `'imported'` bindings had no defined
-> home. (F10) a restored profiles-list entry carrying `email` re-enabled
-> the email-gated direct writes (`Profile.jsx:54,99`, `Settings.jsx:465`).
-> (F11) staging keys under `fitness_` leaked into export, old-bundle
-> import, and scope discovery; the hold key was unclassified. (F12)
-> `origin` vs `source`; C bumped the generation itself. Anchors corrected
-> (`Profile.jsx` import handler is `:163-183`; the reload is
-> `WorkoutContext.jsx:2809` inside `importData` `:2800`).
+> **Revision 3 (2026-09-11) — from the Codex adversarial pass:**
+> - The commit was not recoverable. A crash or quota failure **during the
+>   live writes** (not staging, which was the only case covered) left the
+>   device half-restored with no way back. Step 4 also deleted staging
+>   before step 5 still needed it.
+> - Restoring over a **trusted** scope silently replaced that account's
+>   data and then uploaded it. Quarantining imported *bindings* does not
+>   prevent that — the danger was the data keys.
+> - Stripping `email` from restored list entries was treated as an interim
+>   authorisation fix; it is not. It would suppress eleven legitimate
+>   cloud-write paths in `WorkoutContext` plus `Profile.jsx:54,99`,
+>   `Settings.jsx:465`, `CoachView.jsx:1025`.
+> - `restoreBegin` was requested from A, which had no such event.
+> - Imported hold entries kept their apparent original `source`.
+> - Export contents contradicted Design B.
 
 ## 1. Current behaviour (anchored)
 
-- `exportSnapshot()` (`StorageService.js:390-399`) dumps every key
-  starting with `fitness_` plus the coach keys: data, the profiles list,
-  `currentProfileId`, the auth token, the logout marker, the queue and
-  dead letter — and, after S29, anything else under that prefix.
-- `importSnapshot(data)` (`:401-427`) checks only that *some* key starts
-  with `fitness_` (`:403-405`), **removes every current matching key
-  first** (`:410-414`), then writes and throws on failure after the
-  removal — a quota failure mid-import leaves neither old nor new state.
-- Import handler `Profile.jsx:163-183` → `importData`
-  (`WorkoutContext.jsx:2800`) → `window.location.reload()` (`:2809`).
-  Nothing distinguishes data from session authority.
+`exportSnapshot()` (`StorageService.js:390-399`) dumps every `fitness_*`
+key plus the coach keys — data, the profiles list, `currentProfileId`, the
+auth token, the logout marker, the queue and dead letter.
+`importSnapshot(data)` (`:401-427`) validates only that *some* key starts
+with `fitness_` (`:403-405`), **removes every current matching key first**
+(`:410-414`), then writes and throws on failure *after* the removal.
+Handler `Profile.jsx:163-183` → `importData` (`WorkoutContext.jsx:2800`)
+→ `window.location.reload()` (`:2809`).
 
-## 2. Key classification and prefixes
+## 2. Key classification
 
-**Reserved prefixes (shared list, one constant, used by discovery, export,
-and import):** `fitness_sync_` (B's v2 queue and hold), `fitness_bindings_`
-(A's store), `fx_staging_` and `fx_quarantine_` (this design — deliberately
-**not** under `fitness_`, so `exportSnapshot` and an old bundle's
-`importSnapshot` never see them and discovery never parses `_user_` inside
-them). Discovery skips every reserved prefix before parsing scope ids.
+Reserved prefixes (shared with A and B, excluded from discovery and from
+`exportSnapshot`'s data set): `fitness_sync_`, `fitness_bindings_`,
+`fx_staging_`, `fx_quarantine_`, `fx_journal_`. The `fx_` prefixes sit
+deliberately outside `fitness_` so neither the current exporter nor an old
+bundle's importer can see them.
 
-| Class | Keys | Restore treatment |
+| Class | Keys | Treatment |
 |---|---|---|
-| **Data** | every `PROFILE_SCOPED_BASE_KEYS` entry in both scoped forms (`:43-67`, `:91-92`), plus the global data keys (custom exercises/templates, food log, weight history, assessments, settings, coach preference keys) | promoted after validation |
-| **Selection** | profiles list, `currentProfileId` | list entries promoted **with `email` removed** — after C4 list metadata is never authorisation (A §7), and stripping it makes the pre-C4 email gates inert on restored entries too; selection promoted only if that scope exists after promotion, else cleared |
-| **Session authority** | auth token, logout marker | never restored; live values win |
-| **Queue** | legacy `fitness_sync_queue`, dead letter, v2 active queue, **v2 hold** | never promoted to the active queue; legacy/active entries go to the **hold** with `source: 'restore'`; a snapshot's own hold entries are merged into the hold by content hash (so held ops survive a re-import instead of vanishing) |
-| **Bindings** | `fitness_bindings_v1` | **written to quarantine only** (`fx_quarantine_bindings_<hash>`), recorded as `provenance: 'imported'`; never into A's store; A's inheritance reads only its own store, so these can never become trusted without an explicit adoption |
-| **Unknown** | any other `fitness_*` key | retained verbatim under `fx_quarantine_` |
+| **Data** | every `PROFILE_SCOPED_BASE_KEYS` entry in both forms (`:43-67`, `:91-92`) plus the global data keys | promoted **into a recovery namespace** (§3), not over a live scope, unless the user explicitly authorises replacement |
+| **Selection** | profiles list, `currentProfileId` | promoted **verbatim, including `email`** — see below; selection applied only if that scope exists after promotion |
+| **Session authority** | auth token, logout marker | never restored |
+| **Queue** | legacy queue, dead letter, v2 active queue, v2 hold | never promoted to the active queue; every entry lands in the hold with **`source: 'restore'`** regardless of its apparent origin |
+| **Bindings** | `fitness_bindings_v1` | quarantine only, `provenance: 'imported'`; A's inheritance reads only its own store |
+| **Unknown** | any other `fitness_*` key | quarantined verbatim |
 
-## 3. The transaction
+**Why `email` is no longer stripped.** Revision 2 stripped it to make the
+pre-C4 email gates inert on restored entries. That was the wrong lever: it
+would also disable legitimate syncing for a restored profile, in eleven
+`WorkoutContext` cloud-write sites plus three pages. The correct sequencing
+is the one Design B already states — **restore stays inert until C4**.
+C2 ships the parser, staging, journal, and quarantine helpers with no live
+entry point; the Import button keeps today's behaviour until C4 replaces
+the email gates with `A.state` reads in the same release.
 
-1. **Parse and classify** in memory. Reject (nothing written) only if there
-   are no data keys at all. Unparseable data values are quarantined
-   verbatim, not rejected, so a partly corrupt backup still yields its good
-   data; the user is told which scope had corrupt values.
-2. **Stage** the promoted set under `fx_staging_<hash>_…` in one pass, with
-   read-back verification (B's rule). On quota failure: remove staging
-   keys, leave live state untouched, surface "Not enough space to restore".
-3. **Boundary:** request `A.transition('restoreBegin')` (A bumps the
-   generation; C never does) — in-flight work aborts, dispatch pauses.
-4. **Swap:** write live from staging, delete staging. Selection per §2.
-   Marker and credentials untouched.
-5. **Hold:** append snapshot queue entries to the hold (`source:
-   'restore'`), read-back verified, before staging is discarded.
-6. **Commit:** `A.transition('restoreCommitted')` — A re-runs discovery and
-   re-evaluates `bindingStatus` for the selected scope against the
-   **current** principal; **no `/me` call and no pull are issued by the
-   restore itself**. Then the app refreshes state (`refreshGlobalState`/
-   hydration) under the new generation.
-7. **What happens next is ordinary behaviour, stated plainly:** if the
-   selected scope is `trusted` and `authenticated`, the restored history
-   will be pushed to that (own) account by `syncToApi` and reconciled by
-   the backfill exactly as any local data would — through B's gate, so it
-   can only ever reach the account the scope is bound to. If the scope is
-   `unbound` or `conflict`, nothing leaves the device.
-8. **Idempotence:** keyed by snapshot hash; re-importing the same file is
-   a no-op with a message.
+## 3. The transaction (journaled and recoverable)
 
-## 4. Export changes (same commit as import)
+A durable journal at `fx_journal_<snapshotHash>` records
+`{ phase, stagedKeys, targetKeys, startedAt }` with
+`phase ∈ 'staged' | 'committing' | 'committed'`.
 
-- Export **stops including the auth token** (a backup is not a session;
-  no loss). It still includes the marker? — no: the marker is session
-  authority too; excluded. It includes data, list (with `email` already
-  irrelevant post-C4 but exported as-is for fidelity), selection, the v2
-  queue and hold (so pending work is not lost), and A's bindings store
-  **as metadata** (the importer quarantines it regardless).
-- Writes a `_meta` entry: format version, app version, export time, and
-  the classification map. Old backups without `_meta` are classified by
-  key name.
-- The recovery screen's scoped export is the narrower artifact: one scope,
-  data keys only, both key formats, unparseable values verbatim.
+1. **Parse and classify** in memory. Reject only if there are no data keys
+   at all. Unparseable values are quarantined verbatim; the user is told
+   which scope held them.
+2. **Choose a destination.** Default: a **recovery namespace** —
+   `restored_<snapshotHash>` — which is by construction unbound, so
+   nothing about it can dispatch. Promoting into the **currently selected
+   trusted scope** requires a separate confirmation naming the account
+   ("Replace the data for `<email>` on this device"), because that action
+   both overwrites and, once trusted, uploads.
+3. **Stage** the promoted set under `fx_staging_<hash>_…` with read-back
+   verification. Quota failure → delete staging, live state untouched,
+   surface the error. Journal `phase: 'staged'`.
+4. **Boundary:** `A.transition('restoreBegin')` — A bumps the generation,
+   sets `paused: true`; Design B stops dispatching for the whole commit.
+5. **Persist the hold additions and verify them**, *before* any staging is
+   discarded — revision 2 had these in the wrong order.
+6. Journal `phase: 'committing'`, then write the live keys from staging.
+7. Journal `phase: 'committed'`, then delete staging and the journal.
+8. `A.transition('restoreCommitted')` — A clears `paused`, re-runs
+   discovery, re-evaluates `bindingStatus`. **The restore itself issues no
+   `/me` and no pull.** Selection changes only as §2 allows, and Design A
+   §5 re-derives status; the two documents now agree.
 
-## 5. Fixtures (C1 red → C2 for parsers/staging, C4 for the boundary)
+**Boot recovery.** A journal in `phase: 'committing'` means a crash
+mid-write: staging still exists, so re-apply every `targetKey` from
+staging and finish the phases. `'staged'` means nothing was written:
+delete staging and the journal. `'committed'` means only cleanup
+remained. Recovery runs before any dispatch.
+
+**Peak storage** is live data **plus** staging **plus** the promoted set
+**plus** hold and quarantine — not "twice the incoming set". If staging
+cannot be written, the restore does not start.
+
+## 4. Export
+
+- **Excludes** the auth token and the logout marker (a backup is not a
+  session).
+- **Includes** data, the profiles list and selection, and the v2 active
+  queue **and hold** (so pending work survives) — matching Design B §2.
+- Bindings are included as metadata and are quarantined on import
+  regardless.
+- Adds a `_meta` entry: format version, app version, export time,
+  classification map. Backups without `_meta` are classified by key name.
+- The recovery screen's **scoped** export is the narrower artifact: one
+  scope, data keys only, both key formats, unparseable values verbatim —
+  no session, queue, hold, or binding keys.
+
+## 5. Fixtures (C1 red → C2 parsers/staging/journal, C4 boundary)
 
 1. `restore_never_writes_token_or_marker`
-2. `restore_quota_failure_leaves_live_state_intact` — third staged key
-   throws → live keys byte-identical, no `fx_staging_` residue.
-3. `restored_queue_goes_to_hold_with_source_restore`
-4. `restored_bindings_land_in_quarantine_only` — A's store unchanged;
-   `bindingStatus` unchanged.
-5. `restore_issues_no_me_and_no_pull_itself` — transitions `restoreBegin`
-   and `restoreCommitted` observed; zero `/me`, zero pull calls **from the
-   restore**; subsequent ordinary dispatch (if trusted) is a separate
-   assertion.
-6. `restored_list_entries_have_no_email`
-7. `unparseable_value_is_quarantined`
-8. `reimport_same_snapshot_is_noop`
-9. `legacy_key_format_promoted`
-10. `staging_and_quarantine_keys_are_invisible_to_export_and_discovery`
-11. `snapshot_hold_entries_merge_into_hold`
-12. `export_excludes_token_and_marker`
+2. `quota_failure_during_staging_leaves_live_state_intact`
+3. `crash_during_live_writes_is_recovered_from_journal_at_boot`
+4. `staging_not_deleted_before_hold_is_verified`
+5. `default_destination_is_recovery_namespace_not_trusted_scope`
+6. `replacing_a_trusted_scope_requires_named_confirmation`
+7. `restored_queue_and_hold_entries_all_have_source_restore`
+8. `restored_bindings_land_in_quarantine_only`
+9. `restore_issues_no_me_and_no_pull_itself`
+10. `restored_list_entries_keep_email` — and the C4 gate replacement is
+    what makes that safe.
+11. `unparseable_value_is_quarantined`
+12. `reimport_same_snapshot_is_noop`
+13. `legacy_key_format_promoted`
+14. `fx_prefixes_invisible_to_export_and_discovery`
+15. `export_excludes_token_and_marker_includes_hold`
 
-## 6. Open for cross-review
+## 6. Open
 
-- Whether held restore-source ops may be surfaced as "resume sending?"
-  (position: only for types with a server key; others via B's reconcile).
-- Staging doubles peak storage for the promoted set; per-key journal if a
-  real device is near quota *(unverified)*.
+- Whether a restored recovery namespace should offer a transfer into the
+  signed-in account (Design A §4 mechanism) or stay export-only in stage 1
+  (position: export-only; transfer is one more confirmation surface).
+- Per-key journal instead of a staging copy if a real device is near
+  quota *(unverified that any is)*.

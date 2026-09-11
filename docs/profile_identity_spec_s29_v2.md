@@ -1,10 +1,29 @@
 # Spec — Account identity, profile retirement, and sync ownership (S29)
 
-> **STATUS: REVISION 6, 2026-09-11 — C0 designs A, B, C at revision 2
-> after a cold cross-review returned CHANGES-REQUIRED on all three (twelve
-> findings, every one verified and adopted). Awaiting the Codex
-> adversarial pass on the revised set and the literal "Cleared, proceed
-> with implementation." No application code has been written. Priority P1.**
+> **STATUS: REVISION 7, 2026-09-11 — C0 designs A, B, C at revision 3
+> after the Codex adversarial pass returned CHANGES-REQUIRED on all three
+> (four P1s and four P2s, every one verified in source and adopted).
+> Owner direction 2026-09-11: build the full design; the narrow-fix
+> alternative was offered and declined. Awaiting review of revision 3 and
+> the literal "Cleared, proceed with implementation." No application code
+> has been written. Priority P1.**
+>
+> **What revision 2 of the designs got wrong** (each fixed in revision 3):
+> the queue's dedupe key *is* its identity (`type:key`), so two accounts'
+> settings ops destroyed each other before any ownership check could run;
+> aborted requests were returned to `pending`, which re-sends creates the
+> server may already have committed; ops were sent before being persisted,
+> so a crash lost them entirely; "compare-and-remove is never lossy" was
+> false against an unlocked old tab, so the legacy keys are now **copied
+> and never removed** until stage 3; the adoption prompt claimed it could
+> never adopt another account's data while its own mechanism could, so it
+> is now an explicit **transfer** naming the destination account and
+> showing a preview; the OAuth nonce had no route, store, expiry, or
+> session binding and now has all four (including a new table and
+> migration, stated as stage-2 schema work); `conflict` allowed mutations
+> to be stamped with the wrong account; a late 401 could clear a newer
+> login's credentials; and restore could crash mid-write with no recovery
+> and could overwrite-then-upload a trusted scope.
 >
 > **Decision surfaced by the cross-review, for the owner:** every Google
 > user's data already lives under a scope named by the server UUID. Under
