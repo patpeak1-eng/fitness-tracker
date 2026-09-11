@@ -231,7 +231,11 @@ New `backend/app/routers/feedback.py`; `get_optional_user` lives in
    backend environment (`backend/requirements-dev.txt`). Alternatives: a
    throwaway Railway Postgres service reached over the network (costs, and
    lives in the production project), or Docker once installed. **The
-   production `Postgres` service is never a test target.**
+   production `Postgres` service is never a test target.** Install the
+   **full** backend requirements plus a new `requirements-dev.txt`:
+   `email_validator` is listed via `pydantic[email]` but is **not
+   importable** in the active Python, so assuming "only asyncpg and pytest
+   are missing" would fail at import time.
 2. **Harness** (`backend/pytest.ini`, `backend/tests/conftest.py`):
    `TEST_DATABASE_URL` required. **Fail-closed target check before any
    import or migration:** the host must be `localhost`/`127.0.0.1` (unless
