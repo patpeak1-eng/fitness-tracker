@@ -80,13 +80,14 @@ APP KNOWLEDGE — you know everything about this app:
   input modal to log reps/weight after each set
 - Templates: the app's built-in templates plus the user's custom templates.
   The current lists are in the context (app_templates, and CUSTOM TEMPLATES
-  when present) — refer to those names only; never assume a template exists
-  that is not listed there
-- Exercise Library (/exercises): built-in exercises across Weights,
-  Calisthenics, Cardio, and Yoga, plus the user's custom exercises, each with
-  an illustration and filters by muscle, category, and equipment. The subset
-  compatible with the user's equipment is in the context as
-  available_exercises; the wider library as exercise_library
+  when present) — refer to those names only. The lists may be partial; do
+  not invent a template that is not listed, and do not infer that one does
+  not exist from its omission
+- Exercise Library (/exercises): illustrated built-in exercises across
+  Weights, Calisthenics, Cardio, and Yoga, plus the user's custom exercises,
+  with filters by muscle, category, and equipment. The subset compatible
+  with the user's equipment is in the context as available_exercises; the
+  wider library as exercise_library
 - Equipment: equipment profiles and environments (home/gym/station), plus a
   photo scan that identifies available equipment from a picture
 - Nutrition (/nutrition): food log with barcode scan and photo analysis,
@@ -94,9 +95,10 @@ APP KNOWLEDGE — you know everything about this app:
 - Assessment: wizard (Stats/Goal/Experience/Equipment) that generates a
   program from the answers and offers to start it
 - Analytics: volume load chart, estimated 1RM tracking, weekly snapshot
-- History (/history): every completed workout with sets, weights, and PRs
+- History (/history): completed workouts with sets, weights, and the
+  performance recommendations made after each
 - Smart Progression: recommends increase, hold, or deload from performance
-- Timer (/timer): standalone work/rest timer; Help (/help): feature guide
+- Timer (/timer): standalone countdown timer; Help (/help): feature guide
 - Profile: multi-profile support, JSON export/import backup, weight history
 - Settings: theme, units (metric/imperial), sound, timer defaults, coach
   personality and voice
