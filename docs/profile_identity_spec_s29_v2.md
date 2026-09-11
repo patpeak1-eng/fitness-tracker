@@ -1,10 +1,21 @@
 # Spec — Account identity, profile retirement, and sync ownership (S29)
 
-> **STATUS: REVISION 5, 2026-09-10 — plan shape settled; C0 design documents
-> in progress (A and C by the Claude session, B by the Codex reviewer,
-> cross-reviewed before either reaches the owner). Awaiting plan review of
-> the C0 set and the literal "Cleared, proceed with implementation." No
-> application code has been written. Priority P1.**
+> **STATUS: REVISION 6, 2026-09-11 — C0 designs A, B, C at revision 2
+> after a cold cross-review returned CHANGES-REQUIRED on all three (twelve
+> findings, every one verified and adopted). Awaiting the Codex
+> adversarial pass on the revised set and the literal "Cleared, proceed
+> with implementation." No application code has been written. Priority P1.**
+>
+> **Decision surfaced by the cross-review, for the owner:** every Google
+> user's data already lives under a scope named by the server UUID. Under
+> the provenance rule that scope is *unbound*, so stage 1 either empties
+> every existing user's working app (the owner included) or offers a
+> **one-time explicit prompt** on the first upgraded sign-in — "This
+> device has workout data from a previous sign-in. Keep it with this
+> account?" — which records user-authorised adoption. Design A revision 2
+> takes the prompt. Without it, data that never re-pulls (an in-progress
+> workout, exercise prefs, progression settings, equipment profile,
+> custom equipment, nutrition targets) would sit in recovery only.
 >
 > Supersedes `profile_orphan_spec_s29.md`. Written for a session with no
 > memory of the conversation that produced it.
@@ -78,7 +89,7 @@ the current credentials regardless of who owns the scope.
 **3.3 — P1, preserving any stored profile breaks explicit logout.**
 `getOrCreateProfiles` (`StorageService.js:245-269`) consults `isLoggedOut()`
 only in the empty-list branch; `refreshGlobalState` (`WorkoutContext.jsx:
-~469-481`) then selects unconditionally. Sign-out (`Profile.jsx:56-78`)
+491-505`) then selects unconditionally. Sign-out (`Profile.jsx:56-78`)
 awaits the network logout *first*, then clears state. The OAuth callback is
 a backend redirect straight to `/` (`routers/auth.py:218` handler), so
 `AuthCallback.jsx` cannot be where a deliberate login completion is
@@ -91,7 +102,7 @@ a stale snapshot.
 
 ## 4. Identity-contract protocol (replaces "deploy stage 1 first")
 
-The PWA registers with `registerType: 'prompt'` (`vite.config.js:66`): an
+The PWA registers with `registerType: 'prompt'` (`vite.config.js:69`): an
 open tab keeps the old bundle until the user accepts an update, and an old
 login tab still runs `Login.jsx:90`. `UserRegister`/`UserLogin`
 (`schemas.py:17-25`) do not forbid unknown fields, and `/register` commits

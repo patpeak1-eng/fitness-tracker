@@ -45,7 +45,9 @@ is not auth or schema. Requires a written spec before code
 - database schema (`backend/app/models.py`, `alembic/versions/`)
 - auth or session logic (`backend/app/auth.py`, `backend/app/routers/auth.py`)
 - any read or write of user data (`users`, `workout_history`, `user_stats`,
-  `assessments`, `weight_history`, `coach_messages`)
+  `assessments`, `weight_history`, `food_log`, `coach_messages`,
+  `custom_templates`, `custom_exercises`, `active_workout`, and `feedback`
+  once S31 lands)
 - `src/services/ApiService.js` — one file, but the sole client for every auth
   and user-data call
 - production environment / Railway Variables

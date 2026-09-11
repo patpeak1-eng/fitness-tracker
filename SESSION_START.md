@@ -313,27 +313,40 @@ documented chrome-devtools path turned out not to be connected.
 `29a6465` cross-review mandatory for MEDIUM+, top-tier reviewer required.
 `6703e26` never name a model; always pick the most capable available.
 
-**STATE AT END OF 2026-09-10 (owner asleep; resume in the morning):**
-- S29 is at **C0 — design documents, cross-review in progress.** On the
-  build branch (not yet main): spec revision 5 + Design A (transition state
-  machine) + Design C (restore transaction) at `2e071d9`, Design B
-  (dispatch protocol) drafted by the Claude session after the Codex
-  reviewer hit its usage limit mid-authoring. **Morning task for Codex when
-  the owner says it is back:** adversarial cross-review of A, B, C together
-  (interface mismatches especially), on thread responseId
-  `e2505ef6-…` (agent `6554b7a8-…`). A cold Claude reviewer was also
-  launched overnight on the same set. Then the owner gives "Cleared,
-  proceed with implementation" and C1 (red fixtures) begins.
-- Feedback (S31) revision 2 at `9cb2883` on main; plan review by a cold
-  Claude reviewer running overnight (first attempt died on a rate limit).
-- **Three owner decisions still open:** Feedback admin gate (Railway
-  variable holding the owner's account UUID — recommended — or a DB
-  flag); deletion contract (delete a person's feedback with their account
-  — recommended — or retain with disclosure); ordering (S29 first —
-  recommended — or Feedback first).
-- Quota: Codex exhausted twice today on top-tier review/authoring; the
-  Claude session once. Spend Codex on review, not authoring, until quota
-  is comfortable.
+**STATE AT THE START OF 2026-09-11 (overnight work done; owner to resume):**
+- **S29 at C0, designs A/B/C all at revision 2** after an overnight cold
+  cross-review returned CHANGES-REQUIRED on all three (twelve findings,
+  each verified, each adopted). The decisive one: every Google user's data
+  already lives under the server-UUID scope, so "allocate a fresh scope
+  named `<uuid>`" would have laundered ownership or emptied every user.
+  Design A now allocates provably fresh ids and adds a **one-time explicit
+  adoption prompt** at the first upgraded sign-in ("keep this device's
+  data with this account?") — owner to confirm (below). Also fixed: the
+  generation no longer gates durable queue ops (queue never drained);
+  OAuth deliberate-login uses a server-validated single-use nonce (a
+  cross-origin intent cookie is unreadable); stale Bearer cleared before a
+  Google sign-in; mid-session principal change is always `conflict`; the
+  write inventory now covers `saveProfile({stats})`, `deleteCustomTemplate`,
+  coach chat, account deletion, and three extra flush triggers; legacy
+  queue migration is compare-and-remove; restore quarantines bindings and
+  strips `email` from restored list entries; staging keys moved out of
+  the `fitness_` prefix. **Morning task for Codex:** adversarial pass on
+  A/B/C revision 2 (thread `e2505ef6-…`, agent `6554b7a8-…`). Then the
+  clearance phrase, then C1.
+- **Feedback (S31) at revision 4** after two more cold reviews
+  (CHANGES-REQUIRED, ten then nine findings). Blocking fact: **there is no
+  PostgreSQL on the development machine** (no psql/pg_ctl/docker; no
+  asyncpg/pytest-asyncio) — the only Postgres is production. Nothing in
+  the backend verification plan can run until one exists (decision 6).
+  `route` column dropped (it would always record `/`).
+- **Owner decisions open (seven, all with recommendations in
+  `docs/feedback_spec_s31.md` §7 and `docs/profile_identity_spec_s29_v2.md`
+  status block):** admin gate; guests; deletion contract; inbox;
+  test harness; **test database provisioning** (recommended: install
+  PostgreSQL locally via winget); drop `route`; plus **S29's adoption
+  prompt** and the S29-vs-S31 ordering.
+- Quota: Codex exhausted twice on 2026-09-10; Claude once. Codex on
+  review only.
 
 **OPEN — P1, NEXT UP (owner, 2026-09-10: "resolve as soon as possible",
 co-workers are being onboarded).** What was filed as a P3 "cloud login
