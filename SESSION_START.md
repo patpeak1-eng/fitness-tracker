@@ -313,6 +313,28 @@ documented chrome-devtools path turned out not to be connected.
 `29a6465` cross-review mandatory for MEDIUM+, top-tier reviewer required.
 `6703e26` never name a model; always pick the most capable available.
 
+**STATE AT END OF 2026-09-10 (owner asleep; resume in the morning):**
+- S29 is at **C0 — design documents, cross-review in progress.** On the
+  build branch (not yet main): spec revision 5 + Design A (transition state
+  machine) + Design C (restore transaction) at `2e071d9`, Design B
+  (dispatch protocol) drafted by the Claude session after the Codex
+  reviewer hit its usage limit mid-authoring. **Morning task for Codex when
+  the owner says it is back:** adversarial cross-review of A, B, C together
+  (interface mismatches especially), on thread responseId
+  `e2505ef6-…` (agent `6554b7a8-…`). A cold Claude reviewer was also
+  launched overnight on the same set. Then the owner gives "Cleared,
+  proceed with implementation" and C1 (red fixtures) begins.
+- Feedback (S31) revision 2 at `9cb2883` on main; plan review by a cold
+  Claude reviewer running overnight (first attempt died on a rate limit).
+- **Three owner decisions still open:** Feedback admin gate (Railway
+  variable holding the owner's account UUID — recommended — or a DB
+  flag); deletion contract (delete a person's feedback with their account
+  — recommended — or retain with disclosure); ordering (S29 first —
+  recommended — or Feedback first).
+- Quota: Codex exhausted twice today on top-tier review/authoring; the
+  Claude session once. Spend Codex on review, not authoring, until quota
+  is comfortable.
+
 **OPEN — P1, NEXT UP (owner, 2026-09-10: "resolve as soon as possible",
 co-workers are being onboarded).** What was filed as a P3 "cloud login
 orphans local profiles" is actually **three P1 defects**, and the original
