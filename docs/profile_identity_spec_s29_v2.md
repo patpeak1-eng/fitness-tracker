@@ -1,252 +1,303 @@
 # Spec — Account identity, profile retirement, and sync ownership (S29)
 
-> **STATUS: REVISION 4, 2026-09-10 — stage-1 design rewritten after the
-> third plan review returned CHANGES-REQUIRED. Awaiting plan review of this
-> revision and the literal "Cleared, proceed with implementation." No code
-> has been written. Priority P1.**
+> **STATUS: REVISION 5, 2026-09-10 — plan shape settled; C0 design documents
+> in progress (A and C by the Claude session, B by the Codex reviewer,
+> cross-reviewed before either reaches the owner). Awaiting plan review of
+> the C0 set and the literal "Cleared, proceed with implementation." No
+> application code has been written. Priority P1.**
 >
 > Supersedes `profile_orphan_spec_s29.md`. Written for a session with no
-> memory of the conversation that produced it; resume from here.
+> memory of the conversation that produced it.
 >
-> **What revision 3 got wrong, stated plainly:** it replaced the recovery
-> requirement with a guard on "more than one entry in the profiles list".
-> That guard cannot detect the case this bug manufactures. Password sign-in
-> *replaces* the list with a single entry every time (`Login.jsx:30`) while
-> minting a new storage scope every time (`:65`, `:90`), so the affected
-> user has **one** list entry and **several** history scopes. The reviewer
-> reproduced it by executing the real activation code against synthetic
-> storage: two sign-ins produced one list entry and two history scopes, and
-> a later UUID activation selected an empty scope. Revision 4 restores
-> recovery as an executable requirement and redesigns stage 1 around
-> "resolving who you are must never change where your data is".
+> **Revision history of what each draft got wrong, kept on purpose:**
+> - *Rev 1* — treated the bug as a multi-profile edge case; it is a missing
+>   identity for password sign-in (§3.1).
+> - *Rev 3* — replaced recovery with a "more than one list entry" guard that
+>   cannot see one-list-entry / many-scopes (`Login.jsx:30` replaces the list
+>   on every sign-in while `:65,:90` mint a new scope every time).
+> - *Rev 4* — defined "proof that a scope belongs to an account" as *a
+>   validated principal was active while the scope was selected*. That is
+>   exactly the A-is-selected / B-signs-in coincidence the work exists to
+>   stop. Validating a credential proves the **account**, not ownership of
+>   existing data. Corrected in §6 item 1.
 
 **Zone:** HIGH — identity, auth transport, user data, sync ownership, the
-logout gate, and `WorkoutContext.jsx` together with the backend.
+logout gate, `WorkoutContext.jsx` together with the backend.
 
 ---
 
-## 1. Origin
+## 1. Origin and priority
 
-Filed as a **P3** ("cloud login orphans local profiles"). Three review
-passes established it is three P1 defects (§3) plus a rollout trap (§4).
-Raised to **P1** on 2026-09-10 because the owner has begun sharing the app
-with co-workers — the users most likely to register with a password.
+Filed as a P3 ("cloud login orphans local profiles"). Four review passes
+established three P1 defects (§3) and a rollout trap (§4). **P1** since
+2026-09-10: the owner has begun sharing the app with co-workers, who are
+the users most likely to register with a password.
 
 ## 2. Owner decisions (all recorded; nothing open for the owner)
 
 | Decision | Answer (2026-09-10) |
 |---|---|
 | Device sharing | Never. One account is one person on their own device |
-| Second profiles | "No one has a second profile. Make it so no one can have a second profile" |
-| Password sign-in | **Keep and fix.** Anyone without a Google account must still be able to use the app |
+| Second profiles | "No one has a second profile. Make it so no one can have one" |
+| Password sign-in | **Keep and fix** — anyone without a Google account must still be able to use the app |
 | Interim login copy | Not needed |
-| "Fire Station profile" | Does not exist; framing corrected in `ARCHITECTURE.md` |
-| Containment stage | Left to the builder — folded into stage 1 |
+| "Fire Station profile" | Does not exist; `ARCHITECTURE.md` framing corrected |
+| Containment stage | Builder's call — folded into stage 1 |
 
-**Reading the second-profile decision correctly.** It rules out *intentional*
-extra profiles — the picker and creation go. It does **not** rule out the
-*aliases this bug manufactured*: every `cloud_<timestamp>` scope a password
-user ever signed into. Those hold real, possibly unsynced, workouts. The
-owner's rule is honoured by never offering profile creation or normal
-switching again; the data is honoured by §6 stage 1's recovery surface.
+The second-profile decision rules out *intentional* extra profiles. It does
+**not** cover the *aliases this bug manufactured* — every `cloud_<timestamp>`
+scope a password user ever signed into, each possibly holding an unsynced
+workout. The rule is honoured by never offering creation or normal
+switching again; the data is honoured by §5.
 
 ## 3. The three defects, verified
 
-### 3.1 — P1: password sign-in has no stable identity
-`Token` (`backend/app/schemas.py:28-30`) carries only `access_token` and
-`token_type`; `/register` and `/login` return exactly that
-(`routers/auth.py:113-114,138-139`). Verified against the live
-`/openapi.json` too. So `Login.jsx:65,90`'s `result.user_id || 'cloud_' +
-Date.now()` always mints a timestamp id and a fresh localStorage scope.
-The boot path cannot repair it — `getMe` is cookie-only
-(`ApiService.js:70-77`) while password login holds a Bearer token.
-Google/OAuth users are unaffected; their id is the server UUID.
+**3.1 — P1, no stable identity for password sign-in.** `Token`
+(`schemas.py:28-30`) carries only `access_token`/`token_type`; `/register`
+and `/login` return exactly that (`routers/auth.py:113-114,138-139`; live
+`/openapi.json` agrees). `Login.jsx:65,90` therefore always mint
+`'cloud_' + Date.now()` and a fresh storage scope. The boot path cannot
+repair it: `getMe` is cookie-only (`ApiService.js:70-77`) while password
+login holds a Bearer token. Google/OAuth users get the server UUID.
 
-### 3.2 — P1: the sync queue crosses account boundaries
-`SyncQueue.enqueue` (`SyncQueue.js:76-88`) keys ops by `type:key` only and
-accepts `uid = null`; `flush` (`:105-125`) dispatches every op through the
-registered executor using whatever credentials the app holds now; `init`
-(`:154-162`) flushes on boot, `online`, and tab-visible. A failed op for
-account A replays against account B after a re-login. Reproduced by the
-reviewer with a mocked B executor receiving an A payload despite `op.uid`.
-Ownership is also captured too late: `WorkoutContext.jsx:~1178-1182` and
-`TimerContext.jsx:~223-230` enqueue inside a `catch` after the request has
-already failed, with no owner.
+**3.2 — P1, the sync queue crosses account boundaries.** `enqueue`
+(`SyncQueue.js:76-88`) keys ops by `type:key`, accepts `uid = null`, and an
+old tab's enqueue drops unknown fields; `flush` (`:105-125`) dispatches
+every op with whatever credentials exist now and removes by id after the
+await (`:117-120`); `init` (`:154-162`) flushes on boot, online, and
+visible; `persistQueue` (`:31-36`) swallows quota failure. Ownership is
+captured too late — producers enqueue inside a failure `catch`
+(`WorkoutContext.jsx:~1178-1182`, `TimerContext.jsx:~223-230`). **The queue
+is not the only path:** the direct push/backfill (`WorkoutContext.jsx:
+~1026-1097`), `syncToApi` (called at `~1148-1154`; `StorageService.js:
+429-450` saves history and saves *or deletes* the active workout with
+global credentials), and pull-completion writes (`~673-698`, guarded only
+by `latestProfileIdRef !== profile.id` — scope, not account) all operate on
+the current credentials regardless of who owns the scope.
 
-### 3.3 — P1: preserving any stored profile breaks explicit logout
+**3.3 — P1, preserving any stored profile breaks explicit logout.**
 `getOrCreateProfiles` (`StorageService.js:245-269`) consults `isLoggedOut()`
-only inside its `profiles.length === 0` branch; `refreshGlobalState`
-(`WorkoutContext.jsx:~469-481`) then selects `lastId` or `profilesData[0]`
-unconditionally. Sign-out today (`Profile.jsx:56-78`) awaits the network
-logout *first*, then clears the token, sets the marker, and empties the
-list — so a stored list plus the marker is a state the code never expects.
-`AuthCallback.jsx` only redirects; a surviving cookie or a late `/me`
-response can reactivate a session (`WorkoutContext.jsx:~523-540`).
+only in the empty-list branch; `refreshGlobalState` (`WorkoutContext.jsx:
+~469-481`) then selects unconditionally. Sign-out (`Profile.jsx:56-78`)
+awaits the network logout *first*, then clears state. The OAuth callback is
+a backend redirect straight to `/` (`routers/auth.py:218` handler), so
+`AuthCallback.jsx` cannot be where a deliberate login completion is
+recorded. A surviving cookie or late `/me` (`WorkoutContext.jsx:~523-540`)
+can reactivate a session.
 
-### 3.4 — P2: storage-only writes leave React state stale
-The cloud-boot branches write storage and `currentProfile` but never
-`setProfiles`; `updateProfile` (`:~1404-1415`) later rewrites the list from
-a stale snapshot. Any list write must return the resulting list and callers
-must synchronise React state with it.
+**3.4 — P2, storage-only writes leave React state stale.** Boot branches
+never `setProfiles`; `updateProfile` (`~1404-1415`) rewrites the list from
+a stale snapshot.
 
-## 4. The rollout trap — now a protocol, not a deploy order
+## 4. Identity-contract protocol (replaces "deploy stage 1 first")
 
-Adding `user_id` to the `Token` response is **not** safe merely because a
-newer frontend is deployed first. The PWA registers with
-`registerType: 'prompt'` (`vite.config.js:66`): an already-open tab keeps
-running the old bundle until the user accepts the update, and an old login
-tab still executes `Login.jsx:90`. The moment the backend returns
-`user_id`, that tab switches the device to a UUID scope and its local
-history disappears from view — the exact loss this work exists to prevent.
+The PWA registers with `registerType: 'prompt'` (`vite.config.js:66`): an
+open tab keeps the old bundle until the user accepts an update, and an old
+login tab still runs `Login.jsx:90`. `UserRegister`/`UserLogin`
+(`schemas.py:17-25`) do not forbid unknown fields, and `/register` commits
+before returning (`auth.py:95-114`) — so an *old backend* would ignore an
+opt-in field and create an account before a new client could reject the
+missing id. A field alone has a deploy-race window. Therefore:
 
-**Protocol (stage 2 depends on it, stage 1 builds it):**
-- Upgraded clients **opt in** by sending an identity-contract version on
-  login/register (a header or body field). The backend returns `user_id`
-  **only** to requests that opt in. Legacy requests get the legacy response.
-- Legacy behaviour is acknowledged as still defective for the un-upgraded
-  tab, and tested as such; it is bounded, not fixed, by this protocol.
-- Preferred over letting legacy clients keep minting timestamp scopes
-  indefinitely: once stage 2 is live, the backend may answer a legacy
-  login with a controlled "update required" failure **before** any
-  registration side effect, so a stale tab cannot create an account it
-  will then scope wrongly. Decision for the reviewer in stage-2 design.
-- The same protection covers **every** place a principal is resolved —
-  `/me`, the OAuth callback, re-login, backup restore, and bootstrap — not
-  only the login response. See stage 1.
+- **Versioned endpoints** `/api/auth/identity-v1/login` and
+  `/api/auth/identity-v1/register`, absent from the original backend (it
+  answers 404 before any mutation), with a body field
+  `identity_contract: "account-scope-v1"` validated by schema.
+- **Stage-2 backend behaviour:** recognised opt-in → normal validation,
+  then `Token` with `access_token`, `token_type`, **validated `user_id`**;
+  no id-less success. Legacy endpoints / missing contract → controlled
+  `409 CLIENT_UPDATE_REQUIRED` **before** any DB write or credential
+  activation; no token, no activating id. Malformed → 422. Well-formed but
+  unsupported version → controlled unsupported-contract error; never a
+  downgrade to legacy success.
+- Rejection blocks stale software, not password accounts; the old tab's
+  local data, inputs, and any offline workout stay intact. It is activated
+  only once the updated bundle is verified available. Rollback floor: the
+  original backend is harmless (404); a stage-2 backend must not be rolled
+  back to one that answers legacy login with success while stage-1 clients
+  exist. Pinned in the C0 design.
+- The same "resolving a principal never changes a scope" rule (§6) covers
+  `/me`, the OAuth redirect, re-login, restore, and boot.
 
 ## 5. Migration and recovery position
 
-Per-profile data lives under id-scoped keys (`scopedKey` at
-`StorageService.js:91`, base keys in `PROFILE_SCOPED_BASE_KEYS` at `:43`).
-The profiles list is one global key. Nothing on the defect paths calls
-`clearProfileData` (`:386-388`), so orphaned scopes survive on disk —
-including scopes whose id is absent from the list (§ above).
+Per-profile data lives under id-scoped keys (`scopedKey`,
+`StorageService.js:91`, over `PROFILE_SCOPED_BASE_KEYS` `:43-67` — history,
+active workout, assessments, weight history, custom exercises and
+templates, food log, settings — plus the legacy `_<uid>` form `:92`). The
+profiles list is one global key. No defect path calls `clearProfileData`
+(`:386-388`), so orphaned scopes survive on disk, including ones absent
+from the list.
 
 **Prohibited without explicit, per-item user choice:** picking
-`profiles[0]`; merging by name or email; merging sibling histories into the
-signed-in account; `clearProfileData` as cleanup; `importSnapshot` as a
-migration mechanism (`:401-420` clears and restores every `fitness_*` key,
-credentials, logout marker, and queues included).
+`profiles[0]`; merging by name or email; merging into the signed-in
+account; `clearProfileData` as cleanup; `importSnapshot` as migration
+(`:401-420` clears and restores every `fitness_*` key including
+credentials, the logout marker, and queues).
 
-**Required (restored from review 2, dropped by revision 3):** discover
-retained scopes from **storage keys**, not from the list; keep explicit
-account→scope bindings once they are proven; provide a supported,
-local-only, read-only recovery surface for scopes that cannot be bound —
-view what is there and export it — so that no user's only copy of a
-workout becomes unreachable. Retaining bytes is not access. An opaque full
-backup is not access. No automatic merging.
+**Required:** discover scopes from **storage keys**; keep bindings only
+with provenance (§6 item 1); a read-only, credential-free recovery surface
+covering **every** data type above — counts per type, a minimal readable
+preview, scoped JSON export of all recognised data in both key formats,
+unparseable values retained verbatim — using a **non-mutating reader**
+(`loadProfileState` migrates and deletes global keys at `:275-282`, so it
+is not that reader). Retaining bytes is not access; an opaque full backup
+is not access; no automatic merging.
 
-## 6. Staged plan (revision 4)
-
-Every stage is separately spec'd in detail, plan-reviewed, and cleared.
-This table is the map; it is not the stage designs.
+## 6. Staged plan and the stage-1 contract
 
 | # | Stage | Fixes | Gate |
 |---|---|---|---|
-| 0 | This revision, plan-reviewed and cleared | — | current |
-| 1 | **Account-boundary safety** (design below) | 3.2, 3.3, 3.4, the protocol side of §4, recovery per §5; stops new profile creation | HIGH; test-first |
-| 2 | **Stable identity** through the negotiated protocol: backend returns `user.id` to opted-in clients; client refuses a missing/invalid id; proven bindings preserved | 3.1 | HIGH; gated on the §7 mixed-version test, **not** on a green stage-1 deploy |
-| 3 | **Retirement and cleanup**: retire normal switching and `/profiles` once recovery is reachable; delete `createProfile`/`switchProfile`/`deleteProfile`, `ProfileSelector`, Settings entries; update Coach prose and `ARCHITECTURE.md` for anything not already updated in 1–2 | — | zone decided by what the diff touches — not LOW by label |
+| 0 | C0 design set (A, B, C below) plan-reviewed and cleared | — | current |
+| 1 | Account-boundary safety, recovery, stop new profile creation — commits C1–C4 | 3.2, 3.3, 3.4, §5 | HIGH; test-first |
+| 2 | Stable identity via the §4 protocol — C5 plumbing, then a separately reviewed activation | 3.1 | gated on the §7 mixed-version matrix |
+| 3 | Retirement and cleanup — C6 | — | zone by diff |
 
-Retirement may share a release with completed recovery; it is **not** a
-prerequisite for shipping the safety fix. Every live entry point to a
-removed feature is removed or redirected **in the release that removes the
-feature**, and the Coach APP KNOWLEDGE block and `ARCHITECTURE.md` change
-in that same commit.
+Every live entry point to a removed feature is removed or redirected in
+the release that removes it; the Coach APP KNOWLEDGE block and
+`ARCHITECTURE.md` change in the same commit. Retirement is not a
+prerequisite for the safety fix.
 
-### Stage 1 design — the contract
+### The stage-1 contract
 
-**Principle:** an *authenticated principal* (account UUID, from a validated
-credential) and a *local scope* (the localStorage id whose keys hold the
-data) are different things. Resolving the principal — at login, `/me`,
-OAuth callback, restore, or boot — **never** changes the local scope by
-itself. A scope changes only through an explicit, tested transition that
-either follows a proven binding or asks.
+**Principle:** an *authenticated principal* (account UUID from a validated
+credential) and a *local scope* (the localStorage id holding the data) are
+different things. Resolving the principal — at login, `/me`, OAuth
+completion, restore, or boot — **never** creates, reassigns, or selects a
+binding as a side effect.
 
-1. **Identity model.** Introduce `accountId` (server UUID or null) alongside
-   the existing local `profile.id` (scope). Persist a bindings map
-   `accountId → scopeId`, proven only by a validated principal having been
-   active while that scope was selected. Legacy `cloud_<timestamp>` aliases
-   with no proven binding are **retained unbound**.
-2. **Scope discovery.** Enumerate localStorage for keys matching
-   `<base><segment><uid>` across `PROFILE_SCOPED_BASE_KEYS` (and the legacy
-   `_<uid>` form) to list every scope that holds data, whether or not it is
-   in the profiles list.
-3. **Recovery surface.** A read-only screen reachable from Settings:
-   "Other data on this device" — one row per unbound scope with counts and
-   date range, view history, export JSON. No merge, no switch-as-identity,
-   no delete in this pass. Absent when there are no unbound scopes.
-4. **Principal resolution without scope change.** Repair `getMe` to send
-   the Bearer token as well as the cookie (today it is cookie-only) —
-   **and** change the boot branch so a resolved UUID updates `accountId`
-   and the binding, never replaces the list or the selected scope unless a
-   binding says so. Same rule for the OAuth callback and re-login.
-5. **Explicit logout.** Order: set the logout marker and clear credentials
-   **synchronously first**; stop dispatch; invalidate pending auth, pull,
-   and queue callbacks; *then* await the cookie logout. Retain the list,
-   bindings, scopes, and pending work; clear only the active selection.
-   `isLoggedOut()` is enforced in both initialisation paths
-   (`WorkoutContext.jsx:~306-312` and `~491-503`), in auth completion
-   (`~523-540`), and in dispatch — not only in `getOrCreateProfiles`. A
-   surviving cookie or late `/me` must not clear the marker; only a
-   deliberate successful login does. Offline/expired sessions keep local
-   access to the previously selected scope; explicit logout does not.
-6. **Queue ownership.** Every op carries `accountId` (authorisation owner),
-   `scopeId` (write-back target), and a unique op/revision id; dedupe
-   includes owner and scope. Ownership is captured **when the mutation is
-   created**, not in the failure `catch`. Dispatch fails closed unless the
-   op's owner matches the validated principal; transitions between awaited
-   ops are re-checked; a newer revision is never acknowledged by an older
-   request's completion. Old-format entries move to a **versioned hold**
-   under a new key, preserved verbatim, surfaced in the recovery screen,
-   never assigned to the current login and never dropped; the 20-entry
-   dead-letter store is not used for this. The direct push/backfill path
-   (`WorkoutContext.jsx:~1026-1097`) obeys the same owner check.
-7. **Backup restore boundary.** Restored data passes the same
-   identity/queue boundary before any refresh or dispatch; a restored token
-   or cookie is not trusted as a session; restored ownerless ops go to the
-   hold.
-8. **List/state coherence.** Every list write returns the list and callers
-   set React state from it (3.4).
-9. **Stop new profile creation** in this release (remove the create UI and
-   its action); normal switching stays until stage 3.
+1. **Binding provenance.** `accountId → scopeId` is trusted only if it came
+   from one of: (a) an already-trusted binding; (b) allocation of a **new,
+   empty** scope by the upgraded client inside a validated-account
+   transition; (c) an explicit, separately recorded, user-authorised
+   adoption of existing unbound data into the *current verified* account
+   (user-authorised transfer — never "proven historical ownership"; a
+   `cloud_<timestamp>` suffix proves nothing). Bindings are **exclusive in
+   both directions**: one account, one scope; one scope, one account.
+   Imported bindings from a backup are untrusted metadata.
+2. **Scope discovery** from storage keys, both formats, all base keys.
+3. **Recovery surface** ("Other data on this device", from Settings): per
+   §5; also shows held queue operations (counts, types, dates) **even when
+   there are no unbound scopes**; read-only; no adoption in this pass.
+4. **Principal resolution without scope change.** `getMe` sends Bearer as
+   well as cookie — but **only** once the boot branch has been changed so a
+   resolved UUID updates `accountId` and *looks up* a trusted binding; it
+   never writes one, never replaces the list, never re-selects a scope
+   without one. Same rule for OAuth completion and re-login. Cloud
+   **reads** and their completion writes are gated by `accountId +
+   scopeId + session generation`, not by scope alone.
+5. **Explicit logout.** Synchronously first: set the marker, clear
+   credentials, bump the session generation, stop dispatch, invalidate
+   pending auth/pull/queue callbacks; *then* await the cookie logout.
+   Retain list, bindings, scopes, and pending work; clear only the active
+   selection. The marker is enforced in both init paths, auth completion,
+   and dispatch. Only a deliberate successful login clears it — recorded
+   at the login transition, since the OAuth flow lands on `/` directly.
+   Offline/expired sessions keep local access to the previously selected
+   scope; explicit logout does not.
+6. **Queue ownership and durable dispatch** — Design B. Every op carries
+   `accountId`, `scopeId`, op/revision id, producer version; dedupe
+   includes owner and scope; captured at mutation time; **new active-v2
+   key** so an old tab's enqueue cannot strip fields; legacy entries go to
+   a **versioned hold** — persisted and read back **before** any original
+   is removed, idempotent on later boots and imports, originals preserved
+   on quota failure; dispatch fails closed unless owner matches the
+   validated principal at dispatch and at each await boundary; a newer
+   revision is never acknowledged by an older completion; two-tab
+   invalidation via storage events with the residual limits stated.
+   **All** direct paths obey the same gate: push/backfill, `syncToApi`,
+   pull completion.
+7. **Restore boundary** — Design C. Restored data passes the identity and
+   queue boundary before any refresh or dispatch; restored credentials are
+   not a session; restored bindings are untrusted; restored ownerless ops
+   go to the hold; non-destructive staging with validation and quota
+   handling.
+8. **List/state coherence** — every list write returns the list; storage
+   failure is surfaced, never presented as durable.
+9. **Stop new profile creation** — remove the create UI and its action
+   after inventorying every caller; normal switching stays until stage 3.
 
-### Stage 1 — first commit
+### C0 — three designs before code
 
-`test(auth): S29 account-boundary and legacy-scope regression fixtures`:
-synthetic storage and credential tests, red before the fix, for — one list
-entry with two history scopes; `/me` returning a UUID while a timestamp
-scope is selected; mixed Bearer/cookie principals; logout followed by a
-late auth response; A→B pending ops; a backup-restored ownerless queue.
-The first production change is the principal/scope boundary with those
-tests green — not `user_id`, not deleting `/profiles`.
+| Design | Covers | Author |
+|---|---|---|
+| **A** — account/scope transition state machine | items 1, 4, 5: principal validation, credential precedence (Bearer over cookie, as `auth.py:103`), binding provenance and exclusivity, scope selection, session generation, offline/expired vs explicit logout, OAuth completion, late logout-cookie responses | Claude session |
+| **B** — durable dispatch protocol | item 6 in full, plus the direct paths and pull callbacks | Codex reviewer, writing in its worktree |
+| **C** — restore transaction | item 7: which keys are data vs session/queue/binding authority; staging; validation; quota; the gate before refresh/dispatch | Claude session |
+
+Each is cross-reviewed by the other author before the set goes to the
+owner. Items 2, 3, 8, 9 are designed in their implementation commits
+against the acceptance details above.
+
+### Commit sequence (stage 1 → 2 → 3)
+
+- **C0** — design documents only.
+- **C1** — `test(auth): S29 account-boundary and legacy-scope regression
+  fixtures`. Synthetic storage/credential fixtures and a scenario harness;
+  production unchanged. The new suite is **deliberately red** for the
+  recorded defects and reported as such; expected failures are never
+  counted as a fix.
+- **C2** — `feat(storage): S29 scope inventory and ownership primitives`.
+  Non-mutating discovery/read/export helpers, the pure transition/binding
+  model, v2 queue/hold primitives, restore validators — not yet wired.
+  Unit fixtures (modern/legacy/orphan keys, every data type, bad JSON,
+  binding exclusivity, revisions, quota) go green; integrated fixtures stay
+  red.
+- **C3** — `feat(recovery): expose retained device data without
+  activation`. Recovery view/export, held-op display, removal of new
+  profile creation and its callers, docs and Coach prose. Discovery and
+  recovery fixtures go green, including food-only, active-workout-only,
+  and hold-only scopes.
+- **C4** — `fix(auth): activate the account and scope transition
+  boundary`. One reviewed, atomic integration: principal resolution,
+  protected boot selection, bindings, logout/OAuth intent, session
+  generation, every direct and queued dispatch/pull guard, mutation-time
+  producer ownership (TimerContext included), restore-before-refresh,
+  list/state coherence. `/me`-UUID-with-legacy-scope, mixed credentials,
+  logout/late-auth, A→B→A, concurrent tabs, imported credentials/bindings/
+  queues go green. `getMe`'s new transport ships **here**, never earlier.
+  HIGH across many files — the coupling is real and is not cured by
+  slicing unsafe intermediate states into commits.
+- **C5** — `feat(auth): identity-contract compatibility plumbing`.
+  Versioned endpoints and client integration behind the activation
+  contract; original endpoints never start returning `user_id`. Contract
+  fixtures green; the §7 matrix exercised against a stage-2 candidate
+  backend in a disposable environment. **Activation is a separate,
+  separately cleared change.**
+- **C6** — stage 3 retirement: switching, `/profiles`, dead APIs, live
+  links; recovery preserved; docs and Coach prose in the same commit.
 
 ## 7. Verification
 
-- **Mixed-version identity rollout preserves legacy scope** (required before
-  stage 2): seed the *pre-stage-1* bundle with a timestamp-scoped offline
-  history, a one-entry list, a second orphan scope, and pending legacy ops;
-  keep a tab on that bundle while stage 1 deploys, then point at the stage-2
-  backend; assert legacy requests cannot trigger UUID activation or mutate
-  registration state before the upgrade gate. Separately run the stage-1
-  client against `Token` with and without `user_id` and against canonical
-  `/me`; assert the proven scope stays selected, unbound scopes remain
-  reachable in recovery, every blob is byte-identical, and no cross-owner
-  write leaves the device. Cover server-first, client-first, rollback,
-  repeated login, and update-prompt refusal.
+- **Mixed-version identity rollout preserves legacy scope** (gates stage
+  2): seed the pre-stage-1 bundle with a timestamp-scoped offline history,
+  a one-entry list, a second orphan scope, and pending legacy ops; keep a
+  tab on it through the stage-1 deploy, then against the stage-2 backend;
+  assert legacy requests cannot activate a UUID or mutate registration
+  state — they receive `409 CLIENT_UPDATE_REQUIRED` before any write. Run
+  the stage-1 client against `Token` with and without `user_id` and
+  against canonical `/me`; assert the trusted scope stays selected,
+  unbound scopes remain reachable in recovery, every blob is byte-
+  identical, no cross-owner write leaves the device. Cover server-first,
+  client-first, rollback to the original backend (404 path), repeated
+  login, update-prompt refusal.
 - Existing matrix: repeated password sign-in; Google sign-in; A→B→A;
-  offline and 401; delayed and duplicate auth resolution; StrictMode replay;
-  two tabs; concurrent enqueue; storage quota failure; old backup import.
-- Local `npm run dev` first; then a **disposable** account on the live
-  backend — never the owner's.
-- `docs/ARCHITECTURE.md` and the Coach APP KNOWLEDGE block change in the
-  same commit as any stage that changes persistence, auth, or a feature.
+  offline and 401; delayed/duplicate auth resolution; StrictMode; two tabs;
+  concurrent enqueue; quota failure; old backup import; a scope holding
+  only an unfinished workout or only a food log.
+- Local first (`npm run dev`, disposable local Postgres for backend
+  stages); then a **disposable** account on the live backend — never the
+  owner's.
+- `ARCHITECTURE.md` and the Coach APP KNOWLEDGE block change in the same
+  commit as any stage that changes persistence, auth, or a feature.
 
 ## 8. Provenance
 
-Planned by the Claude session; plan-reviewed three times by an independent
-top-tier Codex agent, read-only in its own worktree (Traycer agent
-`a85ddc71-6cd5-4a72-8da2-d1eefe1a83a1` for passes 1–2 on 2026-09-09,
-`6554b7a8-2a8a-48e1-90fc-712cc438aa64` for pass 3 on 2026-09-10). Pass 3
-returned CHANGES-REQUIRED on revision 3 and supplied the stage-1 design
-positions adopted above. Reviewer transcripts are the proof artifacts.
+Planned by the Claude session; plan-reviewed four times by independent
+top-tier Codex agents, read-only in their own worktrees (agent
+`a85ddc71-6cd5-4a72-8da2-d1eefe1a83a1`, passes 1–2, 2026-09-09; agent
+`6554b7a8-2a8a-48e1-90fc-712cc438aa64`, passes 3–4, 2026-09-10). Pass 4
+returned CHANGES-REQUIRED on revision 4, identified the binding-provenance
+error, and supplied the protocol pinning and the C0–C6 sequence adopted
+here. Design B is authored by that reviewer. Reviewer transcripts are the
+proof artifacts.
