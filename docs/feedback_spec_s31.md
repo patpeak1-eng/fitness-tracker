@@ -1,10 +1,26 @@
 # Spec — In-app Feedback (S31)
 
-> **STATUS: REVISION 4, 2026-09-11 — after a third plan review
-> (independent cold Claude reviewer) returned CHANGES-REQUIRED with nine
-> findings, all verified and adopted. Spec only, no code. Awaiting review
-> of this revision, the owner's provisioning decision (§7 Q6), and the
-> literal "Cleared, proceed with implementation."**
+> **STATUS: REVISION 5, 2026-09-11 — after a fourth plan review (Codex,
+> adversarial) returned CHANGES-REQUIRED with seven findings, all verified
+> against source and adopted. Spec only, no code. Awaiting the owner's
+> provisioning decision (§7 Q6) and the literal "Cleared, proceed with
+> implementation."**
+>
+> **What revision 4 got wrong — it could have thrown away what a user
+> wrote.** Idempotency was keyed to the *draft*, not to the *text*: send
+> X, lose the response, edit to Y, retry → the server returns 200 for X
+> and the client cleared the draft, so Y was gone. And a guest whose
+> submission committed before the response was lost would get 409 on
+> retry once signed in — the same person, their own words, reported as
+> "already received". Revision 4 also required the X button to bypass a
+> guard that lives in the single `onClose` both it and the overlay call
+> (`Modal.jsx:9,14`) — impossible as written; promised a `Retry-After`
+> the browser cannot read (no `expose_headers` in `backend/main.py:24-33`,
+> and `ApiService.js:37-40` keeps only the status); sourced the admin
+> account id from `currentProfile.id`, which is a `cloud_<timestamp>` for
+> password users; kept the draft in component state across a sign-in that
+> hard-navigates away; and claimed `EmailStr` works when `email_validator`
+> is **not importable** in the active Python.
 > Owner direction: build it in the app; wording is **Feedback**; entry
 > beside the version line in Settings.
 >
@@ -39,7 +55,10 @@ build version attached automatically. The owner reads reports in the app.
 |---|---|---|
 | Build id in the UI | `Settings.jsx:486` | entry point beside it |
 | `__APP_VERSION__` | `vite.config.js:11-12` | attached automatically |
-| Required-auth dependency | `backend/app/auth.py:84-123 get_current_user(request, credentials=Depends(bearer_scheme), db=Depends(get_db))`; `HTTPBearer(auto_error=False)` `:45`; Bearer wins when the header is present `:103`; empty token → 401 `:104-105`; `JWTError` → 401 `:111` | optional variant delegates (§4) |
+| Required-auth dependency | `backend/app/auth.py:84-123 get_current_user(request, credentials=Depends(bearer_scheme), db=Depends(get_db))`; `HTTPBearer(auto_error=False)` `:45`; Bearer wins when **parsed Bearer credentials exist** `:103` (a malformed or non-Bearer header parses to `None` and falls through to the cookie); empty token → 401 `:104-105`; `JWTError` → 401 `:111` | optional variant delegates (§4) |
+| CORS | `backend/main.py:24-33` — **no `expose_headers`**, so no custom response header reaches the browser; `ApiService.js:37-40` preserves only `status` | the wait is returned in the JSON body, not a header (§4) |
+| `email_validator` | listed via `pydantic[email]` in `requirements.txt` but **not importable in the active Python** | install full backend requirements + dev requirements (§6.1) |
+| OAuth vs password accounts | distinguishable: `hashed_password == GOOGLE_OAUTH_SENTINEL` (`routers/auth.py:288`, used at `:395`) | how the owner can count password accounts without guessing |
 | `HTTPBearer(auto_error=False)` | returns `None` for missing header, empty `Bearer`, non-bearer scheme (installed FastAPI 0.136.1, `security/http.py`); `requirements.txt` pins nothing | presence tested on the raw header |
 | Rate limiter | `rate_limit.py:66`; `Retry-After` `:71-75`; module-level `_limiter` `:42`; never evicts `:35-38` | reuse; reset between tests |
 | Client IP | `routers/auth.py:59-72 _client_ip`; callers `:83`, `:125` | move to `rate_limit.py` |
@@ -85,17 +104,27 @@ constant is worse than nothing. If a second entry point ever exists, add
 the column then (YAGNI). The §1 promise is "version attached", not
 "screen".
 
-**Idempotency:** `UNIQUE(client_key)`. On `IntegrityError`: rollback;
-re-select by `client_key`; **no row → re-raise** (a different constraint
-fired, e.g. the `user_id` FK during a concurrent account deletion);
-row found and `existing.user_id == principal_id` (both `None` for guests
-counts) → `200 {id}`; otherwise `409`. No per-IP dedupe; the IP is never
-stored.
+**Idempotency — keyed to the text, not to the draft.** `client_key` is
+minted from the submission *attempt*: the client generates it immediately
+before a send and **mints a new one whenever the message, category, or
+contact email changes**. A retry of unchanged text reuses the key; an
+edited message is a new submission. This is what stops "send X, lose the
+response, edit to Y, retry" from returning 200 for X.
+
+`UNIQUE(client_key)`. On `IntegrityError`: rollback; re-select by
+`client_key`; **no row → re-raise** (a different constraint fired, e.g.
+the `user_id` FK during a concurrent account deletion); row found and
+`existing.user_id == principal_id` (both `None` for guests counts) →
+`200 {id}`; otherwise **`409`, which means only "this key is taken by a
+different submitter" — never "your words are stored."** The principal can
+legitimately change between a committed send and its retry (a guest
+submission followed by signing in), so 409 must not be treated as
+success. No per-IP dedupe; the IP is never stored.
 
 **Deletion contract:** deleting an account deletes its feedback, contact
 address included. No `Feedback` relationship on `User`. Deletion
 docstring corrected (also adds `food_log`). Guest feedback kept until the
-owner removes it; the modal says "Kept until it's been acted on."
+owner removes it; the modal says "Kept until it's removed."
 Feedback **is** user data: `AGENTS.md:47` gains `food_log` and `feedback`.
 
 ## 4. Backend
@@ -111,7 +140,12 @@ New `backend/app/routers/feedback.py`; `get_optional_user` lives in
   but yields zero. A change takes effect on the next process start
   (Railway restarts on variable change). Predicate `is_admin(user)`;
   no column on `User`; never from a request.
-- `GET /api/feedback/access` — `get_current_user`; `{ is_admin }`.
+- `GET /api/feedback/access` — `get_current_user`; returns
+  `{ is_admin, user_id }`. The `user_id` is the **server's** account id and
+  is the only thing Settings displays for `ADMIN_USER_IDS`; never
+  `currentProfile.id`, which is a `cloud_<timestamp>` for password users
+  (`Login.jsx:65,90`). This keeps the UUID allowlist workable without
+  waiting for S29.
 - `POST /api/feedback` — optional auth with the **full signature**:
   ```
   async def get_optional_user(request: Request,
@@ -125,12 +159,16 @@ New `backend/app/routers/feedback.py`; `get_optional_user` lives in
   matches every other route in every case — the only divergence is
   "both absent → guest". Body per §3; rate limits **10/h per account**
   (`f"{user.id}:feedback"`), **30/h per guest IP** (`f"feedback:{ip}"` —
-  a NAT'd station shares it; intended); `Retry-After` surfaced; `201
-  {id}`; `200 {id}` on an idempotent repeat; `409` on a cross-principal
-  repeat.
+  a NAT'd station shares it; intended). On 429 the wait is returned **in
+  the JSON body** (`{detail, retry_after_seconds}`) as well as the
+  `Retry-After` header, because no custom header reaches the browser
+  without a CORS `expose_headers` change and `ApiService` keeps only the
+  status — returning it in the body avoids touching both. `201 {id}`;
+  `200 {id}` on an identical repeat; `409` per §3.
 - `GET /api/feedback?limit=50&cursor=<opaque>` — admin only (403); newest
-  first; `limit ≤ 100`; cursor is an **opaque base64 of `(created_at,
-  id)`** so `+00:00` never hits a query string unencoded.
+  first; **`limit` validated `1 ≤ limit ≤ 100`** (422 otherwise); cursor is
+  an **opaque base64 of `(created_at, id)`**, and a malformed or oversized
+  cursor is a 422, not a crash or a silent full scan.
 - `_client_ip` moves to `rate_limit.py`; `auth.py` imports it from there.
 
 ## 5. Frontend
@@ -142,23 +180,33 @@ New `backend/app/routers/feedback.py`; `get_optional_user` lives in
   keep local `isAdmin`; show the account id under the version line so the
   owner can copy it for `ADMIN_USER_IDS`. Local-only profiles show
   neither (their id is not an account). Not in `WorkoutContext`.
-- **Modal — exactly two component changes, app-wide (17 call sites):**
-  (1) an `isOpen`-keyed effect placed **above** the early return
-  (rules of hooks) that stores `document.activeElement`, moves focus into
-  the dialog container, and restores it on close; (2) a keydown listener
-  for Escape that calls `onClose` — so every caller's existing `onClose`
-  guard applies. Plus `role="dialog" aria-modal="true"
-  aria-labelledby=<title id>` on the container. No prop additions. The
-  overlay/Escape **guard lives in Settings' `onClose`** (the `:513`
-  pattern): ignored while sending or while the draft is non-empty.
-- **Draft semantics (all three exits defined):** overlay click and Escape
-  are ignored while sending or with a non-empty draft; the **X button and
-  Cancel close the modal and keep the draft in Settings state**, so
-  reopening restores it; the draft is cleared only on success or an
-  explicit "Discard" inside the modal.
+- **Modal — three changes, app-wide (17 call sites across 12 files):**
+  (1) `onClose` is called with a **dismissal reason** —
+  `onClose('backdrop' | 'escape' | 'button')` — defaulting to today's
+  behaviour for every existing caller, which ignores the argument.
+  Revision 4 required the X button to bypass a guard living in the same
+  `onClose` the overlay calls (`Modal.jsx:9,14`); that is impossible
+  without this. (2) an `isOpen`-keyed effect placed **above** the early
+  return (rules of hooks) that stores `document.activeElement`, focuses
+  the dialog container (which gains `tabIndex={-1}` and a ref), and
+  restores focus on close. (3) a keydown listener for Escape calling
+  `onClose('escape')`, kept current as the caller's guard state changes
+  without re-running focus setup. Plus `role="dialog" aria-modal="true"
+  aria-labelledby={titleId}` with a unique id. Regression test: an
+  existing modal (logout) still closes on all three exits.
+- **Draft semantics.** Settings' `onClose(reason)`: `backdrop` and
+  `escape` are ignored while sending or with a non-empty draft;
+  `button` (X) and Cancel close and **keep the draft in component
+  state**, so reopening restores it. Cleared only on success or an
+  explicit "Discard".
+- **Honest limit on the 401 path:** signing in hard-navigates
+  (`Login.jsx:29-35`), so a draft in component state does **not** survive
+  it. The 401 state therefore offers **"Copy your message"** before the
+  sign-in link and says the draft will not be kept. No hidden
+  localStorage persistence of someone's unsent words.
 - Modal content: three category chips; message with counter; "Reply email
   (optional)" prefilled, labelled apart from the signed-in identity; "Your
-  app version is included. Kept until it's been acted on." Submit
+  app version is included. Kept until it's removed." Submit
   disables the button, mints `client_key` once per draft, sends via
   `ApiService.sendFeedback`. **UI states:** 201/200 → success, clear
   draft; **409 → "Already received — start a new message"** (terminal for
@@ -185,20 +233,29 @@ New `backend/app/routers/feedback.py`; `get_optional_user` lives in
    lives in the production project), or Docker once installed. **The
    production `Postgres` service is never a test target.**
 2. **Harness** (`backend/pytest.ini`, `backend/tests/conftest.py`):
-   `TEST_DATABASE_URL` required; host **allowlist** `{localhost,
-   127.0.0.1}` unless `TEST_DB_ALLOW_REMOTE=1`; set
-   `os.environ["DATABASE_URL"]` to it **before importing `main`** (dotenv
-   does not override, and the app's own engine then points at the test
-   DB); engine with `poolclass=NullPool` (asyncpg connections are bound to
-   the creating loop); `app.dependency_overrides[get_db]` (every router
-   uses that single function; no direct `AsyncSessionLocal` use outside
-   `database.py:36`); schema via `alembic.command.upgrade(cfg, "head")`
-   once per session and `downgrade base` at teardown (so `0011` itself is
-   under test); `TRUNCATE … CASCADE` over `Base.metadata.sorted_tables`
-   per test; an autouse fixture resetting `_limiter._windows`; cookie
-   tests set the cookie on the httpx request; expired-token tests use
-   `create_access_token(subject, expires_delta=timedelta(seconds=-1))`;
-   `httpx.ASGITransport`.
+   `TEST_DATABASE_URL` required. **Fail-closed target check before any
+   import or migration:** the host must be `localhost`/`127.0.0.1` (unless
+   `TEST_DB_ALLOW_REMOTE=1`) **and** the database name must match a
+   dedicated test identity (`fitness_test`, or a generated per-run name).
+   Host allowlisting alone is not enough — `TRUNCATE … CASCADE` and
+   `downgrade base` against someone's local development database would be
+   just as destructive. Refuse to run otherwise.
+   Set `os.environ["DATABASE_URL"]` to the validated URL **before
+   importing `app.database` or `main`, and before Alembic runs** —
+   `database.py:22` builds the engine at import (it needs the asyncpg
+   driver then, though it opens no connection), and `alembic/env.py:24`
+   imports that module while `:72` does connect. Engine with
+   `poolclass=NullPool` (asyncpg connections are bound to the creating
+   loop). `app.dependency_overrides[get_db]` (every router uses that one
+   function; no direct `AsyncSessionLocal` use outside `database.py:36`).
+   Schema via `alembic.command.upgrade(cfg, "head")` once per session and
+   `downgrade base` at teardown — **run from a synchronous fixture or a
+   subprocess**, because `alembic/env.py:77-78` calls `asyncio.run` and
+   cannot be driven from inside a running async loop. `TRUNCATE … CASCADE`
+   over `Base.metadata.sorted_tables`; an autouse fixture resetting
+   `_limiter._windows`; cookie tests set the cookie on the httpx request;
+   expired-token tests use `create_access_token(subject,
+   expires_delta=timedelta(seconds=-1))`; `httpx.ASGITransport`.
 3. **Fixtures first, red then green:** case-variant password account not
    admin; malformed header alone → 401; malformed header + valid cookie →
    that user; expired → 401; absent → guest 201; flag on no input schema
