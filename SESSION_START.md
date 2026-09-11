@@ -246,8 +246,11 @@ revision 3). `520d6f0` dev-server verification screenshots.
 Owner waived the Codex code-review gate for `6d6eaeb` (data-only; Codex at
 usage limit) — recorded as an exception, not a precedent.
 
-**On the build branch, reviewed APPROVE-WITH-NITS (independent Claude
-reviewer; Codex at usage limit), awaiting owner clearance to merge:** the
+**Merged and deployed at `509ca8e` (both services SUCCESS; backend
+`/openapi.json` 200). Reviewed twice — Claude reviewer APPROVE-WITH-NITS,
+then Codex APPROVE-WITH-NITS on the owner's request; all six nits verified
+against source and applied. Owner authorised the merge in his own words
+(cannot read diffs; asked Codex to go through it for him):** the
 Coach system prompt no longer hard-codes template names or an exercise
 count and now points at the context keys it actually receives; its stale
 navigation list and OAuth-only sync claim are corrected and the features it
