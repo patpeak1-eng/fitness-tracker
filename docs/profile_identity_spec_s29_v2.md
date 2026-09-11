@@ -1,10 +1,15 @@
 # Spec — Account identity, profile retirement, and sync ownership (S29 v2)
 
-> **STATUS: PAUSED mid-planning, 2026-09-09. No code has been written.**
+> **STATUS: REVISION 3, 2026-09-10 — all §7 decisions answered by the owner;
+> priority raised to P1; awaiting plan review of this revision and the
+> literal "Cleared, proceed with implementation." No code has been written.**
 > Supersedes `profile_orphan_spec_s29.md`, whose central premise was wrong.
-> Two independent cross-review passes are complete; both returned
-> CHANGES-REQUIRED / AGREE-WITH-NITS. This document is the current state of
-> the plan and the place to resume.
+> Two independent cross-review passes on revision 2 returned
+> CHANGES-REQUIRED / AGREE-WITH-NITS and are incorporated.
+>
+> **Why P1 now:** the owner has started sharing the app with co-workers.
+> Defect 3.1 is latent for Google sign-in and live for email/password
+> sign-in; new users are the ones most likely to register with a password.
 >
 > **Resume by reading this file top to bottom.** It is written for a session
 > with no memory of the conversation that produced it.
@@ -46,10 +51,24 @@ getting it wrong destroys real data:
 - It does not fix the identity defect. See §3.1 — that defect reaches a
   single-profile, single-device, one-account user on every password sign-in.
 
-**Follow-up:** `docs/ARCHITECTURE.md` opens by describing the app as "used by
-a small family group including a Fire Station (first-responder) profile."
-Under this decision that framing is either stale or means separate devices.
-Confirm with the owner and correct the doc; do not edit it on assumption.
+**Owner's further decisions (2026-09-10), recorded verbatim in spirit:**
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Optional containment stage first? | Left to the builder. **Decision: skip the separate stage; fold "stop creating new profiles" into stage 2** — with one profile per person it is a two-line UI removal, not a release |
+| 2 | Does any device hold a second profile? | "No one has a second profile. Make it so no one can have a second profile." |
+| 3 | Password sign-in? | **Keep and fix.** Nearly everyone uses Google, but anyone without a Google account must still be able to use the app |
+| 4 | Interim login-page copy? | Not needed |
+| 5 | The "Fire Station profile" framing in `ARCHITECTURE.md`? | Not a thing. The only fire-station aspect is *where* the owner trains; the equipment "station" environment idea did not pan out. Framing corrected in the same commit as this revision |
+
+**What decision 2 changes and what it does not.** The picker, `createProfile`,
+and `switchProfile` are retired outright rather than staged behind a legacy
+view. But "no one has a second profile" is the owner's belief, not something
+the app can verify — devices are not inspectable. So the retirement keeps
+one guard, cheap and non-destructive: if a device's stored list holds more
+than one entry at boot, do **not** pick one and discard the rest; keep the
+list and its scopes intact and let the account-bound identity select its
+own entry (§6 stage 3). Nothing is deleted, merged, or re-keyed.
 
 ## 3. The three defects, verified
 
@@ -157,34 +176,36 @@ Each stage is separately spec'd, separately reviewed, separately signed off.
 
 | # | Stage | Fixes | Notes |
 |---|---|---|---|
-| 0 | This spec, reviewed and cleared | — | current position |
-| 1 | *(optional)* stop creating **new** local profiles; leave existing ones, selection, data and `/profiles` intact | none | smallest safe product step; explicitly fixes no P1 |
-| 2 | Account-boundary safety: single authenticated principal, credential-transition policy, owner-bound queue entries, logout independent of list length | 3.2, 3.3 | the first substantive release; must land **before** stage 3 |
-| 3 | Stable identity: return `user.id` in `Token` for login and register, remove the timestamp fallback, client refuses a missing/invalid id | 3.1 | gated by §4; verify old/new client against old/new backend |
-| 4 | Legacy access/export path, then retire `/profiles`, the picker, and create/switch/delete | — | only after users can reach old data |
+| 0 | This spec (revision 3), plan-reviewed and cleared | — | current position |
+| 1 | Account-boundary safety **plus profile retirement**: single authenticated principal; credential-transition policy; owner-bound queue entries; explicit logout independent of list length; remove profile creation, switching, and the `/profiles` route; keep `updateProfile` for name editing; multi-entry guard (§2) | 3.2, 3.3, decision 2 | first substantive release; must land **before** stage 2. `WorkoutContext.jsx` + backend together → HIGH |
+| 2 | Stable identity: return `user.id` in `Token` for login and register, remove the timestamp fallback, client refuses a missing/invalid id | 3.1 | gated by §4 — deploy the compatibility handling in stage 1 **first**; verify old/new client against old/new backend |
+| 3 | Cleanup: delete `ProfileSelector`, `createProfile`/`switchProfile`/`deleteProfile` and their exports, Settings "switch profile" entries; update Coach APP KNOWLEDGE ("multi-profile support") and `ARCHITECTURE.md` | — | docs + dead code; LOW once 1 and 2 are live |
 
-**Reviewer's recommendation, accepted:** stage 3 is a prerequisite, not a
-resolution. Do not ship it alone and call the problem solved. Prefer adding
-`user_id` to `Token` over a second frontend round-trip — it avoids the
-registration-succeeded-but-lookup-failed case, and `getProfile` currently
-does not check `r.ok`.
+**Reviewer's recommendation, accepted:** identity activation is a
+prerequisite, not a resolution, and must follow account-boundary safety.
+Prefer adding `user_id` to `Token` over a second frontend round-trip — it
+avoids the registration-succeeded-but-lookup-failed case, and `getProfile`
+currently does not check `r.ok`.
 
-**First commit when work resumes:** this spec, cleared. First *code* commit:
-stage 1 if a containment step is wanted, otherwise stage 2.
+**The §4 rollout trap, restated as a stage-1 requirement:** stage 1 must
+make the client tolerate a `user_id` appearing in the login response
+*without* switching an existing device's scope out from under it. Only then
+can stage 2 return the field.
 
-## 7. Still open
+**First commit when work resumes:** this revision, plan-reviewed and
+cleared. First *code* commit: stage 1.
 
-1. Stage 1 — take the optional containment step, or go straight to stage 2?
-2. Does any real device currently hold a second profile with data? Answers
-   how much stage 4 has to build. Owner-checkable.
-3. Password sign-in — keep and fix, or retire in favour of Google-only?
-   Owner previously indicated essentially all users are on Google. Retiring
-   it would delete defect 3.1 rather than fix it, but locks out any existing
-   password account and is a product call, not an engineering one.
-4. Interim login-page copy. Position taken: a warning is not a fix and this
-   repo puts data-loss handling off the chopping block. Revisit only if
-   stages 2–3 will not ship promptly.
-5. Confirm or correct the `ARCHITECTURE.md` family-group framing (§2).
+## 7. Decisions — all recorded (see §2 table)
+
+Nothing remains open for the owner. What remains is engineering: the
+plan review of this revision, then the clearance phrase, then stage 1.
+
+Open for the **builder and reviewer** to settle in the stage-1 design, not
+the owner: the exact ownership key for queue entries (account id vs local
+scope id vs both); how a pending entry created by an old client is held
+rather than replayed; and whether explicit logout should clear the stored
+list or only the active id (the spec's position: only the active id, with
+`isLoggedOut()` consulted regardless of list length).
 
 ## 8. Verification required before any stage is called done
 

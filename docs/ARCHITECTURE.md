@@ -14,7 +14,7 @@
 
 ## 1. SYSTEM OVERVIEW
 
-A mobile-first Progressive Web App for personal fitness tracking, used by a small family group including a Fire Station (first-responder) profile with pause/resume workflow requirements. Built as a "Guided Workout" experience — timers, audio cues, smart set recommendations — rather than a spreadsheet-style logger.
+A mobile-first Progressive Web App for personal fitness tracking, used by the owner, family, and (since S30) fire-service co-workers — each on their own device with their own account. Workouts can be paused and resumed because training at a fire station gets interrupted; that is the only "fire station" aspect of the product. (Earlier revisions described a "Fire Station profile"; the owner confirmed on 2026-09-10 that no such thing exists and the equipment "station" environment idea did not pan out.) Built as a "Guided Workout" experience — timers, audio cues, smart set recommendations — rather than a spreadsheet-style logger.
 
 **Core philosophy (unchanged across all sessions):** local-first, profile-scoped, offline-resilient. The backend is a sync layer, not the source of truth during an active session.
 

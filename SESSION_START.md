@@ -310,11 +310,15 @@ documented chrome-devtools path turned out not to be connected.
 `29a6465` cross-review mandatory for MEDIUM+, top-tier reviewer required.
 `6703e26` never name a model; always pick the most capable available.
 
-**OPEN — P1, the session's main find.** What was filed as a P3 "cloud login
+**OPEN — P1, NEXT UP (owner, 2026-09-10: "resolve as soon as possible",
+co-workers are being onboarded).** What was filed as a P3 "cloud login
 orphans local profiles" is actually **three P1 defects**, and the original
-framing was wrong. Full detail, verified evidence, staged plan and the
-remaining decisions are in **`docs/profile_identity_spec_s29_v2.md`** —
-start there, it is written for a session with no memory of this one.
+framing was wrong. Full detail, verified evidence, the three-stage plan and
+every owner decision (all answered 2026-09-10: one profile per person,
+keep-and-fix password sign-in, no interim copy, no "fire station profile")
+are in **`docs/profile_identity_spec_s29_v2.md` revision 3** — start there.
+Next step: plan review of revision 3, then the clearance phrase, then
+stage 1 (account-boundary safety + profile retirement, HIGH).
 In one line each:
   1. Email/password sign-in has no stable identity — `Token` carries no
      `user_id`, so every sign-in mints `cloud_<timestamp>` and a new data
