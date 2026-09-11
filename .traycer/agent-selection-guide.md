@@ -64,6 +64,24 @@ forward from a previous session, and do not record one here.
 When only one top-capability seat is available, it goes to the **reviewer**.
 Catching a bad plan is worth more than writing the code slightly better.
 
+## Cost (owner direction, 2026-09-11)
+
+The most capable models are also the most expensive, and both harnesses
+exhausted their quota on 2026-09-10. Spend capability where the zone
+demands it and nowhere else:
+
+- **LOW** work (docs, copy, CSS, test files, screenshots, log updates):
+  a less capable, cheaper model. Never the top tier.
+- **MEDIUM**: mid-tier builder; the reviewer is the strong seat.
+- **HIGH**: strong on the review side always; the builder may be one tier
+  down when the reviewer is strong. Use the harness's medium reasoning
+  effort by default; raise it only for an adversarial pass on a plan.
+- Coordination turns (relaying, briefing, committing docs) do not need
+  the top tier — the coordinating agent should run one tier down and
+  switch up only for a HIGH-zone design or build turn.
+- Do not run two top-tier reviewers on the same artifact in parallel;
+  sequence them, and let the second one see the first's findings.
+
 ## Run location
 
 Parallel writers **always** get a fresh worktree, bound at creation via
