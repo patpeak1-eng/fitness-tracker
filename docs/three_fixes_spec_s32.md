@@ -1,158 +1,141 @@
-# Spec — Three real defects, one sequence (S32, revision 3)
+# Spec — Three real defects, one sequence (S32, revision 4)
 
 > **STATUS: spec only, no code. Awaiting re-review and the literal
 > "Cleared, proceed with implementation."**
 >
-> **Revision 3 (2026-09-12) — review found two P0s and four P1s in
-> revision 2. All verified in source; all adopted.**
+> **Revision 4 (2026-09-12) — two P0s and four P1s from the third review,
+> all verified. One of them made the design smaller.**
 >
-> - **"Never retry a 409" threw away real work.** Two devices can both see
->   sequence 5 and both send 6. One is rejected — and under revision 2
->   that mutation was simply lost. Worse, `SyncQueue` dead-letters every
->   non-401/429 4xx (`SyncQueue.js:131-137`), so a 409 was terminal even
->   offline. Worse still, completion removes a queue entry by its stable
->   `type:key` id (`:116-120`) while `enqueue` replaces by the same key
->   (`:72-86`), so an in-flight sequence-5 success would delete a queued
->   sequence-6. §3 replaces this with rebase-and-reissue.
-> - **The soft clear had no absent-row case.** A clear arriving before the
->   first save finds no row, a guarded `UPDATE` touches nothing, and the
->   delayed save then inserts and resurrects the workout. §3 makes both
->   handlers conditional upserts.
-> - **Commit 2a is not inert, and I said it was.** `Login.jsx:65,90`
->   already read `result.user_id`, so shipping the backend alone performs
->   the one-time scope switch. I documented that exact trap during the S29
->   work and then contradicted it here. It is acceptable *only* because
->   the four password accounts are verified-empty test fixtures — not
->   because nothing happens.
-> - **Discarding tombstones on restore does not prevent resurrection.**
->   The backfill re-uploads any workout it finds locally but not on the
->   server (`WorkoutContext.jsx:1033-1048`), so an old backup would
->   recreate a deleted workout *and* push it back. §1 makes tombstones
->   durable, exported data.
-> - Tombstone retirement also needs the **confirmation** generation, not
->   just the creation generation.
+> - **Deletion moves to the server, and the client tombstone shrinks.**
+>   Revision 3 tried to make deletion durable with exported client-side
+>   tombstones. That could never deliver its promise: after retirement, or
+>   on a *second device* that never saw the tombstone, an old backup
+>   restores the workout and the backfill re-uploads it
+>   (`WorkoutContext.jsx:1033-1048`). The right place for "this was
+>   deleted" is the server. `workout_history` gains `deleted_at`; DELETE
+>   soft-deletes; the list filters it out; and `POST` already returns the
+>   existing row on a `client_id` collision (`workouts.py:56-78`), so a
+>   re-upload attempt now comes back marked deleted instead of
+>   resurrecting. The client tombstone drops to a short-lived guard for
+>   one thing only: a pull already in flight. No export, no cross-device
+>   propagation, no retirement rule to get wrong.
+> - **Acknowledgement cannot use content as identity (ABA).** Clear at
+>   seq 5 in flight; user starts B (6); cancels B, so desired content is
+>   "clear" again (7). Seq 5 succeeds, content matches, and revision 3
+>   would delete entry 7 — then the delayed PUT 6 clears the server's
+>   seq-5 fence and resurrects B. Identity is now an immutable
+>   `desiredRevision` plus the exact dispatched `client_seq`.
+> - `RETURNING` yields nothing when the conditional `DO UPDATE` is
+>   suppressed, so the 409's current sequence needs a follow-up `SELECT`.
+> - The legacy branch needs its own statement (`client_seq =
+>   active_workout.client_seq + 1`), not the sequenced `WHERE`.
+> - GET could not both return JSON `null` and carry `client_seq`.
+> - 3a is **API-compatible**, not "no effect".
 
-**Zone: HIGH** throughout. Two-clearance gate per commit.
+**Zone: HIGH** throughout. Two-clearance gate per commit. **All three
+fixes now touch the backend** — two migrations in total.
 
-**Owner decisions carried in:** the authorised count found **four password
-accounts, all `example.com` fixtures with no workouts, meals or
-templates** (one stray weight row). Build all three, fence included.
+**Owner decisions carried in:** authorised count found **four password
+accounts, all `example.com` fixtures, no workouts/meals/templates**.
+Build all three, fence included.
 
 ---
 
-## Fix 1 — Deleting a workout must actually delete it
+## Fix 1 — Deletion, made durable on the server
 
 ### Broken
 
-`deleteWorkout` (`WorkoutContext.jsx:1792-1794`) filters local state only.
-No `ApiService` delete exists in `src/`. The backend endpoint is correct
-(`workouts.py:145-164`). The row survives and the next pull re-adds it
-(`:802-829`).
+`deleteWorkout` (`WorkoutContext.jsx:1792-1794`) filters local state only;
+no `ApiService` delete exists in `src/`. The row survives and the next
+pull re-adds it (`:802-829`). Restoring an old backup also re-uploads it.
 
-### Resolving the server row
+### 1a — server (migration `0011`)
 
-| Origin | `id` | `client_id` | `backendId` |
-|---|---|---|---|
-| Local, saved directly | local UUID | UUID | set (`:1768-1776`) |
-| Local, saved via queue | local UUID | UUID | often absent |
-| Pulled | **server UUID** | UUID *or* `NULL` | absent |
-| Restored from backup | any | any | any |
+- `workout_history.deleted_at TIMESTAMPTZ NULL`.
+- `DELETE /api/workouts/{id}` sets `deleted_at = now()` instead of
+  removing the row; already-deleted is success.
+- The list endpoint filters `deleted_at IS NULL`.
+- `POST /api/workouts` keeps today's behaviour — on a `client_id`
+  collision it returns the existing row (`workouts.py:56-78`) — which now
+  carries `deleted_at`. That single fact is what stops resurrection from
+  **any** device and **any** backup, permanently, without client
+  bookkeeping.
+- Response schema gains `deleted_at` so clients can react.
 
-Order: explicit `backendId`; else `client_id` lookup (safe — `(user_id,
-client_id)` is unique, `models.py:135-145`); else **exact `id` match
-against a fetched history page**, which is the legacy `client_id = NULL`
-case that migration `0002:7-14` explicitly permits; only a **successful**
-fetch matching nothing proves local-only. A **failed** fetch enqueues and
-retains intent — it is never read as "never synced". 404 is success, but
-only after resolution has produced a real id.
+API-compatible: existing clients never send it, never see a deleted row in
+the list, and their re-upload attempts return the existing row exactly as
+before.
 
-**Make the fallback rare** (both patterns already exist): the cloud pull
-adopts `backendId` onto a local workout matched by `client_id`, exactly as
-the food log does (`:847-875`), and the `workout` executor writes the
-returned id back the way the assessment and template executors do
-(`:347-369`). Then the paginated fetch only ever runs for old, queued, or
-restored rows.
+### 1b — client
 
-### Tombstones — durable, exported data
+Resolution order for the server id (row shapes verified): explicit
+`backendId`; else `client_id` lookup (safe — `(user_id, client_id)` is
+unique, `models.py:135-145`); else exact `id` match against a fetched page
+— the legacy `client_id = NULL` case migration `0002:7-14` explicitly
+permits; only a **successful** fetch matching nothing proves local-only. A
+**failed** fetch enqueues and retains intent.
 
-Revision 2 made them device-local and discarded on import. That fails:
-after restoring an older backup, the deleted workout is present locally
-and absent on the server, so the backfill re-uploads it.
+Make that fallback rare with patterns that already exist: the pull adopts
+`backendId` onto a workout matched by `client_id`, as the food log does
+(`:847-875`), and the `workout` executor writes the returned id back as
+the assessment and template executors do (`:347-369`).
 
-- Stored profile-scoped, keyed by **both** `client_id` and server `id`.
-- Fields: `createdAtGeneration`, `confirmedAtGeneration`, `deletedAt`.
-- The pull merge skips any row they name, **and so does the backfill** —
-  that second gate is what stops re-upload.
-- **Retired** only by a pull whose *start* generation exceeds
-  `confirmedAtGeneration` and whose result omits both identifiers. A pull
-  that started before confirmation cannot retire it. If pulls keep
-  failing the tombstone persists — fail-closed and intended; the store is
-  bounded and surfaced in the UI.
-- **Exported and restored** as data, merged as a union on import.
-- **Documented consequence:** restoring a backup taken *before* a
-  deletion will not bring that workout back. The most recent explicit
-  intent — the delete — wins over an older snapshot. This is a deliberate
-  choice and belongs in the restore copy.
+`deleteWorkout` removes locally, then deletes remotely, enqueuing
+`workout_delete` on failure (no such executor exists among the ten at
+`:344-411`).
+
+**The remaining tombstone is small.** Purpose: stop a pull that started
+before the delete from re-adding the row. Profile-scoped, keyed by
+`client_id` and server `id`, retired on the first successful pull that
+started after the delete confirmed and omits the row. **Not exported** —
+it no longer needs to be, because the server now holds the truth.
+
+**Backfill gate:** skip any workout whose server record reports
+`deleted_at`. With 1a this is a belt-and-braces check rather than the
+whole defence.
 
 ### Done means
 
-Delete a synced workout → reload, sign out and in → gone. Delete offline →
-reconnect → gone server-side, does not return. Delete a **legacy row with
-no `client_id`** → actually deleted. Delete during an in-flight pull → does
-not reappear. **Restore an older backup → the deleted workout does not
-come back and is not re-uploaded.** Never-synced workout → no request.
+Delete a synced workout → reload, sign out and in → gone. Offline delete →
+reconnect → gone, stays gone. **Legacy row with no `client_id`** →
+actually deleted. Delete during an in-flight pull → does not reappear.
+**Restore a pre-deletion backup, on this device or another** → the workout
+does not come back and is not re-uploaded. Never-synced → no request.
 
 ---
 
 ## Fix 2 — Password sign-in must keep the same identity
 
 `Token` (`schemas.py:28-30`) has no `user_id`; both handlers return it
-unchanged (`routers/auth.py:114,139`), so `Login.jsx:65,90` always take
-`'cloud_' + Date.now()`, and cookie-only `getMe` cannot correct a Bearer
-session. Every login and registration lands on a new scope.
+unchanged (`routers/auth.py:114,139`); `Login.jsx:65,90` therefore always
+take `'cloud_' + Date.now()`, and cookie-only `getMe` cannot correct a
+Bearer session.
 
-**2a (backend, additive but NOT inert):** `Token` gains `user_id`; both
-constructors populate it. The deployed frontend already reads that field,
-so password clients switch to the canonical id on their next sign-in the
-moment this deploys. That is the intended end state and is safe here only
-because the affected accounts are the four empty fixtures. Deploy, then
-confirm in `/openapi.json` and a real login response.
+**2a (backend, additive, behaviourally ACTIVE):** `Token` gains
+`user_id`. The deployed frontend already reads it, so password clients
+adopt the canonical id on their next sign-in the moment this deploys.
+That is the intended end state, safe here only because the four affected
+accounts are verified-empty fixtures. Deploy, then confirm in
+`/openapi.json` and a live login response.
 
 **2b (frontend):** use `result.user_id`; **refuse to activate without
 it**; delete both fallbacks.
 
-Callers verified complete: only `Login.jsx:61,86` reach these endpoints;
-OAuth uses the cookie callback and `/me`; continue-without-account is
-separate (`:104-114`); the S12 email backfill is untouched.
-
-**Done means:** register a disposable password account → profile id is the
-server UUID; sign out and in → same id, data intact; throwaway account
-deleted afterwards.
+Callers verified complete: only `Login.jsx:61,86`; OAuth uses the cookie
+callback and `/me`; continue-without-account is separate (`:104-114`).
 
 ---
 
 ## Fix 3 — Active-workout sync, with a fence that holds
 
-### Broken
-
-No executor (`:344-411`); the only push path is `syncToApi`
-(`StorageService.js:429-457`) behind an effect keyed on **`history`**
-(`:1143-1154`), so changing the live workout pushes nothing; failures are
-swallowed (`:446-455`); `getActiveWorkout` has no caller and does not
-check `r.ok` (`ApiService.js:126-127`).
-
-### 3a — the server fence
+### 3a — server (migration `0012`)
 
 `active_workout` is one row per user (`models.py:164-181`, `user_id`
-unique). Migration `0011`:
+unique). Add `client_seq BIGINT NOT NULL DEFAULT 0`; make `workout_data`
+**nullable**; clearing is a soft clear that keeps the row, because a
+sequence on a row `DELETE` removes cannot fence anything.
 
-- `client_seq BIGINT NOT NULL DEFAULT 0`
-- `workout_data` becomes **nullable**; clearing is a soft clear that keeps
-  the row. A sequence on a row that `DELETE` removes cannot fence
-  anything.
-
-Both handlers are **conditional upserts**, which is what closes the
-absent-row hole:
+**Sequenced branch** (request carries `client_seq`) — one statement:
 
 ```sql
 INSERT INTO active_workout (user_id, workout_data, client_seq)
@@ -165,112 +148,109 @@ ON CONFLICT (user_id) DO UPDATE
 RETURNING client_seq;
 ```
 
-No row returned → the incoming sequence lost → **409 with the current
-`client_seq` in a structured JSON body**. A clear that arrives first
-therefore *creates* the fence row with `workout_data = NULL`, and the
-delayed save is then rejected instead of resurrecting the workout.
+Valid because `user_id` is unique. **No row returned means the update was
+suppressed** — `RETURNING` cannot report the current value in that case,
+so the 409 path performs a follow-up `SELECT client_seq` and returns it in
+a structured body. A clear arriving before any save *creates* the fence
+row with `workout_data = NULL`, which is what closes the absent-row hole.
 
-**GET** returns JSON `null` when the row is absent **or** `workout_data IS
-NULL`, preserving today's `ActiveWorkoutResponse | null` contract
-(`schemas.py:157-167`); it includes `client_seq` so a client can advance.
+**Legacy branch** (no `client_seq`) — a separate statement, not the
+sequenced `WHERE`: insert with `client_seq = 1`; on conflict apply the
+data or null and set `client_seq = active_workout.client_seq + 1`. Old
+clients keep exactly today's behaviour and never see a 409, and their
+writes still advance the high-water mark. **Transition limitation:**
+unversioned requests remain arrival-ordered until old clients are gone.
 
-**Legacy clients that send no `client_seq`** get an explicit branch, not a
-default: apply the mutation as today **and** atomically set `client_seq =
-current + 1`. Mapping absent to 0 would break them immediately (rows start
-at 0 and `0 < 0` is false); ignoring the guard would let them overwrite
-fenced state. **Transition limitation, stated:** requests from old clients
-remain arrival-ordered until those clients are gone.
+**GET** returns `{ workout_data: null, client_seq }` for a cleared row —
+revision 3 asked for JSON `null` *and* a sequence, which is impossible.
+Changing this contract is free: `getActiveWorkout` has **no caller** in
+`src/` today.
 
-### 3b — the client
+### 3b — client
 
 `client_seq` is a Lamport counter per profile: on dispatch, `seq =
 max(local, lastServerSeq) + 1`.
 
-**On 409 — rebase, do not discard.** Never resend the same stale attempt.
-If the entry still represents the device's latest desired state, take the
-server's sequence from the 409 body and dispatch a **new** attempt at a
-higher sequence; if a newer desired state has superseded it, drop it.
-Applies to both save and clear. Three enabling changes:
+**Acknowledgement identity is immutable, never content.** Each enqueue
+carries a `desiredRevision`; each dispatch records the exact
+`client_seq` sent. Success removes the entry only if it still holds that
+same revision and sequence. This closes both the ABA case above and the
+stable-id removal race at `SyncQueue.js:116-120`.
 
-1. `saveActiveWorkout` / `clearActiveWorkout` must surface the structured
-   409 body — today they stringify it and expose only `status`
-   (`ApiService.js:129-150`).
-2. `SyncQueue` must not dead-letter it. Minimal, scoped change at
-   `:131-137`: honour `err.retryable === true` regardless of status.
-3. **Acknowledgement must not delete newer intent.** There is exactly one
-   active-workout desired state per profile (`active_workout:current`),
-   and completion removes it **only if its content still matches what was
-   sent**; an edit made while the request was in flight leaves it queued
-   to dispatch at a higher sequence. This sidesteps the stable-id removal
-   race at `:116-120`.
+**On 409 — rebase, never discard.** Read the server's sequence from the
+structured body, then either reissue the still-current desired state as a
+**new** revision at a higher sequence, or drop it if superseded. Never
+resend the stale attempt. Enablers: `saveActiveWorkout` /
+`clearActiveWorkout` must surface the structured body (they stringify it
+today, `ApiService.js:129-150`); `SyncQueue` must honour
+`err.retryable === true` at `:131-137` instead of dead-lettering — safe
+because only the active-workout code sets it. **Termination:** at most one
+rebase per response, then backoff; each 409 supplies a strictly higher
+bound, so a quiescent server converges. Under continuous contention the
+entry legitimately stays pending — it must never dead-letter.
 
-**Push triggers:** on `activeWorkout` change, debounced, only after active
-hydration for the current profile, only when cloud-eligible, and only
-after pending desired state is reconciled. Timers cancel on profile
-change. **Empty preparing workouts are never pushed** — `startWorkout`
-creates one with no exercises (`:1462-1470`) while hydration rejects
-exactly that (`:601-627`); pushing it would sync something the receiving
-device discards. Pushing starts at the first exercise.
+**Push triggers:** on `activeWorkout` change, debounced; only after
+hydration for the current profile, only when cloud-eligible, only after
+pending desired state reconciles; timers cancel on profile change.
+**Empty preparing workouts are never pushed** — `startWorkout` creates one
+with no exercises (`:1462-1470`) and hydration rejects exactly that
+(`:601-627`). Cross-device coverage therefore begins at the first
+exercise, deliberately, and says so in the product copy.
 
 **Pull merge must not resurrect a finished workout.** Absent local state
-can mean *never had one* or *finished, clear still queued*. Before
-adopting a server copy, consult the durable desired state: a pending or
-confirmed clear at a sequence at or above the server's means the server
-copy is stale and is discarded. `getActiveWorkout` gains an `r.ok` check
-and maps `workout_data`, not the wrapper.
+can mean *never had one* or *finished with a clear still queued*. Consult
+durable desired state first: a pending or confirmed clear at a sequence at
+or above the server's means the server copy is stale. `getActiveWorkout`
+gains an `r.ok` check and maps `workout_data`.
 
 ### Done means
 
-Start a workout with an exercise on one device → it appears on another.
-Network drops mid-workout, sets logged, reconnect → server catches up.
-Finish → the slot clears and **stays** clear. A save delayed past a clear
-is rejected and does not resurrect. A save delayed past a newer save is
-rejected. Two devices racing → one wins, the loser **reissues at a higher
-sequence rather than losing the edit**. An offline 409 is not
-dead-lettered. Empty preparing workouts are never pushed.
+Start a workout with an exercise on one device → appears on another.
+Network drops mid-workout → reconnect → server catches up. Finish → slot
+clears and stays clear. Save delayed past a clear → rejected, no
+resurrection. Save delayed past a newer save → rejected. Two devices
+racing → one wins, **the loser reissues at a higher sequence rather than
+losing the edit**. Clear(5) → start B(6) → cancel B(7), with 5 landing
+late → B does **not** resurrect. Offline 409 → not dead-lettered.
 
 ---
 
 ## Sequencing
 
-| Commit | Contents | Depends on | Effect on existing clients |
+| Commit | Contents | Depends on | Existing clients |
 |---|---|---|---|
-| 1 | Fix 1 — deletion, tombstones, backendId adoption | — | none |
-| 2a | `Token.user_id` | — | **active**: password clients adopt the canonical id on next login |
-| 2b | `Login.jsx` uses it, fallbacks deleted | 2a deployed and verified | — |
-| 3a | Migration `0011`, fenced upserts, legacy branch | — | none (legacy branch preserves today's behaviour) |
-| 3b | Executor, gated debounced push, 409 rebase, queue changes, corrected pull | 3a deployed and verified | — |
+| 1a | Migration `0011` `deleted_at`, soft delete, list filter | — | API-compatible |
+| 1b | Client delete, resolution, in-flight tombstone, backfill gate | 1a live | — |
+| 2a | `Token.user_id` | — | **active** — canonical id adopted on next login |
+| 2b | `Login.jsx` uses it, fallbacks deleted | 2a live | — |
+| 3a | Migration `0012`, fenced upsert, legacy branch, GET contract | — | API-compatible |
+| 3b | Executor, gated push, 409 rebase, immutable ack, corrected pull | 3a live | — |
 
 ## Verification
 
-Local `npm run dev`, clean profile, Playwright at desktop and 375 px,
+Local `npm run dev`, clean profile, Playwright desktop and 375 px,
 console clean; then a **disposable** live account, deleted within the
-session — never the owner's. Each commit deployed and confirmed via
-`scripts/poll_deploy.sh`; backend commits also against `/openapi.json`.
-`ARCHITECTURE.md` and the Coach APP KNOWLEDGE block updated in the same
-commit as any behaviour they describe.
+session — never the owner's. Two-device and racing-request cases use two
+browser contexts against the live backend. Each commit deployed and
+confirmed with `scripts/poll_deploy.sh`; backend commits also against
+`/openapi.json`.
 
-Two-device and racing-request cases are exercised with two browser
-contexts against the live backend and a disposable account.
-
-**Still no local PostgreSQL and no backend test harness**, so migration
-`0011` and the fenced handlers are verified by live probe rather than by
-tests that can fail. Stated plainly. Given that Fix 3a is now a schema
-change with concurrency semantics, provisioning a local database first is
-the recommendation.
+**Two migrations and a concurrency-sensitive upsert now sit in this work,
+and there is still no local PostgreSQL and no backend test harness.** The
+fence's correctness is exactly the kind of thing that wants a test which
+can fail. Provisioning a local database before 3a is the strong
+recommendation; without it, 3a is verified by live probe only, which is
+stated rather than dressed up.
 
 ## Open
 
-1. Provision a local PostgreSQL and a minimal backend harness **before
-   3a** — recommended; the fence is the first change here whose
-   correctness really wants a test that can fail.
-2. Remove the four `example.com` fixtures. Two cannot be deleted through
-   the app (passwords lost), so it is a direct production write needing
-   its own go-ahead.
+1. Provision a local PostgreSQL plus a minimal harness before 3a —
+   recommended.
+2. Remove the four `example.com` fixtures; two need a direct production
+   write and their own go-ahead.
 
 ## Not in scope
 
-The S29 two-account designs (shelved, retained). The in-app Feedback
-build — replaced by a **"Send feedback" mail link** in Settings beside the
-version line, carrying the app version; LOW zone, one file, no backend.
-`docs/feedback_spec_s31.md` retained.
+S29's two-account designs (shelved, retained). The in-app Feedback build —
+replaced by a **"Send feedback" mail link** in Settings carrying the app
+version; LOW zone, one file. `docs/feedback_spec_s31.md` retained.
