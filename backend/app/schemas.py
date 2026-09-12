@@ -145,6 +145,10 @@ class WorkoutResponse(BaseModel):
     exercises: Optional[Any] = None
     recommendations: Optional[Any] = None
     created_at: Optional[datetime] = None
+    # Set when this workout has been deleted. The list endpoint hides deleted
+    # rows, so a re-upload's response is the only way a client learns that its
+    # copy was deleted elsewhere and should be dropped rather than retried.
+    deleted_at: Optional[datetime] = None
 
 
 class WorkoutListResponse(BaseModel):

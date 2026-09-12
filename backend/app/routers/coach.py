@@ -671,6 +671,11 @@ async def coach_chat(
         .where(
             WorkoutHistory.user_id == current_user.id,
             WorkoutHistory.created_at >= year_cutoff,
+            # Soft-deleted workouts are gone as far as the user is concerned;
+            # the Coach reads this table directly rather than through the list
+            # endpoint, so it needs its own filter or it will discuss deleted
+            # workouts and report inflated trends.
+            WorkoutHistory.deleted_at.is_(None),
         )
         .order_by(WorkoutHistory.created_at.desc())
     )
@@ -683,6 +688,7 @@ async def coach_chat(
             .where(
                 WorkoutHistory.user_id == current_user.id,
                 WorkoutHistory.status == "completed",
+                WorkoutHistory.deleted_at.is_(None),
             )
         )
         or 0

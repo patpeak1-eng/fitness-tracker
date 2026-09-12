@@ -531,12 +531,58 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
                                     handler edit)
 
 /api/workouts  (routers/workouts.py)
-  GET  ""                        → WorkoutListResponse
+  GET  ""                        → WorkoutListResponse (excludes soft-deleted)
   POST ""                        → WorkoutResponse (201)
   GET  /active                   → ActiveWorkoutResponse | null
   PUT  /active                   → upsert active workout blob
   DELETE /active                 → 204
-  DELETE /{id}                   → 204
+  DELETE /{id}                   → 204 (SOFT delete — sets deleted_at)
+
+**Workout deletion is a soft delete (S32, migration 0011).** `DELETE /{id}`
+sets `workout_history.deleted_at` and keeps the row; the list filters
+`deleted_at IS NULL` on **both** its count and its row query, and the Coach's
+two direct reads (`coach.py`) filter it too. The row is retained on purpose:
+it is the server's durable record of the deletion, so a re-upload of the same
+`client_id` — from a restored backup or a second device that still holds the
+row — collides with it and returns it **with `deleted_at` set** instead of
+resurrecting the workout. Because the list hides deleted rows, that POST
+response is the only channel through which a client can learn its copy was
+deleted elsewhere.
+
+**Known gap, tracked to Fix 1b:** `POST ""` still **accepts** a create with no
+`client_id`. Such a row has no durable identity — PostgreSQL treats NULLs as
+distinct under the `(user_id, client_id)` unique constraint — so a re-upload
+after deletion inserts a fresh row and undoes the deletion. Requiring one was
+tried and reverted: the shipped login backfill queues the raw local workout
+(`WorkoutContext.jsx` ~1036-1048), a legacy or restored row may carry none,
+and `SyncQueue` dead-letters any 4xx (`SyncQueue.js` ~131-137) — so a 400
+would have permanently discarded that workout on a client that cannot be
+updated in the same deploy. Production held zero `client_id`-less rows when
+this shipped. 1b makes the client always send an identifier; only then can
+the server require one.
+
+`POST ""` resolves conflicts with `INSERT ... ON CONFLICT DO NOTHING …
+RETURNING` and then reads the row back — by the returned id when the insert
+happened, and by `client_id` only when a conflict suppressed it (which implies
+a non-null `client_id`). Reading back by `client_id` unconditionally would
+match every `client_id`-less row for that user.
+
+It previously caught `IntegrityError` from `commit()` and re-queried. **A
+regression test shows that path 500'd on a plain sequential duplicate**: the
+re-query raised `MissingGreenlet`, and the client queue retries 5xx forever,
+so every duplicate sync became a permanent retry loop. The precise trigger was
+*not* isolated — a rollback expires `current_user`, so the likeliest cause is
+attribute access on it during the re-query rather than the session as a whole
+being unusable. A savepoint was tried and the concurrency test still failed.
+The fix removes the exception path instead of depending on which explanation
+is right. **The same `IntegrityError`-then-re-query pattern still exists in
+`PUT /active`** (repaired with the S32 Fix 3 fence) **and in `nutrition.py`'s
+food-log idempotency** (own follow-up); neither is fixed by this change.
+
+One accepted edge: if an account is hard-deleted between the insert and the
+read-back, the cascade removes the row and the read-back raises, returning
+500. The data outcome is correct — account and row are both gone — and every
+other authenticated route races account deletion the same way.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)
@@ -592,7 +638,8 @@ GET  /health                     → {"status": "ok"}  (no SHA field — known g
                                     data per spec Section 5)
 ```
 
-**Database:** PostgreSQL on Railway. Migrations via Alembic (10 revisions in
+**Database:** PostgreSQL on Railway (18.6; the local test database matches).
+Migrations via Alembic (11 revisions in
 `alembic/versions/`), with revision IDs constrained to under 32 characters
 (the `alembic_version` column is VARCHAR(32)). Migration 0008
 (`avatar_color_default`, S21) changed and backfilled the `users.color` default

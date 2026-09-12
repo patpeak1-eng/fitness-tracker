@@ -157,6 +157,11 @@ class WorkoutHistory(Base):
     exercises = Column(JSONB)
     recommendations = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Soft delete. The row is RETAINED so the server can recognise a later
+    # re-upload of the same client_id and refuse to resurrect it — a restored
+    # backup, or a second device still holding the row, otherwise pushes it
+    # straight back. Every reader must filter `deleted_at IS NULL`.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     user = relationship("User", back_populates="workouts")
 
