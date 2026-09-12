@@ -1,0 +1,8 @@
+# Test-only dependencies. Install alongside requirements.txt:
+#   python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+#
+# The suite needs a real PostgreSQL — the models use postgresql.UUID and JSONB,
+# so SQLite is not a substitute. See backend/tests/README.md for setup.
+pytest
+pytest-asyncio
+httpx
