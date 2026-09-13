@@ -193,9 +193,9 @@ async def clear_active_workout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete("/by-client-id/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/by-client-id", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workout_by_client_id(
-    client_id: str,
+    client_id: str = Query(..., min_length=1),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
@@ -213,6 +213,17 @@ async def delete_workout_by_client_id(
 
     Idempotent: a repeat is 204 and never adds a second row, which is what
     lets a client keep the intent queued until it succeeds.
+
+    ``client_id`` is a QUERY parameter, not a path segment, deliberately. It is
+    client-generated and therefore an arbitrary string; one containing ``/``
+    survives ``encodeURIComponent`` as ``%2F``, which the ASGI server decodes
+    before routing, so the request 404s and the client dead-letters a deletion
+    it can never retry. A query parameter carries any string safely.
+
+    This endpoint never 404s for an unknown ``client_id`` — that case is a
+    normal 204. A 404 from it therefore means the route is missing, which is
+    what an older backend returns while a deploy is still rolling over; the
+    client treats it as retryable for exactly that reason.
     """
     now = datetime.now(timezone.utc)
     # One statement so a concurrent create or a second delete cannot interleave

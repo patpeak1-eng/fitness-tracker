@@ -362,6 +362,60 @@ export const ensureWorkoutClientId = (workout) => {
 //                              placeholder could never collide with it.
 //   no client_id, local     -> mint one; the server accepts a deletion for an
 //                              identifier it has never seen.
+// Map a server row into the local history shape. Module scope so the tests
+// exercise THIS function rather than a hand-built row that happens to agree
+// with it — a reconstruction cannot catch a field the real mapper drops, and
+// dropping backendId here is exactly the bug that got through review once.
+export const mapServerWorkout = (w) => ({
+    id: w.id,
+    // This row came FROM the server, so record that positively. Without it a
+    // pulled legacy row (client_id NULL) is indistinguishable from a
+    // never-uploaded local one — local ids are UUIDs too — and deleting it
+    // would mint an identifier that names nothing while the real row lived on.
+    backendId: w.id,
+    // Keep client_id: without it, any re-push of a pulled workout (e.g.
+    // syncToApi's history[0] push) bypasses the backend's client_id
+    // idempotency and duplicates the row server-side on every boot.
+    client_id: w.client_id || null,
+    name: w.name,
+    startTime: w.start_time,
+    endTime: w.end_time,
+    status: w.status || 'completed',
+    completed: w.status === 'completed',
+    notes: w.notes || '',
+    exercises: w.exercises || [],
+    recommendations: w.recommendations || [],
+});
+
+// The queue op that deletes a server row we have positively identified.
+//
+// Only what the SERVER reports is used. An earlier version fell back to the
+// tombstone's clientId: when the server row's client_id is NULL that id is one
+// we minted locally, it names no row, and reissuing it repeated an ineffective
+// delete for ever while the real row stayed live.
+export const deletionOpFor = (serverRow, uid) => {
+    const cid = serverRow.client_id || null;
+    return {
+        type: 'workout_delete',
+        key: cid || serverRow.id,
+        payload: cid ? { client_id: cid } : { backendId: serverRow.id },
+        uid,
+    };
+};
+
+// Was this locally-held row deleted on the server, by us or by another device?
+//
+// Only ever asked about a row the pull did NOT return, and the pull fetches
+// every page. A backendId is positive proof the row was once on the server, so
+// its absence now means the server dropped it. That is evidence, not the
+// absence-as-proof inference this redesign removed: a row with no backendId
+// says nothing either way, and is left alone.
+//
+// It matters because the backfill uploads whatever is local-and-absent. For a
+// legacy row (client_id NULL) that upload is unrecognisable to the server, so
+// it returns as a brand-new workout that no future deletion can catch.
+export const wasDeletedOnServer = (workout) => Boolean(workout?.backendId);
+
 export const chooseDeletionTarget = (workout) => {
     if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
     if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
@@ -538,8 +592,15 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             if (op.payload?.client_id) {
                 await ApiService.deleteWorkoutByClientId(op.payload.client_id);
             } else if (op.payload?.backendId) {
-                // Pre-redesign entries queued before this shipped.
                 await ApiService.deleteWorkout(op.payload.backendId);
+            } else {
+                // Never fall through silently. A resolved executor is treated
+                // as success and the op is dropped, so an unhandled shape here
+                // would discard a deletion without contacting the server at
+                // all. Throwing keeps it queued and visible instead.
+                throw new Error(
+                    `[workout_delete] unusable payload, no identifier: ${JSON.stringify(op.payload)}`
+                );
             }
         });
         SyncQueue.init();
@@ -957,18 +1018,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                                 || SyncQueue.hasPending('workout_delete', key),
                         );
                         retire.forEach(d => StorageService.removeDeletedWorkout(profile.id, d));
-                        reissue.forEach(({ tombstone: d, serverRow }) => {
-                            // Prefer the identifier the server itself reported;
-                            // fall back to the row id for pre-identifier rows.
-                            const cid = serverRow.client_id || d.clientId || null;
-                            SyncQueue.enqueue({
-                                type: 'workout_delete',
-                                key: cid || serverRow.id,
-                                payload: cid
-                                    ? { client_id: cid }
-                                    : { backendId: serverRow.id },
-                                uid: profile.id,
-                            });
+                        reissue.forEach(({ serverRow }) => {
+                            SyncQueue.enqueue(deletionOpFor(serverRow, profile.id));
                         });
                     }
                     if (workoutData?.items?.length > 0) {
@@ -977,23 +1028,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                             const newItems = workoutData.items
                                 .filter(w => !isPendingDelete(w))
                                 .filter(w => !localKeys.has(keyOf(w.name, w.start_time, w.id)))
-                                .map(w => ({
-                                    id: w.id,
-                                    // Keep client_id: without it, any re-push of
-                                    // a pulled workout (e.g. syncToApi's
-                                    // history[0] push) bypasses the backend's
-                                    // client_id idempotency and duplicates the
-                                    // row server-side on every boot.
-                                    client_id: w.client_id || null,
-                                    name: w.name,
-                                    startTime: w.start_time,
-                                    endTime: w.end_time,
-                                    status: w.status || 'completed',
-                                    completed: w.status === 'completed',
-                                    notes: w.notes || '',
-                                    exercises: w.exercises || [],
-                                    recommendations: w.recommendations || []
-                                }));
+                                .map(mapServerWorkout);
                             if (!newItems.length) return prev;
                             const merged = [...newItems, ...prev]
                                 .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
@@ -1221,13 +1256,26 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                             d => (d.id && (d.id === w.id || d.id === w.backendId))
                                 || (d.clientId && d.clientId === w.client_id)
                         );
+                        const onCloud = (w) => cloudWorkoutKeys.has(keyOf(w.name, w.startTime, w.id));
+                        // Drop our copy of anything the server has positively
+                        // dropped, or the user deletes on one device and the
+                        // other shows the workout for ever. Runs BEFORE the
+                        // stamped rows are persisted below, which re-reads
+                        // storage.
+                        localHistory
+                            .filter(w => !onCloud(w) && wasDeletedOnServer(w))
+                            .forEach(w => dropLocallyAsDeleted(profile.id, {
+                                id: w.backendId,
+                                client_id: w.client_id || null,
+                            }));
                         // Stamp an identifier on anything that lacks one
                         // BEFORE it is queued, and persist it, so the row the
                         // server receives can be recognised again later.
                         const stamped = [];
                         localHistory
                             .filter(w => !wasDeleted(w))
-                            .filter(w => !cloudWorkoutKeys.has(keyOf(w.name, w.startTime, w.id)))
+                            .filter(w => !onCloud(w))
+                            .filter(w => !wasDeletedOnServer(w))
                             .forEach(w => {
                                 const withId = ensureWorkoutClientId(w);
                                 if (withId !== w) stamped.push(withId);
@@ -2031,11 +2079,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // here, because inferring it is exactly what this redesign removed.
         if (!target.client_id) SyncQueue.remove('workout', target.id);
 
-        StorageService.addDeletedWorkout(currentProfile.id, {
-            id: target.backendId || target.id,
-            clientId,
-        });
-
         // Queue the deletion, then attempt it. Because the server records a
         // deletion by client id whether or not the workout has arrived, there
         // is no lookup, nothing to cancel, and no need to reason about whether
@@ -2051,6 +2094,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             key,
             payload: clientId ? { client_id: clientId } : { backendId },
             uid: currentProfile.id,
+        });
+
+        // Tombstone AFTER the queue entry, never before. The queue entry is the
+        // durable intent; the tombstone is only a local display guard. Writing
+        // the guard first meant a crash in between left a tombstone with no
+        // intent behind it — and reconciliation retires a tombstone the moment
+        // the queue holds nothing for it, so the delete was silently forgotten
+        // and an in-flight create could commit with nothing left to undo it.
+        StorageService.addDeletedWorkout(currentProfile.id, {
+            id: target.backendId || target.id,
+            clientId,
         });
 
         const attempt = clientId

@@ -596,7 +596,7 @@ exactly that.
   GET  /active                   → ActiveWorkoutResponse | null
   PUT  /active                   → upsert active workout blob
   DELETE /active                 → 204
-  DELETE /by-client-id/{cid}     → 204 (SOFT delete by the CLIENT's identifier,
+  DELETE /by-client-id?client_id= → 204 (SOFT delete by the CLIENT's identifier,
                                     valid even for a row the server has never
                                     seen — declared before /{id})
   DELETE /{id}                   → 204 (SOFT delete — sets deleted_at)
@@ -612,7 +612,7 @@ resurrecting the workout. Because the list hides deleted rows, that POST
 response is the only channel through which a client can learn its copy was
 deleted elsewhere.
 
-**`DELETE /by-client-id/{cid}` is what makes deletion safe (S32 Fix 1b).**
+**`DELETE /by-client-id` is what makes deletion safe (S32 Fix 1b).**
 `DELETE /{id}` can only remove a row that already exists. While an upload is
 in flight there is nothing to delete, so a client is forced to *infer* from an
 absent row whether that upload will land — and that inference cannot be made
@@ -632,8 +632,25 @@ delete can interleave between a check and a write:
 
 Idempotent and owner-scoped — a repeat is 204 and never adds a second row,
 which is what lets the client keep the intent queued until it succeeds.
-Placeholders are invisible everywhere, because every read filters
-`deleted_at IS NULL`.
+Placeholders are excluded from the user-facing history rows and count and from
+both Coach reads. They are **not** invisible everywhere, and the doc used to
+claim they were: `POST ""` deliberately returns a deleted row as the deletion
+acknowledgment, and `DELETE /{id}` reads one to stay idempotent.
+
+`client_id` is a **query parameter, not a path segment**, deliberately. It is
+client-generated and therefore an arbitrary string; one containing `/` survives
+`encodeURIComponent` as `%2F`, which the ASGI server decodes before routing, so
+the request 404s. A live probe against a local backend confirmed it — and the
+client dead-letters a non-401/429 4xx, so that 404 would have discarded the
+deletion permanently.
+
+**This route never 404s for an unknown `client_id`** — that case is a normal
+204. A 404 from it therefore means the route is missing, which is what an older
+backend returns while a deploy is still rolling over. The frontend and backend
+build from the same push but land independently, so that window is real.
+`ApiService.deleteWorkoutByClientId` marks a 404 `retryable`, and `SyncQueue`
+keeps a `retryable` error queued instead of dead-lettering it — the only
+exception to "a non-auth 4xx means the payload is rejected".
 
 **Remaining gap:** `POST ""` still **accepts** a create with no `client_id`.
 Such a row has no durable identity — PostgreSQL treats NULLs as distinct under
@@ -643,9 +660,11 @@ backfill queues the raw local workout (`WorkoutContext.jsx` ~1036-1048), a
 legacy or restored row may carry none, and `SyncQueue` dead-letters any 4xx
 (`SyncQueue.js` ~131-137) — so a 400 would have permanently discarded that
 workout on a client that cannot be updated in the same deploy. Production held
-zero `client_id`-less rows when this shipped. Fix 1b makes *this* client always
-send an identifier, but older deployed clients are still out there, so the
-server cannot require one until they have all rolled over.
+zero `client_id`-less rows when this shipped — a snapshot, not an invariant,
+and not one to lean on while `POST` still accepts them. Fix 1b makes *this*
+client stamp an identifier before a workout is uploaded, but older deployed
+clients are still out there, so the server cannot require one until they have
+all rolled over.
 
 `POST ""` resolves conflicts with `INSERT ... ON CONFLICT DO NOTHING …
 RETURNING` and then reads the row back — by the returned id when the insert
@@ -662,7 +681,8 @@ attribute access on it during the re-query rather than the session as a whole
 being unusable. A savepoint was tried and the concurrency test still failed.
 The fix removes the exception path instead of depending on which explanation
 is right. **The same `IntegrityError`-then-re-query pattern still exists in
-`PUT /active`** and is repaired with the S32 Fix 3 fence. The food-log
+`PUT /active`** (`workouts.py`, unchanged) and is *planned* to be repaired with
+the S32 Fix 3 fence — that work has not shipped. The food-log
 variant in `nutrition.py` **has since been fixed** the same way (S32,
 `ON CONFLICT DO NOTHING … RETURNING` plus a read-back).
 
@@ -672,32 +692,62 @@ read-back, the cascade removes the row and the read-back raises, returning
 other authenticated route races account deletion the same way.
 
 **Client side (S32 Fix 1b).** `deleteWorkout` (`WorkoutContext.jsx`) drops the
-row locally, writes a **tombstone**, enqueues `workout_delete`, and attempts
-the call. There is **no lookup** — the earlier `resolveWorkoutBackendId` is
-gone, along with the unsafe inference that a successful-but-empty lookup
+row locally, **enqueues** `workout_delete`, writes a **tombstone**, and then
+attempts the call. There is **no lookup** — the earlier `resolveWorkoutBackendId`
+is gone, along with the unsafe inference that a successful-but-empty lookup
 proved the workout was never uploaded.
 
-- **Which endpoint.** A row with a `client_id`, or one never uploaded, is
-  deleted by client id. A row that is already on the server but predates
-  client ids is deleted by its **server id** — minting an id for it would
-  record the deletion against an identifier nothing refers to, since the real
-  row carries `client_id` NULL and could never collide with the placeholder.
+The ordering is load-bearing. The queue entry is the durable intent; the
+tombstone is only a local display guard. Writing the guard first meant a crash
+in between left a tombstone with no intent behind it, and reconciliation retires
+a tombstone the moment the queue holds nothing for it — so the delete was
+silently forgotten and an in-flight create could commit with nothing left to
+undo it.
+
+- **Which endpoint** — `chooseDeletionTarget` (module scope, returns exactly one
+  of `clientId` / `backendId`). A row with a `client_id` is deleted by client
+  id. A row that is already on the server but predates client ids is deleted by
+  its **server id**: minting an id for it would record the deletion against an
+  identifier nothing refers to, since the real row carries `client_id` NULL and
+  could never collide with the placeholder. Only a row with neither gets a
+  minted id.
+- **`mapServerWorkout` stamps `backendId`** on every pulled row, and that is
+  what makes the branch above work. Local ids are UUIDs too, so without it a
+  pulled legacy row is indistinguishable from a never-uploaded local one —
+  review caught exactly that: the mapper dropped `backendId`, so deleting a
+  pulled legacy row minted an id naming nothing while the real row lived on,
+  and reconciliation then reissued that useless id for ever.
 - `crypto.randomUUID()` at `startWorkout` means every normally-created workout
-  already has an identifier; `ensureWorkoutClientId` (module scope) only
-  stamps legacy and restored rows, and the login backfill stamps and
-  **persists** before queueing, so the row the server receives is recognisable
-  later.
+  already has an identifier; `ensureWorkoutClientId` only stamps legacy and
+  restored rows, and the login backfill stamps and **persists** before queueing.
+  Note the limit: this governs what *this* client sends from now on. The
+  `workout` executor still transmits already-stored queue payloads as they were
+  written.
+- **`wasDeletedOnServer`** guards the backfill, which uploads whatever is
+  local-and-absent. A `backendId` is positive proof the row was once on the
+  server, and the pull fetches every page — so a row with one that the pull did
+  not return has been deleted, here or on another device. It is not re-uploaded,
+  and the local copy is dropped. This is evidence, not absence-as-proof: a row
+  with no `backendId` says nothing either way and is left alone. Without it,
+  device A deleting a legacy row and device B re-uploading it needed no race and
+  no old queue entry at all.
 - Tombstones live in the profile-scoped `fitness_deleted_workouts`, keyed on
-  **both** ids, and gate two places: the pull merge (a pull that started
-  before the delete can land after it) and the backfill (which uploads
-  anything local-and-absent — the exact shape of a just-deleted workout, or
-  one reinstated by restoring an older backup).
-- `planTombstoneReconciliation` (module scope, pure, unit-tested) decides each
-  tombstone's fate against a pull: still on the server → **reissue** the
-  delete; absent and nothing outstanding in the queue → **retire**; absent but
-  an op is still in flight → **hold**. Server ids and client ids are indexed
-  in **separate** maps, because `client_id` is client-generated and can be any
-  string — including one equal to a different row's server UUID.
+  **both** ids, and gate the pull merge (a pull that started before the delete
+  can land after it) and the backfill.
+- `planTombstoneReconciliation` (module scope, pure) decides each tombstone's
+  fate against a pull: still on the server → **reissue**; absent and nothing
+  outstanding in the queue → **retire**; absent but an op is still in flight →
+  **hold**. Server ids and client ids are indexed in **separate** maps, because
+  `client_id` is client-generated and can be any string — including one equal to
+  a different row's server UUID.
+- `deletionOpFor` builds the reissue op from **only** what the server reports.
+  Falling back to the tombstone's `clientId` was wrong: when the server row's
+  `client_id` is NULL, that id is one we minted, it names no row, and reissuing
+  it repeats an ineffective delete for ever.
+- The `workout_delete` executor **throws** on a payload with no identifier
+  rather than resolving. A resolved executor is treated as success and the op is
+  dropped, so falling through silently would discard a deletion without ever
+  contacting the server.
 - Nothing is ever evicted from the tombstone store; it warns past 200. Evicting
   the oldest would silently let that workout return, which is the bug the store
   exists to prevent. A permanently-offline profile therefore grows it
@@ -705,13 +755,22 @@ proved the workout was never uploaded.
 - `ApiService.deleteWorkout` treats 404 as success: already gone is the state
   we wanted, and a retry after a lost response must not loop.
 
-**Residual hole, documented rather than guessed away.** A queue entry written
-by a *pre-redesign* client — a create for a row with no `client_id`, keyed on
-its local id — uploads with `client_id` NULL, so it collides with nothing and
-the recorded deletion cannot catch it. `deleteWorkout` cancels such a create
-while it is still cancellable (`SyncQueue.remove`). If `flush` already
-captured it, the workout can come back. Reaching that state needs a legacy
-row, a create queued before this shipped, and a deletion inside that window.
+**Known gaps, stated rather than guessed away.**
+
+- **Overlapping pulls (P2, open).** Tombstone retirement uses the tombstone set
+  as of when a pull *resolves*. If pull P1 stalls while holding a live row, the
+  delete succeeds, a newer pull P2 returns empty and retires the guard, then P1
+  resolves — P1 re-adds the row to local state and storage. The server stays
+  correct; History can show the workout again until later reconciliation.
+  `latestProfileIdRef` guards profile identity, not request order. Fixing it
+  needs a pull generation counter.
+- **Already-transmitted legacy creates.** A create that has *already left* a
+  pre-redesign client carrying no `client_id` cannot be made identifiable after
+  the fact, so no recorded deletion can catch it. `deleteWorkout` cancels such a
+  create while it is still cancellable (`SyncQueue.remove`); once `flush` has
+  captured it, nothing local can help. This is genuinely narrow — but the
+  earlier claim that it was the *only* remaining resurrection path was wrong,
+  and `wasDeletedOnServer` above closes the one that was not.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)

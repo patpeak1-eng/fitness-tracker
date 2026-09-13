@@ -29,8 +29,10 @@ if (!globalThis.crypto?.randomUUID) {
 
 const StorageService = (await import('./StorageService')).default;
 const SyncQueue = (await import('./SyncQueue')).default;
-const { ensureWorkoutClientId, planTombstoneReconciliation, chooseDeletionTarget } =
-    await import('../context/WorkoutContext');
+const {
+    ensureWorkoutClientId, planTombstoneReconciliation, chooseDeletionTarget,
+    mapServerWorkout, deletionOpFor, wasDeletedOnServer,
+} = await import('../context/WorkoutContext');
 
 const UID_A = 'user_aaa';
 const UID_B = 'user_bbb';
@@ -98,6 +100,80 @@ describe('chooseDeletionTarget', () => {
     });
 });
 
+describe('a PULLED row can actually be deleted (regression, found in review)', () => {
+    // These chain the REAL functions the app uses. Hand-building a row here
+    // instead of running the real mapper is what let the original bug through:
+    // the mapper dropped backendId, so a pulled legacy row looked exactly like
+    // a never-uploaded local one and deletion minted an id naming nothing.
+    const SERVER_ROW_LEGACY = { id: 'srv-legacy', client_id: null, name: 'Old', start_time: 'T' };
+    const SERVER_ROW_MODERN = { id: 'srv-modern', client_id: 'cid-modern', name: 'New', start_time: 'T' };
+
+    it('the mapper records that the row came from the server', () => {
+        expect(mapServerWorkout(SERVER_ROW_LEGACY).backendId).toBe('srv-legacy');
+    });
+
+    it('deleting a pulled LEGACY row targets its server id, not a minted one', () => {
+        const local = mapServerWorkout(SERVER_ROW_LEGACY);
+        expect(chooseDeletionTarget(local)).toEqual({ clientId: null, backendId: 'srv-legacy' });
+    });
+
+    it('deleting a pulled MODERN row targets its client id', () => {
+        const local = mapServerWorkout(SERVER_ROW_MODERN);
+        expect(chooseDeletionTarget(local)).toEqual({ clientId: 'cid-modern', backendId: null });
+    });
+
+    it('reissue never sends a locally minted id for a row the server says has none', () => {
+        // The tombstone carries a minted clientId from an older client. The
+        // server row positively reports client_id NULL, so that minted id
+        // names nothing — sending it would repeat a no-op delete for ever.
+        const op = deletionOpFor(SERVER_ROW_LEGACY, UID_A);
+        expect(op.payload).toEqual({ backendId: 'srv-legacy' });
+        expect(op.key).toBe('srv-legacy');
+    });
+
+    it('reissue prefers the server-reported client id when there is one', () => {
+        const op = deletionOpFor(SERVER_ROW_MODERN, UID_A);
+        expect(op.payload).toEqual({ client_id: 'cid-modern' });
+    });
+
+    it('the tombstone for a pulled legacy row matches it again on the next pull', () => {
+        const local = mapServerWorkout(SERVER_ROW_LEGACY);
+        const { backendId } = chooseDeletionTarget(local);
+        const tombstone = { id: local.backendId || local.id, clientId: null };
+        expect(backendId).toBe(tombstone.id);
+
+        const { reissue, retire } = planTombstoneReconciliation(
+            [SERVER_ROW_LEGACY], [tombstone], () => false,
+        );
+        expect(reissue).toHaveLength(1);
+        expect(retire).toHaveLength(0);
+        expect(deletionOpFor(reissue[0].serverRow, UID_A).payload).toEqual({ backendId: 'srv-legacy' });
+    });
+});
+
+describe('the backfill must not resurrect what another device deleted', () => {
+    // Codex found this one: device A deletes a legacy row; device B still holds
+    // its pulled copy, has no tombstone for it, and the backfill re-uploads
+    // anything local-and-absent. For a legacy row the upload carries no
+    // identifier, so it lands as a BRAND-NEW workout no deletion can catch.
+    it('treats a pulled row missing from the cloud as deleted on the server', () => {
+        const pulled = mapServerWorkout({ id: 'srv-1', client_id: null, name: 'Old' });
+        expect(wasDeletedOnServer(pulled)).toBe(true);
+    });
+
+    it('leaves a never-uploaded local row alone', () => {
+        // No backendId means no evidence either way, and guessing here is the
+        // absence-as-proof mistake the redesign exists to remove.
+        expect(wasDeletedOnServer({ id: 'local-1', client_id: 'cid-1' })).toBe(false);
+        expect(wasDeletedOnServer({ id: 'local-2' })).toBe(false);
+    });
+
+    it('is safe on junk input', () => {
+        expect(wasDeletedOnServer(null)).toBe(false);
+        expect(wasDeletedOnServer(undefined)).toBe(false);
+    });
+});
+
 describe('deletion tombstones', () => {
     it('records and matches on either identifier', () => {
         StorageService.addDeletedWorkout(UID_A, { id: 'srv-1', clientId: 'cid-1' });
@@ -137,6 +213,39 @@ describe('deletion tombstones', () => {
         const left = StorageService.loadDeletedWorkouts(UID_A);
         expect(left).toHaveLength(1);
         expect(left[0].id).toBe('srv-2');
+    });
+});
+
+describe('a 404 from the by-client-id route is retryable, not fatal', () => {
+    // The frontend and backend deploy from the same push but land
+    // independently, so a call to a brand-new route can 404 purely because the
+    // backend has not rolled over. Dead-lettering that would discard the
+    // deletion for good, and the next pull would bring the workout back.
+    const failWith = (status, retryable) => {
+        const err = new Error(`HTTP ${status}`);
+        err.status = status;
+        if (retryable) err.retryable = true;
+        return err;
+    };
+
+    it('keeps the op queued when the error is marked retryable', async () => {
+        SyncQueue.enqueue({ type: 'workout_delete', key: 'cid-1', payload: { client_id: 'cid-1' }, uid: UID_A });
+        SyncQueue.registerExecutor('workout_delete', async () => { throw failWith(404, true); });
+
+        await SyncQueue.flush();
+
+        expect(SyncQueue.hasPending('workout_delete', 'cid-1')).toBe(true);
+        expect(SyncQueue.getState().deadLetterCount || 0).toBe(0);
+    });
+
+    it('still dead-letters an ordinary 4xx, so the escape hatch is narrow', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        SyncQueue.enqueue({ type: 'workout_delete', key: 'cid-2', payload: { client_id: 'cid-2' }, uid: UID_A });
+        SyncQueue.registerExecutor('workout_delete', async () => { throw failWith(400, false); });
+
+        await SyncQueue.flush();
+
+        expect(SyncQueue.hasPending('workout_delete', 'cid-2')).toBe(false);
     });
 });
 

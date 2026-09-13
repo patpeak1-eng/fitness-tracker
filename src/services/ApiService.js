@@ -303,11 +303,19 @@ export const updateFoodLog = async (id, updates) => {
 // server keeps the deletion and the late create comes back marked deleted.
 // That is what removes the need to infer anything from an absent row.
 export const deleteWorkoutByClientId = async (clientId) => {
-  const path = `/api/workouts/by-client-id/${encodeURIComponent(clientId)}`;
+  // Query parameter, not a path segment: client_id is client-generated, and one
+  // containing '/' encodes to %2F, which the server decodes before routing —
+  // the request would 404 and the deletion would be dead-lettered.
+  const path = `/api/workouts/by-client-id?client_id=${encodeURIComponent(clientId)}`;
   const r = await apiFetch(path, { method: 'DELETE' });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw httpError(r, path, text);
+    const err = httpError(r, path, text);
+    // An unknown client_id is a normal 204 here, so a 404 means the ROUTE is
+    // missing — an older backend that has not finished deploying. Mark it
+    // retryable so the queue keeps the deletion instead of dead-lettering it.
+    if (r.status === 404) err.retryable = true;
+    throw err;
   }
   // 204 No Content — idempotent, so a retry after a lost response is safe.
 };

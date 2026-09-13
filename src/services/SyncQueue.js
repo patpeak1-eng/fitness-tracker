@@ -164,7 +164,20 @@ const SyncQueue = {
                         authExpired = true;
                         break;
                     }
-                    if (err?.status >= 400 && err.status < 500 && err.status !== 429) {
+                    if (err?.retryable) {
+                        // The caller knows this 4xx is transient and NOT a
+                        // rejected payload. The case that forced this: the
+                        // frontend and backend deploy from the same push but
+                        // land independently, so a call to a brand-new route
+                        // can 404 purely because the backend has not rolled
+                        // over yet. Dead-lettering that discards the op for
+                        // good — here, a deletion, which the next pull would
+                        // then undo.
+                        const kept = loadQueue().map(o =>
+                            o.id === op.id ? { ...o, attempts: (o.attempts || 0) + 1 } : o
+                        );
+                        persistQueue(kept);
+                    } else if (err?.status >= 400 && err.status < 500 && err.status !== 429) {
                         // Non-auth 4xx: the payload itself is rejected —
                         // retrying forever can't succeed. Park it in the
                         // dead-letter store instead of discarding, loudly.
