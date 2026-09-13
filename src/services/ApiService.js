@@ -298,6 +298,22 @@ export const updateFoodLog = async (id, updates) => {
   return r.json();
 };
 
+// Record a deletion against the workout's own client_id. Works whether or not
+// the workout has reached the server yet: if an upload is still in flight, the
+// server keeps the deletion and the late create comes back marked deleted.
+// That is what removes the need to infer anything from an absent row.
+export const deleteWorkoutByClientId = async (clientId) => {
+  const path = `/api/workouts/by-client-id/${encodeURIComponent(clientId)}`;
+  const r = await apiFetch(path, { method: 'DELETE' });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, path, text);
+  }
+  // 204 No Content — idempotent, so a retry after a lost response is safe.
+};
+
+// Delete a row we know the server id for. Retained for workouts that predate
+// client identifiers; everything else goes through deleteWorkoutByClientId.
 export const deleteWorkout = async (id) => {
   const r = await apiFetch(`/api/workouts/${id}`, { method: 'DELETE' });
   // 404 means the row is already gone, which is the state we wanted. Treating
@@ -306,7 +322,6 @@ export const deleteWorkout = async (id) => {
     const text = await r.text().catch(() => '');
     throw httpError(r, `/api/workouts/${id}`, text);
   }
-  // 204 No Content on success — nothing to parse.
 };
 
 export const deleteFoodLog = async (id) => {

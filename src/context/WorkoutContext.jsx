@@ -287,32 +287,41 @@ const getExerciseById = (id, masterList) => {
     return found;
 };
 
-// Decide what a completed pull means for each outstanding deletion.
+// Decide what a completed pull means for each locally-recorded deletion.
 //
-// Pure so it can be tested directly — the interesting cases are orderings, and
-// driving them through the provider is far less reliable than calling this.
+// Pure so it can be tested directly. Deliberately simple: since the server now
+// records deletions by client_id (DELETE /by-client-id), the client no longer
+// has to infer anything from an absent row. A tombstone here is only a local
+// display guard, stopping a pull that was already in flight from re-adding a
+// row the user just deleted.
 //
-//   serverItems  rows the pull returned
-//   tombstones   [{ id, clientId }] deletions not yet settled
-//   isOutstanding(key) whether an upload/delete for that key is still unresolved
+//   serverItems  rows the pull returned (deleted ones are never included)
+//   tombstones   [{ id, clientId }] recorded deletions
+//   isOutstanding(key) whether this device still owes the server a delete
 //
 // Returns { retire, reissue }.
-//   retire  — server does not have it AND nothing is outstanding, so the
-//             deletion is done. An absent row alone is NOT confirmation: a
-//             create captured by a running flush may still commit.
-//   reissue — server still has it, so a create landed after the delete; send
-//             the delete again rather than assuming it worked.
+//   retire  — the server does not list it and we owe no delete for it, so the
+//             guard has done its job.
+//   reissue — the server still lists it. Only reachable for a row deleted
+//             before this device knew its client_id; send the delete again.
+//
+// Ids and client ids are matched in SEPARATE namespaces: client_id is
+// client-generated and could collide with another row's server UUID, and
+// conflating them could target the wrong workout.
 export const planTombstoneReconciliation = (serverItems, tombstones, isOutstanding) => {
-    const present = new Map();
+    const byServerId = new Map();
+    const byClientId = new Map();
     (serverItems || []).forEach(w => {
-        if (w.id) present.set(w.id, w);
-        if (w.client_id) present.set(w.client_id, w);
+        if (w.id) byServerId.set(w.id, w);
+        if (w.client_id) byClientId.set(w.client_id, w);
     });
 
     const retire = [];
     const reissue = [];
     (tombstones || []).forEach(t => {
-        const onServer = present.get(t.id) || present.get(t.clientId);
+        const onServer = (t.clientId && byClientId.get(t.clientId))
+            || (t.id && byServerId.get(t.id))
+            || null;
         if (onServer) {
             reissue.push({ tombstone: t, serverRow: onServer });
         } else if (!isOutstanding(t.clientId || t.id)) {
@@ -338,28 +347,25 @@ export const ensureWorkoutClientId = (workout) => {
     return { ...workout, client_id: id };
 };
 
-// Which server row does this local workout correspond to?
+// (resolveWorkoutBackendId removed with the redesign. Deleting no longer needs
+// to find a server row first — the server accepts a deletion for a client_id
+// it has never seen — so the whole "which row is this?" problem, and the
+// unsafe inference that a successful-but-empty lookup proved absence, are
+// gone rather than guarded.)
+
+// Which identifier a deletion is recorded against. Returns exactly one of
+// { clientId } or { backendId } — never both, never neither.
 //
-// Row shapes in circulation: created locally (local UUID id + client_id,
-// backendId only after a direct save), pulled (server id, client_id possibly
-// NULL — migration 0002 allows it), or restored from a backup (any of those).
-// Local ids are UUIDs too, so shape alone cannot tell them apart.
-//
-// Returns null ONLY when a successful fetch proves the workout is not on the
-// server. If the fetch FAILS it throws, so the caller retries rather than
-// silently concluding "never synced" and dropping the deletion on the floor.
-const resolveWorkoutBackendId = async (payload) => {
-    if (payload.backendId) return payload.backendId;
-    const page = await ApiService.getHistory();   // throws if it cannot check
-    const rows = page?.items || [];
-    if (payload.client_id) {
-        const byClient = rows.find(r => r.client_id === payload.client_id);
-        if (byClient) return byClient.id;
-    }
-    // Legacy rows carry no client_id; there the local id IS the server id.
-    const localId = payload.localId || payload.id;
-    const byId = localId ? rows.find(r => r.id === localId) : null;
-    return byId ? byId.id : null;
+//   has client_id           -> by client id, whether or not it has been uploaded
+//   no client_id, on server -> by SERVER id. The row carries client_id NULL, so
+//                              a minted id would name nothing and the
+//                              placeholder could never collide with it.
+//   no client_id, local     -> mint one; the server accepts a deletion for an
+//                              identifier it has never seen.
+export const chooseDeletionTarget = (workout) => {
+    if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
+    if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
+    return { clientId: ensureWorkoutClientId(workout).client_id, backendId: null };
 };
 
 export const WorkoutProvider = ({ children, timerApiRef }) => {
@@ -526,12 +532,15 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             if (backendId) await ApiService.deleteFoodLog(backendId);
         });
         SyncQueue.registerExecutor('workout_delete', async op => {
-            const backendId = await resolveWorkoutBackendId(op.payload);
-            // A null id means the fetch proved this workout was never synced,
-            // so there is nothing to delete. resolveWorkoutBackendId THROWS if
-            // it could not check — the queue then retries rather than
-            // concluding "never synced" from a failed lookup.
-            if (backendId) await ApiService.deleteWorkout(backendId);
+            // No lookup: the server records a deletion by client_id whether or
+            // not the workout has arrived. Only a real HTTP failure throws, so
+            // the op is retried rather than acknowledged on a guess.
+            if (op.payload?.client_id) {
+                await ApiService.deleteWorkoutByClientId(op.payload.client_id);
+            } else if (op.payload?.backendId) {
+                // Pre-redesign entries queued before this shipped.
+                await ApiService.deleteWorkout(op.payload.backendId);
+            }
         });
         SyncQueue.init();
         // dropLocallyAsDeleted is a []-deps useCallback, so it is stable and
@@ -949,10 +958,15 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         );
                         retire.forEach(d => StorageService.removeDeletedWorkout(profile.id, d));
                         reissue.forEach(({ tombstone: d, serverRow }) => {
+                            // Prefer the identifier the server itself reported;
+                            // fall back to the row id for pre-identifier rows.
+                            const cid = serverRow.client_id || d.clientId || null;
                             SyncQueue.enqueue({
                                 type: 'workout_delete',
-                                key: d.clientId || d.id,
-                                payload: { backendId: serverRow.id, client_id: serverRow.client_id || null },
+                                key: cid || serverRow.id,
+                                payload: cid
+                                    ? { client_id: cid }
+                                    : { backendId: serverRow.id },
                                 uid: profile.id,
                             });
                         });
@@ -2002,65 +2016,52 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         setHistory(prev => prev.filter(w => w.id !== workoutId));
         if (!target || !currentProfile) return;
 
-        const key = target.client_id || target.id;
-
-        // Drop a create that has not been sent. Best effort only: one already
-        // captured by a running flush cannot be recalled, which is exactly
-        // why the durable delete intent below is not conditional.
-        SyncQueue.remove('workout', key);
-
-        // Local-only profiles never sync, so there is no pull to guard
-        // against and no server row to delete. A tombstone there would only
-        // grow a store nothing ever retires.
+        // Local-only profiles never sync — nothing to tell the server, and a
+        // tombstone would only grow a store nothing retires.
         if (!canSyncRef.current()) return;
+
+        const { clientId, backendId } = chooseDeletionTarget(target);
+
+        // One residual case, from queue entries written by a PRE-redesign
+        // client: a create for a row with no client_id, keyed on its local id.
+        // The server cannot recognise that upload — it inserts with client_id
+        // NULL, which collides with nothing — so the recorded deletion cannot
+        // catch it. Cancel it while it is still cancellable. If flush already
+        // captured it the workout can come back; that is not inferred away
+        // here, because inferring it is exactly what this redesign removed.
+        if (!target.client_id) SyncQueue.remove('workout', target.id);
 
         StorageService.addDeletedWorkout(currentProfile.id, {
             id: target.backendId || target.id,
-            clientId: target.client_id || null,
+            clientId,
         });
 
-        // Queue the delete UNCONDITIONALLY, before attempting it.
+        // Queue the deletion, then attempt it. Because the server records a
+        // deletion by client id whether or not the workout has arrived, there
+        // is no lookup, nothing to cancel, and no need to reason about whether
+        // an upload is still in flight — a create that lands afterwards
+        // collides with the recorded deletion and comes back marked deleted.
         //
-        // An earlier version queued it only when the immediate attempt failed,
-        // and leaned on a memory-only in-flight marker for the rest. That lost
-        // the intent in two real cases: a POST whose response never arrived
-        // (the executor throws, and the retry branch cannot re-persist an op
-        // that delete had already removed), and a crash (memory is gone).
-        // Either way the create could still commit server-side with nothing
-        // durable left to undo it.
-        //
-        // The queue entry IS the durable record. It survives reloads, is
-        // removed only once the delete actually succeeds, and blocks tombstone
-        // retirement until then.
+        // Five review rounds went into trying to make that inference safe on
+        // the client. It cannot be: a lost response or a crash leaves the
+        // outcome unknown. Recording intent server-side removes the question.
+        const key = clientId || backendId;
         SyncQueue.enqueue({
             type: 'workout_delete',
             key,
-            payload: {
-                backendId: target.backendId || null,
-                client_id: target.client_id || null,
-                localId: target.id,
-            },
+            payload: clientId ? { client_id: clientId } : { backendId },
             uid: currentProfile.id,
         });
 
-        (async () => {
-            const backendId = await resolveWorkoutBackendId({
-                backendId: target.backendId || null,
-                client_id: target.client_id || null,
-                localId: target.id,
+        const attempt = clientId
+            ? ApiService.deleteWorkoutByClientId(clientId)
+            : ApiService.deleteWorkout(backendId);
+        attempt
+            .then(() => SyncQueue.remove('workout_delete', key))
+            .catch(err => {
+                // Already queued; the retry will carry it.
+                console.warn('[delete-workout] queued for retry:', err?.message || err);
             });
-            // Null means the fetch succeeded and found nothing — NOT proof it
-            // was never synced, since an in-flight create may still land. The
-            // queued intent stays; a later pull settles it.
-            if (!backendId) return;
-            await ApiService.deleteWorkout(backendId);
-            // Confirmed gone. Retire the durable intent; the tombstone waits
-            // for a pull so an in-flight create cannot slip in behind it.
-            SyncQueue.remove('workout_delete', key);
-        })().catch(err => {
-            // Intent is already queued — nothing to do but say so.
-            console.warn('[delete-workout] queued for retry:', err?.message || err);
-        });
     };
 
     const cancelWorkout = () => {

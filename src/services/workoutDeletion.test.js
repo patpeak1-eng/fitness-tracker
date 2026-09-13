@@ -29,7 +29,7 @@ if (!globalThis.crypto?.randomUUID) {
 
 const StorageService = (await import('./StorageService')).default;
 const SyncQueue = (await import('./SyncQueue')).default;
-const { ensureWorkoutClientId, planTombstoneReconciliation } =
+const { ensureWorkoutClientId, planTombstoneReconciliation, chooseDeletionTarget } =
     await import('../context/WorkoutContext');
 
 const UID_A = 'user_aaa';
@@ -67,6 +67,34 @@ describe('ensureWorkoutClientId', () => {
         const stamped = ensureWorkoutClientId(restored);
         expect(stamped.client_id).toBeTruthy();
         expect(ensureWorkoutClientId(stamped)).toBe(stamped);   // stable thereafter
+    });
+});
+
+describe('chooseDeletionTarget', () => {
+    it('uses the client id when the row has one', () => {
+        expect(chooseDeletionTarget({ id: 'l1', client_id: 'cid-1', backendId: 'srv-1' }))
+            .toEqual({ clientId: 'cid-1', backendId: null });
+    });
+
+    it('uses the SERVER id for an uploaded row that predates client ids', () => {
+        // Minting one here would record the deletion against an identifier
+        // nothing refers to: the server row carries client_id NULL, so the
+        // placeholder could never collide with it and the row would survive.
+        expect(chooseDeletionTarget({ id: 'l1', backendId: 'srv-1' }))
+            .toEqual({ clientId: null, backendId: 'srv-1' });
+    });
+
+    it('mints a client id for a row that was never uploaded', () => {
+        const { clientId, backendId } = chooseDeletionTarget({ id: 'l1' });
+        expect(clientId).toBeTruthy();
+        expect(backendId).toBeNull();
+    });
+
+    it('always returns exactly one identifier', () => {
+        for (const row of [{ id: 'a', client_id: 'c' }, { id: 'b', backendId: 's' }, { id: 'c' }]) {
+            const { clientId, backendId } = chooseDeletionTarget(row);
+            expect(Boolean(clientId) !== Boolean(backendId)).toBe(true);
+        }
     });
 });
 
@@ -237,6 +265,47 @@ describe('planTombstoneReconciliation — what a pull proves', () => {
             NONE,
         );
         expect(reissue).toHaveLength(1);
+    });
+
+    it('matches a local tombstone to its server row by client_id alone', () => {
+        // The real shape: a locally-created workout has a LOCAL id, the server
+        // row has a different one, and only client_id links them. Indexing by
+        // id alone would miss this and wrongly retire the guard.
+        const { retire, reissue } = planTombstoneReconciliation(
+            [{ id: 'srv-999', client_id: 'cid-1' }],
+            [{ id: 'local-1', clientId: 'cid-1' }],
+            NONE,
+        );
+        expect(reissue).toHaveLength(1);
+        expect(reissue[0].serverRow.id).toBe('srv-999');
+        expect(retire).toHaveLength(0);
+    });
+
+    it('does not let a client_id collide with another row’s server id', () => {
+        // client_id is client-generated, so it can be any string — including
+        // one that happens to equal a different workout's server UUID. Matching
+        // the two namespaces separately keeps them from crossing.
+        const { retire, reissue } = planTombstoneReconciliation(
+            [{ id: 'collide', client_id: 'cid-other' }],
+            [{ id: 'srv-1', clientId: 'collide' }],
+            NONE,
+        );
+        expect(reissue).toHaveLength(0);
+        expect(retire).toHaveLength(1);
+    });
+
+    it('partitions a mixed set of tombstones correctly', () => {
+        const { retire, reissue } = planTombstoneReconciliation(
+            [{ id: 'srv-present', client_id: 'cid-present' }],
+            [
+                { id: 'srv-present', clientId: 'cid-present' },   // still there
+                { id: 'srv-gone', clientId: 'cid-gone' },         // settled
+                { id: 'srv-busy', clientId: 'cid-busy' },         // outstanding
+            ],
+            (key) => key === 'cid-busy',
+        );
+        expect(reissue.map(r => r.tombstone.clientId)).toEqual(['cid-present']);
+        expect(retire.map(t => t.clientId)).toEqual(['cid-gone']);
     });
 
     it('handles an empty pull and no tombstones without inventing work', () => {

@@ -193,6 +193,52 @@ async def clear_active_workout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.delete("/by-client-id/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workout_by_client_id(
+    client_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Record that a workout is deleted, whether or not it has been uploaded.
+
+    ``DELETE /{id}`` can only remove a row that already exists. While an
+    upload is in flight there is nothing to delete, so a client is forced to
+    infer from an absent row whether that upload will land — an inference no
+    amount of local bookkeeping makes safe across a lost response or a crash.
+
+    Keying the deletion on the client's OWN identifier removes the inference.
+    If the row exists it is soft-deleted; if it does not, a placeholder is
+    written already deleted, so a create arriving later collides with it and
+    comes back marked ``deleted_at`` instead of resurrecting the workout.
+
+    Idempotent: a repeat is 204 and never adds a second row, which is what
+    lets a client keep the intent queued until it succeeds.
+    """
+    now = datetime.now(timezone.utc)
+    # One statement so a concurrent create or a second delete cannot interleave
+    # between a check and a write. COALESCE keeps the ORIGINAL deletion time on
+    # a repeat rather than sliding it forward.
+    await db.execute(
+        pg_insert(WorkoutHistory)
+        .values(
+            id=uuid4(),
+            user_id=current_user.id,
+            client_id=client_id,
+            # name is NOT NULL; this row is never shown, since every read
+            # filters deleted_at IS NULL.
+            name="(deleted)",
+            status="deleted",
+            deleted_at=now,
+        )
+        .on_conflict_do_update(
+            index_elements=["user_id", "client_id"],
+            set_={"deleted_at": func.coalesce(WorkoutHistory.deleted_at, now)},
+        )
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workout(
     id: UUID,
