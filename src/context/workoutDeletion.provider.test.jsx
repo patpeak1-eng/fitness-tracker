@@ -310,6 +310,59 @@ describe('the three P1s review left open', () => {
         expect(ctx.history.map(w => w.id)).not.toContain('lx8f2a9q1z');
     });
 
+    it('a legacy queued upload adopts the identity the server stamped, and is then deletable', async () => {
+        // Review round 5. The executor discarded the response, so a legacy row
+        // that uploaded successfully stayed identifierless FOREVER: the ids
+        // differ so matchFor cannot join it to the server row, the new-item
+        // fingerprint filter hides that row while this one exists, and every
+        // later Delete took the local-only branch and reported success while
+        // the cloud row lived on. Not a race — the ordinary successful path.
+        const L = 'lx8f2a9q1z';
+        const S = '11111111-2222-3333-4444-555555555555';
+        StorageService.saveHistory(USER.id, [{
+            id: L, name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        // The server stamps client_id = its own id for an identifierless upload.
+        ApiService.saveWorkout.mockResolvedValue({ id: S, client_id: S });
+        SyncQueue.enqueue({ type: 'workout', key: L, payload: { id: L }, uid: USER.id });
+
+        await mount();
+        await act(async () => { await SyncQueue.flush(); });
+
+        const row = ctx.history.find(w => w.id === L);
+        expect(row?.client_id, 'the stamped identity was discarded').toBe(S);
+        expect(row?.backendId).toBe(S);
+
+        // The point of adopting it: the workout can now actually be deleted.
+        await act(async () => { ctx.deleteWorkout(L); });
+        expect(ApiService.deleteWorkoutByClientId).toHaveBeenCalledWith(S);
+    });
+
+    it('a stamped identity is never adopted onto an ambiguous duplicate', async () => {
+        // Imported storage can duplicate an id. Choosing one would stamp
+        // identity onto the wrong workout, and the next delete would remove
+        // that one instead. Zero-or-many must do nothing.
+        const L = 'lx8f2a9q1z';
+        const S = '11111111-2222-3333-4444-555555555555';
+        const row = () => ({
+            id: L, name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        });
+        StorageService.saveHistory(USER.id, [row(), row()]);
+        ApiService.saveWorkout.mockResolvedValue({ id: S, client_id: S });
+        SyncQueue.enqueue({ type: 'workout', key: L, payload: { id: L }, uid: USER.id });
+
+        await mount();
+        await act(async () => { await SyncQueue.flush(); });
+
+        expect(ctx.history.filter(w => w.client_id === S),
+            'guessed which of two identical rows the upload meant'
+        ).toHaveLength(0);
+    });
+
     it('cancels a queued upload for an unidentified row before returning', async () => {
         // The cancellation used to sit BELOW the local-only return, so it never
         // ran for exactly the rows that need it most: a pre-redesign client

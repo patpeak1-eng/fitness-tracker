@@ -755,13 +755,29 @@ Four rules earn their place here, each from a defect that reached review:
    server: counting rows that look alike establishes how many candidates
    exist, never that a candidate **is** this row.
 
-   **Scope limit, deliberate and measured.** A row carrying neither identifier
-   that *had* already reached the cloud under a pre-`8b88b49` client keeps its
-   server copy. No automatic fix is possible — the correspondence was never
-   recorded — so the alternatives are an explicit user-resolution flow or this
-   documented limit. A production census found **zero** cloud rows with a NULL
-   `client_id`, and `POST ""` now stamps one on every insert, so that
-   population is empty and cannot grow.
+   **The two properties, stated precisely** — an earlier draft of this section
+   overstated both:
+
+   - *Backend.* Every new row created through `POST /api/workouts` has a
+     non-NULL `client_id`; if the request omits one, the backend uses the newly
+     inserted server id. This prevents newly inserted NULL identities. It does
+     **not** establish a correspondence with an existing local legacy id.
+   - *Client.* A local row with neither `client_id` nor `backendId` is removed
+     only locally and makes no cloud-deletion claim; it may have an
+     uncorrelated legacy cloud copy. A *cancellable* legacy queued create is
+     cancelled before local removal. A *successfully acknowledged* one is
+     correlated from its own queue op and response (`planStampedIdentityAdoption`
+     — see 5 below). A captured request whose response is lost remains an
+     explicit unresolved legacy limitation.
+
+   The production census covered **server rows where `client_id IS NULL`** and
+   found zero. It inventoried neither local queue payloads nor their
+   correspondence to server rows, so it cannot be cited for more than that.
+
+   Closing the last interval is not a matter of another guard: a response
+   cannot retroactively repair a lost one. It would need a stable key carried
+   in the request *before the first send*, plus a migration for already-queued
+   payloads — a different change, deliberately not made here.
 
 4. **The backfill uploads only what carries a stable identifier.** See
    `backfillDisposition`. A `backendId` means the server has seen the row, so it
@@ -776,6 +792,27 @@ Four rules earn their place here, each from a defect that reached review:
 
    Absence from a pull proves nothing on its own — a moving-`OFFSET` page walk
    can skip a still-live row — so no branch here infers deletion from it.
+
+5. **A legacy queued upload adopts the identity the server stamped.** The
+   `workout` executor used to discard the response, and the consequence was not
+   a race but a permanent one: the local row stayed identifierless, `matchFor`
+   could not join it to the server row because the ids differ, the new-item
+   fingerprint filter hid that row while the local one existed, and so **every
+   later delete reported success while the cloud row survived**.
+
+   The correlation is positive, not inferred — the queue operation *is* the
+   link between `op.payload.id` and that request's response. This is the same
+   write-back `assessment` and `template` already did; `workout` was the
+   exception. Every guard is fail-closed (legacy ops only, `op.key` must still
+   match the payload, `saved.client_id === String(saved.id)` to prove the stamp
+   path, exactly one unidentified local match, storage before React,
+   owner-scoped). "Exactly one" matters: `SyncQueue`'s dedupe is not uid-aware
+   and imported storage can duplicate an id.
+
+   Honest bound: this is **recovery for a completed response, not a crash fix**.
+   If the app dies after the write-back but before the queue entry clears, the
+   replay creates a second server row, and the guard then correctly refuses to
+   overwrite the identity already adopted — leaving a live duplicate.
 
 The ordering is load-bearing. The queue entry is the durable intent; the
 tombstone is only a local display guard. Writing the guard first meant a crash

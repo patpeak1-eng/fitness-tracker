@@ -32,6 +32,7 @@ const SyncQueue = (await import('./SyncQueue')).default;
 const {
     ensureWorkoutClientId, planTombstoneReconciliation, chooseDeletionTarget,
     mapServerWorkout, deletionOpFor, wasDeletedOnServer,
+    planStampedIdentityAdoption,
 } = await import('../context/WorkoutContext');
 
 const UID_A = 'user_aaa';
@@ -463,5 +464,75 @@ describe('ensureWorkoutClientId covers every upload path', () => {
         const completed = { ...ensureWorkoutClientId(restoredActive), status: 'completed' };
         expect(completed.client_id).toBeTruthy();
         expect(completed.status).toBe('completed');
+    });
+});
+
+describe('planStampedIdentityAdoption', () => {
+    // A legacy queued upload succeeds; the server answers with the identity it
+    // stamped. Discarding that answer left the local row identifierless for
+    // good, so every later Delete reported success while the cloud row lived on.
+    const L = 'local-legacy-1';
+    const S = '11111111-2222-3333-4444-555555555555';
+    const op = { uid: UID_A, key: L, payload: { id: L } };
+    const saved = { id: S, client_id: S };
+    const legacyRow = () => ({ id: L, name: 'Push Day', exercises: [] });
+
+    it('adopts the stamped identity onto the row the op named', () => {
+        const out = planStampedIdentityAdoption(op, saved, [legacyRow()]);
+        expect(out[0].client_id).toBe(S);
+        expect(out[0].backendId).toBe(S);
+    });
+
+    it('leaves every other row untouched', () => {
+        const other = { id: 'other', name: 'Pull Day', exercises: [] };
+        const out = planStampedIdentityAdoption(op, saved, [other, legacyRow()]);
+        expect(out[0]).toEqual(other);
+        expect(out[1].client_id).toBe(S);
+    });
+
+    it('refuses when the op belongs to no profile', () => {
+        // An unscoped write lands on whoever is on screen.
+        expect(planStampedIdentityAdoption({ ...op, uid: '' }, saved, [legacyRow()]))
+            .toBeNull();
+    });
+
+    it('refuses when the queue key no longer matches the payload', () => {
+        // A rewritten or deduped entry no longer proves which row it uploaded,
+        // and SyncQueue's dedupe is not uid-aware.
+        expect(planStampedIdentityAdoption({ ...op, key: 'something-else' }, saved, [legacyRow()]))
+            .toBeNull();
+    });
+
+    it('refuses when the response did not come through the stamp path', () => {
+        // client_id !== id means the server did not mint this from the row's
+        // own id, so it is some other identifier and the correlation is unproven.
+        expect(planStampedIdentityAdoption(op, { id: S, client_id: 'cid-elsewhere' }, [legacyRow()]))
+            .toBeNull();
+    });
+
+    it('refuses a payload that already carries a client_id', () => {
+        const identified = { uid: UID_A, key: L, payload: { id: L, client_id: 'cid-1' } };
+        expect(planStampedIdentityAdoption(identified, saved, [legacyRow()])).toBeNull();
+    });
+
+    it('refuses when no local row matches', () => {
+        expect(planStampedIdentityAdoption(op, saved, [{ id: 'different' }])).toBeNull();
+    });
+
+    it('refuses when MORE THAN ONE local row matches', () => {
+        // Imported storage can duplicate an id. Guessing which one the upload
+        // meant would stamp identity onto the wrong workout, and the next
+        // delete would then remove that one instead.
+        const out = planStampedIdentityAdoption(op, saved, [legacyRow(), legacyRow()]);
+        expect(out, 'picked one of two identical candidates').toBeNull();
+    });
+
+    it('refuses to overwrite a row that is already identified', () => {
+        // The crash-and-replay case: the first response was adopted, the queue
+        // entry survived, and the replay created a SECOND server row. Its
+        // identity must not displace the one already linked.
+        const already = { id: L, client_id: 'cid-first', backendId: 'srv-first' };
+        expect(planStampedIdentityAdoption(op, { id: 'T', client_id: 'T' }, [already]))
+            .toBeNull();
     });
 });

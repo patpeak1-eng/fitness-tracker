@@ -473,6 +473,52 @@ export const backfillDisposition = (workout) => {
 // Content matching cannot substitute either, on the client or on the server:
 // counting candidates establishes how many rows look alike, never that a
 // candidate IS this row. See docs/skills/provider-level-testing.md.
+// A legacy queued upload succeeds and the server answers with the identity it
+// stamped. Without this, that answer is thrown away and the local row stays
+// identifierless FOREVER: `matchFor` cannot join it to the server row (the ids
+// differ), the new-item fingerprint filter hides the server row while the local
+// one exists, so nothing ever hints at the split — and every later Delete takes
+// the local-only branch and reports success while the cloud row survives.
+//
+// The correlation is positive, not inferred: the queue operation IS the link.
+// `op.payload.id` named the row when the upload was queued, and `saved` is that
+// exact request's response. This is the same write-back the `assessment` and
+// `template` executors already do; `workout` was the one that did not.
+//
+// Every guard below is fail-closed, because writing identity onto the WRONG row
+// would make a later delete remove someone's other workout:
+//   - legacy operations only; a payload that already carries a client_id is
+//     identified and needs nothing
+//   - `op.key === op.payload.id` and a non-empty `op.uid`, so a rewritten or
+//     cross-profile entry is refused
+//   - `saved.client_id === String(saved.id)` proves the response came through
+//     the server's stamp path rather than carrying some other identifier
+//   - EXACTLY ONE local row may match, and it must still lack both identifiers.
+//     Not ceremony: SyncQueue's dedupe is not uid-aware and imported storage can
+//     duplicate an id, so zero-or-many is a real state and the answer is to do
+//     nothing rather than guess.
+//
+// Returns the updated history array, or null to mean "do not write".
+export const planStampedIdentityAdoption = (op, saved, storedHistory) => {
+    if (!op?.uid || op?.payload?.client_id) return null;
+    const localId = op?.payload?.id;
+    if (!localId || op.key !== localId) return null;
+    if (!saved?.id || !saved?.client_id) return null;
+    if (String(saved.client_id) !== String(saved.id)) return null;
+
+    const history = Array.isArray(storedHistory) ? storedHistory : [];
+    const matches = history.filter(
+        w => w?.id === localId && !w?.client_id && !w?.backendId
+    );
+    if (matches.length !== 1) return null;
+
+    return history.map(w =>
+        w === matches[0]
+            ? { ...w, client_id: saved.client_id, backendId: saved.id }
+            : w
+    );
+};
+
 export const chooseDeletionTarget = (workout) => {
     if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
     if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
@@ -559,6 +605,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     }, []);
 
+    // Persist the adoption planned above. Storage first, React second and only
+    // while that profile is still on screen — this resolves long after the
+    // request and the user may have switched profiles, and an unscoped
+    // setHistory would write one profile's identity onto another's list. Same
+    // ownership rule as dropLocallyAsDeleted and dropOwned.
+    const adoptStampedIdentity = useCallback((op, saved) => {
+        const stored = StorageService.loadProfileState(op?.uid).history || [];
+        const updated = planStampedIdentityAdoption(op, saved, stored);
+        if (!updated) return;
+        if (!StorageService.saveHistory(op.uid, updated)) {
+            // Nothing durable was written, so leave React alone: showing an
+            // identity that reload discards is worse than showing none.
+            console.warn('[workout-sync] identity write-back failed; not adopted');
+            return;
+        }
+        if (latestProfileIdRef.current === op.uid) setHistory(updated);
+    }, []);
+
     // Retry queue for failed cloud pushes. Executors are registered here (the
     // one place with access to both ApiService and StorageService) and the
     // queue's flush triggers (online / foreground / boot) are installed once.
@@ -572,6 +636,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             // pre-deletion backup — learns to drop its copy. Ignoring it left
             // the workout visible locally and re-offered on every boot.
             if (saved?.deleted_at) dropLocallyAsDeleted(op.uid, saved);
+            else adoptStampedIdentity(op, saved);
             return saved;
         });
         SyncQueue.registerExecutor('weight', op =>
@@ -2235,11 +2300,18 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // server, so there is no request to make and nothing a pull could match
         // it against. Removing it locally IS the whole deletion.
         //
-        // Scope limit, deliberate and measured: if such a row HAD reached the
-        // cloud under a pre-8b88b49 client, its server copy survives here. A
-        // production census found zero cloud rows without a client_id, and the
-        // backend now stamps one on every insert, so that population is empty
-        // and cannot grow. See docs/ARCHITECTURE.md.
+        // Scope limit, stated precisely. The census covered SERVER rows where
+        // client_id IS NULL — it found zero, and the backend's stamp keeps that
+        // at zero. It did NOT inventory local queue payloads, and proves
+        // nothing about whether a local row corresponds to some server row.
+        //
+        // So what remains here is narrower than "a legacy row": a legacy queued
+        // create whose request was already captured by flush and whose response
+        // was then lost. A cancellable one is cancelled just above; an
+        // acknowledged one is correlated by adoptStampedIdentity from its own
+        // queue op. Only the lost-response interval is unresolved, and it
+        // cannot be closed from the response path — a stable key would have to
+        // be in the request before it was first sent. Explicit limitation.
         if (localOnly) {
             dropOwned();
             return;
