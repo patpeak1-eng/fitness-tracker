@@ -620,7 +620,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             console.warn('[workout-sync] identity write-back failed; not adopted');
             return;
         }
-        if (latestProfileIdRef.current === op.uid) setHistory(updated);
+        // Apply to React through a FUNCTIONAL update re-planned against current
+        // state, not by assigning the storage snapshot. The snapshot was read
+        // before the request resolved, so assigning it would drop any row added
+        // in between — replacing the whole visible list with stale data. Running
+        // the same planner over `prev` also re-checks every guard against what
+        // React actually holds, and returns `prev` untouched if it no longer
+        // qualifies.
+        if (latestProfileIdRef.current === op.uid) {
+            setHistory(prev => planStampedIdentityAdoption(op, saved, prev) || prev);
+        }
     }, []);
 
     // Retry queue for failed cloud pushes. Executors are registered here (the
@@ -2305,13 +2314,24 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // at zero. It did NOT inventory local queue payloads, and proves
         // nothing about whether a local row corresponds to some server row.
         //
-        // So what remains here is narrower than "a legacy row": a legacy queued
-        // create whose request was already captured by flush and whose response
-        // was then lost. A cancellable one is cancelled just above; an
-        // acknowledged one is correlated by adoptStampedIdentity from its own
-        // queue op. Only the lost-response interval is unresolved, and it
-        // cannot be closed from the response path — a stable key would have to
-        // be in the request before it was first sent. Explicit limitation.
+        // What remains is a legacy queued create whose request flush had
+        // ALREADY captured when Delete was pressed, so cancellation above could
+        // not reach it. BOTH outcomes are unresolved, not just the lost one:
+        //
+        //   - response lost or the app dies: nothing ever learns the stamped id
+        //   - response received NORMALLY: this row is already gone locally, so
+        //     adoption correctly fail-closes (it must not resurrect what the
+        //     user deleted) — and nothing holds a deletion intent for the
+        //     stamped id, so the next pull brings the workout back
+        //
+        // An earlier comment here claimed only the lost-response interval was
+        // open. That was false, and review caught it.
+        //
+        // Neither can be closed from the response path: a stable key would have
+        // to be in the request before it was first sent. Pinned by the
+        // 'LIMITATION:' test in workoutDeletion.provider.test.jsx so it cannot
+        // be quietly relabelled as fixed. An acknowledged create that was NOT
+        // deleted meanwhile is correlated by adoptStampedIdentity.
         if (localOnly) {
             dropOwned();
             return;

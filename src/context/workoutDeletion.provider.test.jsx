@@ -340,6 +340,92 @@ describe('the three P1s review left open', () => {
         expect(ApiService.deleteWorkoutByClientId).toHaveBeenCalledWith(S);
     });
 
+    it('adopting an identity does not drop a workout finished while the request was open', async () => {
+        // The write-back used to assign the STORAGE SNAPSHOT read before the
+        // request resolved. Anything added in between was replaced by stale
+        // data — the whole visible list, not just the adopted row. It is now a
+        // functional update re-planned against current state.
+        const L = 'lx8f2a9q1z';
+        const S = '11111111-2222-3333-4444-555555555555';
+        StorageService.saveHistory(USER.id, [{
+            id: L, name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        let release;
+        ApiService.saveWorkout.mockReturnValue(new Promise(r => { release = r; }));
+        SyncQueue.enqueue({ type: 'workout', key: L, payload: { id: L }, uid: USER.id });
+
+        await mount();
+        // Held OUTSIDE act: an act scope left open across the rest of the
+        // test wedges later mounts.
+        const flushing = SyncQueue.flush();
+
+        // Make storage diverge from React while the request is open. Assigning
+        // the snapshot would import this unrelated row into the visible list;
+        // a functional update adopts the identity and nothing else.
+        StorageService.saveHistory(USER.id, [
+            ...StorageService.loadProfileState(USER.id).history,
+            { id: 'unrelated-1', client_id: 'cid-unrelated', name: 'Not Ours' },
+        ]);
+
+        release({ id: S, client_id: S });
+        await act(async () => { await flushing; });
+
+        expect(ctx.history.find(w => w.id === L)?.client_id,
+            'the identity was not adopted at all'
+        ).toBe(S);
+        expect(ctx.history.map(w => w.id),
+            'assigned a stale storage snapshot over React state instead of ' +
+            'adopting the identity within it'
+        ).not.toContain('unrelated-1');
+    });
+
+    it('LIMITATION: deleting during a captured legacy upload still resurrects it', async () => {
+        // Deliberately pins a KNOWN, ACCEPTED limitation so it cannot be
+        // silently relabelled as fixed. Review round 6 caught the docs claiming
+        // only the lost-response interval was unresolved; this case has a
+        // perfectly normal response and still resurrects.
+        //
+        // Sequence: flush captures the legacy upload, so cancellation cannot
+        // reach it. Delete removes the row locally — it has no identifier, so
+        // there is nothing to tell the server. The response then arrives, and
+        // adoption correctly fail-closes because no local row remains (it must
+        // NOT resurrect the row the user just deleted). Nothing holds a
+        // deletion intent for the stamped id, so the next pull brings it back.
+        //
+        // Closing this needs a stable key in the request BEFORE its first send.
+        // It cannot be done from the response path. If that is ever built, this
+        // test should fail — and that failure is the signal to rewrite it, not
+        // to delete it.
+        const L = 'lx8f2a9q1z';
+        const S = '11111111-2222-3333-4444-555555555555';
+        StorageService.saveHistory(USER.id, [{
+            id: L, name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        let release;
+        ApiService.saveWorkout.mockReturnValue(new Promise(r => { release = r; }));
+        SyncQueue.enqueue({ type: 'workout', key: L, payload: { id: L }, uid: USER.id });
+
+        await mount();
+        // Held OUTSIDE act: an act scope left open across the rest of the
+        // test wedges later mounts.
+        const flushing = SyncQueue.flush();
+
+        await act(async () => { ctx.deleteWorkout(L); });
+        expect(ctx.history.map(w => w.id)).not.toContain(L);
+
+        release({ id: S, client_id: S });
+        await act(async () => { await flushing; });
+
+        expect(ApiService.deleteWorkoutByClientId,
+            'if this now fires, the limitation is CLOSED — update the docs and ' +
+            'rewrite this test rather than deleting it'
+        ).not.toHaveBeenCalled();
+    });
+
     it('a stamped identity is never adopted onto an ambiguous duplicate', async () => {
         // Imported storage can duplicate an id. Choosing one would stamp
         // identity onto the wrong workout, and the next delete would remove

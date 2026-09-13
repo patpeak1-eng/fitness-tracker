@@ -767,8 +767,19 @@ Four rules earn their place here, each from a defect that reached review:
      uncorrelated legacy cloud copy. A *cancellable* legacy queued create is
      cancelled before local removal. A *successfully acknowledged* one is
      correlated from its own queue op and response (`planStampedIdentityAdoption`
-     — see 5 below). A captured request whose response is lost remains an
-     explicit unresolved legacy limitation.
+     — see 5 below). A create whose request flush had **already captured** when
+     Delete was pressed remains an explicit unresolved legacy limitation, and
+     that applies to **both** outcomes — the response being lost, *and* the
+     response arriving normally. In the second case the local row is already
+     gone, so adoption correctly fail-closes rather than resurrecting what the
+     user deleted; nothing then holds a deletion intent for the stamped id, and
+     the next pull brings the workout back.
+
+     An earlier revision of this section claimed only the lost-response
+     interval was open. That was false; review caught it. The case is pinned by
+     the `LIMITATION:` test in `workoutDeletion.provider.test.jsx` so it cannot
+     be quietly relabelled as fixed — if that test ever fails, the limitation
+     has been closed and this text is what needs rewriting.
 
    The production census covered **server rows where `client_id IS NULL`** and
    found zero. It inventoried neither local queue payloads nor their
@@ -809,10 +820,17 @@ Four rules earn their place here, each from a defect that reached review:
    owner-scoped). "Exactly one" matters: `SyncQueue`'s dedupe is not uid-aware
    and imported storage can duplicate an id.
 
+   React is updated through a **functional** update that re-plans against
+   current state, not by assigning the storage snapshot. The snapshot was read
+   before the request resolved, so assigning it would drop anything added in
+   between — replacing the whole visible list with stale data.
+
    Honest bound: this is **recovery for a completed response, not a crash fix**.
    If the app dies after the write-back but before the queue entry clears, the
    replay creates a second server row, and the guard then correctly refuses to
-   overwrite the identity already adopted — leaving a live duplicate.
+   overwrite the identity already adopted — leaving a live duplicate. It also
+   does nothing for a row deleted while its create was already in flight; see
+   the limitation under 3.
 
 The ordering is load-bearing. The queue entry is the durable intent; the
 tombstone is only a local display guard. Writing the guard first meant a crash
