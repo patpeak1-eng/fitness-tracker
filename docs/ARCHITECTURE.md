@@ -501,8 +501,35 @@ StorageService.saveActiveWorkout(uid, workout)  ← localStorage write
 GET  /health                     → {"status": "ok"}  (no SHA field — known gap)
 
 /api/auth      (routers/auth.py)
-  POST /register                 → Token (201)
-  POST /login                    → Token
+  POST /register                 → Token (201) — {access_token, token_type, user_id}
+  POST /login                    → Token        — same shape
+
+**`Token.user_id` is the password client's only source of identity (S32 Fix
+2a).** It is the canonical `users.id`, and deliberately the same value as the
+JWT subject — identity and authorization must name the same user, or a client
+scopes its local data by one id while the server attributes its writes to
+another. Required, not optional: the server always knows it, so a missing
+value should fail response validation rather than reach a client that would
+invent one.
+
+Before this, `Token` carried no identity, so `Login.jsx` fell back to
+`'cloud_' + Date.now()`. Because `activateProfileAndGo` **replaces the whole
+profiles array**, every password sign-in minted a new local profile and
+orphaned everything scoped to the previous one. `getMe` could not repair it:
+the backend `/me` accepts Bearer, but the frontend `getMe` is cookie-only by
+design, so a Bearer-only password session never learned who it was. Google
+users were never affected — the OAuth callback sets a cookie and `/me` returns
+the canonical id.
+
+Deploy order matters and is not optional: **2a (backend) ships and is verified
+live before 2b (frontend)**. 2b refuses to activate a profile without a
+`user_id`, so a new frontend against a not-yet-rolled-over backend would block
+sign-in outright. The two services deploy from one push but not atomically.
+
+Sign-in method is recoverable from the data: Google users store the literal
+`GOOGLE_OAUTH_SENTINEL` (`"google_oauth_no_password"`) in `hashed_password`.
+`hashed_password` is `NOT NULL` for every user, so it cannot be used to tell
+the two apart — only the sentinel comparison can.
   GET  /google                   → OAuth redirect — CSRF state cookie (S8) +
                                     PKCE S256 challenge/verifier cookie (S18)
   GET  /google/callback          → validates state + PKCE verifier (missing

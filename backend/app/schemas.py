@@ -28,6 +28,19 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # The canonical user id, returned so a password client can scope its local
+    # data by a STABLE identity.
+    #
+    # Without it Login.jsx falls back to 'cloud_' + Date.now(), and because
+    # activateProfileAndGo replaces the whole profiles array, every password
+    # sign-in creates a brand new local profile and orphans everything stored
+    # under the previous one. getMe cannot repair it either: it is cookie-only,
+    # so a Bearer-only password session never learns who it is.
+    #
+    # Required, not optional — the server always knows this, and a missing
+    # value should fail response validation here rather than silently reach a
+    # client that would invent one.
+    user_id: str
 
 
 class AccountDeleteRequest(BaseModel):

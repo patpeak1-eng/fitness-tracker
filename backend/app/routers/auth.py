@@ -111,7 +111,10 @@ async def register(
     await db.refresh(user)
 
     token = create_access_token(subject=str(user.id))
-    return Token(access_token=token)
+    # Same value as the token subject, deliberately: identity and authorization
+    # must name the same user, or the client scopes local data by one id while
+    # the server attributes its writes to another.
+    return Token(access_token=token, user_id=str(user.id))
 
 
 @router.post("/login", response_model=Token)
@@ -136,7 +139,10 @@ async def login(
         )
 
     token = create_access_token(subject=str(user.id))
-    return Token(access_token=token)
+    # Same value as the token subject, deliberately: identity and authorization
+    # must name the same user, or the client scopes local data by one id while
+    # the server attributes its writes to another.
+    return Token(access_token=token, user_id=str(user.id))
 
 
 # --------------------------------------------------------------------------- #
