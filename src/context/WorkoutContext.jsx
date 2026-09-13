@@ -452,31 +452,30 @@ export const backfillDisposition = (workout) => {
     return 'skip-ambiguous';
 };
 
-// Local ids are UUIDs (crypto.randomUUID). The pre-UUID fallback in generateId
-// produced `${base36 time}${base36 random}`, which never matches this — so a
-// non-UUID id proves the row was made locally by an older client and was never
-// a server row.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
+// Deletion targets a row only by an identifier something actually recorded:
+// the client id the creating device stamped, or the server id the server
+// returned. There is no third source. A row carrying neither is deleted
+// locally and nothing is claimed about the cloud.
+//
+// Two earlier attempts tried to manufacture the missing identifier, and both
+// were destructive:
+//
+//   - Minting a fresh client id named nothing the server had ever seen, so the
+//     placeholder deletion succeeded while the real row stayed live — and the
+//     guard was then retired on that false confirmation.
+//   - Treating a UUID-shaped local id as the server id was false at the root.
+//     `generateId` already returned crypto.randomUUID() BEFORE commit 8b88b49,
+//     which is the commit that first wrote client_id and backendId at all. So a
+//     row finished before then has a UUID local id L that is unrelated to its
+//     server row's id S. DELETE /L answers 404, the client reads 404 as
+//     success, the guard retires, and S returns on the next pull.
+//
+// Content matching cannot substitute either, on the client or on the server:
+// counting candidates establishes how many rows look alike, never that a
+// candidate IS this row. See docs/skills/provider-level-testing.md.
 export const chooseDeletionTarget = (workout) => {
     if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
     if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
-
-    // No identifiers at all — a row the OLD mapper cached, before it recorded
-    // backendId. That mapper stored `id: w.id`, so this row's own id may BE the
-    // server id, and deleting by it is a positive act: the server either
-    // soft-deletes that row or answers 404, which the client treats as success.
-    //
-    // This replaces minting a client id here. A minted id names nothing the
-    // server has ever seen, so the placeholder deletion it creates succeeds
-    // while the real row stays live — and the guard is then retired on that
-    // false confirmation, letting an ordinary pull resurrect the workout.
-    if (workout?.id && UUID_RE.test(String(workout.id))) {
-        return { clientId: null, backendId: workout.id };
-    }
-
-    // A non-UUID id cannot be a server id, so there is nothing to delete
-    // remotely. Purely local; remove it and stop.
     return { clientId: null, backendId: null, localOnly: true };
 };
 
@@ -2198,34 +2197,53 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // on screen — removing the wrong person's workout and leaving the real
         // one on disk. Same ownership rule as dropLocallyAsDeleted.
         const uid = currentProfile.id;
+        // Returns whether the row is actually gone. A storage write can fail on
+        // a full quota, and dropping it from React state anyway would show the
+        // user a successful delete that reload undoes. Keep the row visible
+        // instead — a deletion that visibly did not happen beats one that
+        // silently did not.
         const dropOwned = () => {
             const stored = StorageService.loadProfileState(uid).history || [];
             const pruned = stored.filter(w => w.id !== workoutId);
-            if (pruned.length !== stored.length) StorageService.saveHistory(uid, pruned);
+            if (pruned.length !== stored.length && !StorageService.saveHistory(uid, pruned)) {
+                console.warn(
+                    '[delete-workout] history write failed; keeping the row visible'
+                );
+                return false;
+            }
             if (latestProfileIdRef.current === uid) {
                 setHistory(prev => prev.filter(w => w.id !== workoutId));
             }
+            return true;
         };
 
         const { clientId, backendId, localOnly } = chooseDeletionTarget(target);
 
-        // Nothing was ever uploaded and nothing can be: a non-UUID id predates
-        // crypto.randomUUID, and the backfill will not upload a row with no
-        // identifiers. Removing it locally IS the whole deletion — no request,
-        // and no tombstone, since there is no pull that could bring it back.
+        // Cancel any queued upload for this row BEFORE anything returns. A
+        // pre-redesign client could queue a create keyed on the local id with
+        // no client_id in its payload; the server cannot recognise that upload
+        // — it inserts with client_id NULL, colliding with nothing — so a
+        // recorded deletion cannot catch it afterwards. Cancelling while it is
+        // still cancellable is the only fence available, and it applies to the
+        // local-only row too, which is why it sits above that return rather
+        // than below it. If flush already captured the entry the workout can
+        // come back; that is not inferred away here, because inferring it is
+        // exactly what this redesign removed.
+        if (!target.client_id) SyncQueue.remove('workout', target.id);
+
+        // No identifier from either source. Nothing names this row on the
+        // server, so there is no request to make and nothing a pull could match
+        // it against. Removing it locally IS the whole deletion.
+        //
+        // Scope limit, deliberate and measured: if such a row HAD reached the
+        // cloud under a pre-8b88b49 client, its server copy survives here. A
+        // production census found zero cloud rows without a client_id, and the
+        // backend now stamps one on every insert, so that population is empty
+        // and cannot grow. See docs/ARCHITECTURE.md.
         if (localOnly) {
             dropOwned();
             return;
         }
-
-        // One residual case, from queue entries written by a PRE-redesign
-        // client: a create for a row with no client_id, keyed on its local id.
-        // The server cannot recognise that upload — it inserts with client_id
-        // NULL, which collides with nothing — so the recorded deletion cannot
-        // catch it. Cancel it while it is still cancellable. If flush already
-        // captured it the workout can come back; that is not inferred away
-        // here, because inferring it is exactly what this redesign removed.
-        if (!target.client_id) SyncQueue.remove('workout', target.id);
 
         // Queue the deletion, then attempt it. Because the server records a
         // deletion by client id whether or not the workout has arrived, there

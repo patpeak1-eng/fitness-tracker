@@ -78,12 +78,20 @@ async def create_workout(
     # permanently discard that workout on a client we cannot update in the
     # same deploy.
     #
-    # Known gap, tracked to Fix 1b: such a row has no durable identity, and
-    # because PostgreSQL treats NULLs as distinct under the
-    # (user_id, client_id) unique constraint, a later re-upload inserts a
-    # fresh row and can undo a deletion. Production held ZERO client_id-less
-    # rows when this shipped. 1b makes the client always send an identifier;
-    # only after that can the server require one.
+    # It is accepted and then REPAIRED. A row without a client_id has no
+    # durable identity: PostgreSQL treats NULLs as distinct under the
+    # (user_id, client_id) unique constraint, so a later re-upload inserts a
+    # fresh row and can undo a deletion, and no client-side deletion can name
+    # the row afterwards. Stamping the row's own id as its client_id closes
+    # that permanently — the value is a fresh UUID, so it can never collide,
+    # and every row in the table from here on carries an identifier.
+    #
+    # This is why it is done here rather than by rejecting the upload: an
+    # earlier attempt returned 400, which SyncQueue dead-letters, permanently
+    # discarding the user's workout. Accepting and stamping loses nothing.
+    #
+    # A production census found ZERO client_id-less rows, so there is no
+    # backlog to migrate; this keeps the count at zero.
 
     # Let PostgreSQL resolve the conflict; never let one reach the session.
     #
@@ -100,6 +108,9 @@ async def create_workout(
     # regression tests cover it.
     values = {"user_id": current_user.id, **payload.model_dump()}
     values.setdefault("id", uuid4())
+    if values.get("client_id") is None:
+        values["client_id"] = str(values["id"])
+    effective_client_id = values["client_id"]
     inserted_id = (
         await db.execute(
             pg_insert(WorkoutHistory)
@@ -111,13 +122,15 @@ async def create_workout(
     await db.commit()
 
     # Read back by the id we actually inserted; only fall back to client_id
-    # when the insert was suppressed by a conflict, which can only happen when
-    # client_id is non-null. Looking up by client_id unconditionally would
-    # match EVERY client_id-less row for this user and blow up scalar_one().
+    # when the insert was suppressed by a conflict. Use the EFFECTIVE client
+    # id, not payload.client_id — a stamped row's payload value is None, and
+    # matching on None would match every such row and blow up scalar_one().
+    # (A stamped id is freshly minted and cannot conflict, so that fallback is
+    # unreachable for it; keyed correctly anyway rather than relying on it.)
     lookup = (
         WorkoutHistory.id == inserted_id
         if inserted_id is not None
-        else WorkoutHistory.client_id == payload.client_id
+        else WorkoutHistory.client_id == effective_client_id
     )
     # A soft-deleted row is returned WITH deleted_at set — the list hides
     # deleted rows, so this response is the only channel through which a

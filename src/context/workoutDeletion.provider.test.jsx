@@ -264,25 +264,35 @@ describe('the three P1s review left open', () => {
         expect(ApiService.deleteWorkoutByClientId).not.toHaveBeenCalled();
     });
 
-    it('deletes an unidentified cached row by its OWN id, minting nothing', async () => {
-        // Replaces the old "a minted identifier is persisted" test. Minting is
-        // gone: it created a placeholder naming nothing, the placeholder delete
-        // succeeded, the real row stayed live, and the guard retired on that
-        // false confirmation.
-        const SERVER_UUID = '11111111-2222-3333-4444-555555555555';
+    it('an unidentified UUID row is deleted locally and names nothing remotely', async () => {
+        // Two heuristics have been tried and removed here, both destructive.
+        // Minting a client id created a placeholder naming nothing, so the
+        // placeholder delete succeeded while the real row stayed live. Then
+        // treating the UUID local id AS the server id was false at the root:
+        // generateId already returned crypto.randomUUID() before 8b88b49, the
+        // commit that first recorded client_id/backendId at all. So this row's
+        // id L is unrelated to its server row's id S — DELETE /L 404s, the
+        // client reads 404 as success, and S returns on the next pull.
+        //
+        // The contract now: no identifier, no remote claim.
+        const LOCAL_UUID = '11111111-2222-3333-4444-555555555555';
         StorageService.saveHistory(USER.id, [{
-            id: SERVER_UUID, name: 'Legacy Session',
+            id: LOCAL_UUID, name: 'Legacy Session',
             startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
             completed: true, notes: '', exercises: [], recommendations: [],
         }]);
         await mount();
 
-        await act(async () => { ctx.deleteWorkout(SERVER_UUID); });
+        await act(async () => { ctx.deleteWorkout(LOCAL_UUID); });
 
-        expect(ApiService.deleteWorkout).toHaveBeenCalledWith(SERVER_UUID);
-        expect(ApiService.deleteWorkoutByClientId,
-            'minted a client id for a row whose own id may be the server id'
+        expect(ApiService.deleteWorkout,
+            'a UUID local id is not a server id; deleting by it targets nothing ' +
+            'and its 404 is misread as success'
         ).not.toHaveBeenCalled();
+        expect(ApiService.deleteWorkoutByClientId,
+            'minted a client id for a row the server has never named'
+        ).not.toHaveBeenCalled();
+        expect(ctx.history.map(w => w.id)).not.toContain(LOCAL_UUID);
     });
 
     it('does not call the server for a pre-UUID local row', async () => {
@@ -298,6 +308,61 @@ describe('the three P1s review left open', () => {
         expect(ApiService.deleteWorkout).not.toHaveBeenCalled();
         expect(ApiService.deleteWorkoutByClientId).not.toHaveBeenCalled();
         expect(ctx.history.map(w => w.id)).not.toContain('lx8f2a9q1z');
+    });
+
+    it('cancels a queued upload for an unidentified row before returning', async () => {
+        // The cancellation used to sit BELOW the local-only return, so it never
+        // ran for exactly the rows that need it most: a pre-redesign client
+        // could queue a create with no client_id in its payload, the server
+        // inserts it with client_id NULL (colliding with nothing), and no
+        // later deletion can name it. Cancelling while it is still cancellable
+        // is the only fence available for that row.
+        const ID = 'lx8f2a9q1z';
+        StorageService.saveHistory(USER.id, [{
+            id: ID, name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        await mount();
+        SyncQueue.enqueue({ type: 'workout', key: ID, payload: { id: ID }, uid: USER.id });
+        expect(SyncQueue.hasPending('workout', ID),
+            'precondition: the upload must be queued before the delete'
+        ).toBe(true);
+
+        await act(async () => { ctx.deleteWorkout(ID); });
+
+        expect(SyncQueue.hasPending('workout', ID),
+            'the queued upload survived the delete and will resurrect the workout'
+        ).toBe(false);
+    });
+
+    it('keeps a local-only row visible when its history write fails', async () => {
+        // dropOwned discarded saveHistory's boolean, so a full quota removed
+        // the row from React state with nothing written to disk — the user saw
+        // a successful delete that reload silently undid.
+        const ID = 'lx8f2a9q1z';
+        StorageService.saveHistory(USER.id, [{
+            id: ID, name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        await mount();
+        expect(ctx.history.map(w => w.id),
+            'precondition: the row must be on screen before the write is broken'
+        ).toContain(ID);
+
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSet = localStorage.setItem.bind(localStorage);
+        vi.spyOn(localStorage, 'setItem').mockImplementation((k, v) => {
+            if (k.includes('history')) throw new Error('QuotaExceededError');
+            return realSet(k, v);
+        });
+
+        await act(async () => { ctx.deleteWorkout(ID); });
+
+        expect(ctx.history.map(w => w.id),
+            'reported a deletion that was never written to disk'
+        ).toContain(ID);
     });
 
     it('R3-1: a lone same-name/time server row must not lend its identity', async () => {
@@ -330,8 +395,10 @@ describe('the three P1s review left open', () => {
         expect(ApiService.deleteWorkoutByClientId,
             'deleting the cached row issued a delete for a different workout'
         ).not.toHaveBeenCalledWith('cid-B');
-        expect(ApiService.deleteWorkout)
-            .toHaveBeenCalledWith('99999999-8888-7777-6666-555555555555');
+        // And it must not fall back to deleting by its own id either: that id
+        // is local, so the request would target nothing while B stays live.
+        expect(ApiService.deleteWorkout).not.toHaveBeenCalled();
+        expect(ApiService.deleteWorkoutByClientId).not.toHaveBeenCalled();
     });
 
     it('R3-1: a positive id match still enriches', async () => {
@@ -359,14 +426,12 @@ describe('the three P1s review left open', () => {
         // removed the row and the second found no target - it passed with ZERO
         // requests. Forcing the queue write to fail keeps the row visible, so
         // the second press genuinely runs.
-        const SERVER_UUID = '22222222-3333-4444-5555-666666666666';
-        StorageService.saveHistory(USER.id, [{
-            id: SERVER_UUID, name: 'Legacy Session',
-            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
-            completed: true, notes: '', exercises: [], recommendations: [],
-        }]);
+        // The row must carry a real identifier, or there is no request to
+        // retry: an unidentified row is now deleted locally and never named
+        // remotely. Pull it so it arrives with the server's client_id.
+        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
         let release;
-        ApiService.deleteWorkout.mockReturnValue(new Promise(r => { release = r; }));
+        ApiService.deleteWorkoutByClientId.mockReturnValue(new Promise(r => { release = r; }));
         await mount();
 
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -376,17 +441,17 @@ describe('the three P1s review left open', () => {
             return realSet(k, v);
         });
 
-        await act(async () => { ctx.deleteWorkout(SERVER_UUID); });
+        await act(async () => { ctx.deleteWorkout('srv-1'); });
         expect(ctx.history.map(w => w.id),
             'precondition: an unqueued delete must keep the row visible'
-        ).toContain(SERVER_UUID);
+        ).toContain('srv-1');
 
-        await act(async () => { ctx.deleteWorkout(SERVER_UUID); });
+        await act(async () => { ctx.deleteWorkout('srv-1'); });
 
-        const calls = ApiService.deleteWorkout.mock.calls.map(([id]) => id);
+        const calls = ApiService.deleteWorkoutByClientId.mock.calls.map(([id]) => id);
         expect(calls.length, 'the second press did not reach the API').toBe(2);
+        expect(calls.every(Boolean), 'an attempt sent an empty identifier').toBe(true);
         expect(new Set(calls).size, 'the two attempts used different targets').toBe(1);
-        expect(calls[0]).toBe(SERVER_UUID);
         release?.();
     });
 

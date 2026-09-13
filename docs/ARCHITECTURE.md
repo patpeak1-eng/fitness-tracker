@@ -661,25 +661,31 @@ good. Verified by loading `origin/main`'s router into a throwaway app: the
 one-segment path returns 422 with `loc=['path','id']`, the two-segment path
 returns a clean 404.
 
-**Remaining gap:** `POST ""` still **accepts** a create with no `client_id`.
-Such a row has no durable identity — PostgreSQL treats NULLs as distinct under
-the `(user_id, client_id)` unique constraint — so a re-upload after deletion
-inserts a fresh row. Requiring one was tried and reverted: the shipped login
-backfill queues the raw local workout (`WorkoutContext.jsx` ~1036-1048), a
-legacy or restored row may carry none, and `SyncQueue` dead-letters any 4xx
-(`SyncQueue.js` ~131-137) — so a 400 would have permanently discarded that
-workout on a client that cannot be updated in the same deploy. Production held
-zero `client_id`-less rows when this shipped — a snapshot, not an invariant,
-and not one to lean on while `POST` still accepts them. Fix 1b makes *this*
-client stamp an identifier before a workout is uploaded, but older deployed
-clients are still out there, so the server cannot require one until they have
-all rolled over.
+`POST ""` **accepts** a create with no `client_id` and then **stamps one**:
+`client_id = str(row.id)`. The value is the freshly minted primary key, so it
+cannot collide, and the stamp only fills a gap — a supplied `client_id` is
+never overwritten, because overwriting would break the idempotent re-upload
+the whole deletion design rests on.
+
+It is repaired rather than rejected because rejection loses data. Requiring
+one was tried and reverted: the shipped login backfill queues the raw local
+workout (`WorkoutContext.jsx` ~1036-1048), a legacy or restored row may carry
+none, and `SyncQueue` dead-letters any 4xx (`SyncQueue.js` ~131-137) — so a
+400 permanently discarded that workout on a client that cannot be updated in
+the same deploy. Older deployed clients are still out there; the server
+therefore cannot *require* an identifier, but it can supply one.
+
+Why it matters: a row with `client_id` NULL has no durable identity, because
+PostgreSQL treats NULLs as distinct under the `(user_id, client_id)` unique
+constraint, so a re-upload after deletion inserts a fresh row and resurrects
+the workout — and no client can name the row to delete it either. Stamping
+makes every row nameable from the moment it exists.
 
 `POST ""` resolves conflicts with `INSERT ... ON CONFLICT DO NOTHING …
 RETURNING` and then reads the row back — by the returned id when the insert
-happened, and by `client_id` only when a conflict suppressed it (which implies
-a non-null `client_id`). Reading back by `client_id` unconditionally would
-match every `client_id`-less row for that user.
+happened, and by the **effective** `client_id` (post-stamp) when a conflict
+suppressed it. Reading back by the raw payload value would match on NULL and
+so match every identifierless row for that user.
 
 It previously caught `IntegrityError` from `commit()` and re-queried. **A
 regression test shows that path 500'd on a plain sequential duplicate**: the
@@ -727,18 +733,35 @@ Four rules earn their place here, each from a defect that reached review:
    `setHistory` in the request's `.then` removed whichever profile happened to
    be on screen and left the real row on disk. Same rule as
    `dropLocallyAsDeleted`.
-3. **Nothing is minted at deletion time.** `chooseDeletionTarget` resolves
-   `client_id`, then `backendId`, then — for a row the old mapper cached with
-   neither — the row's **own id**, because that mapper stored `id: w.id` and it
-   may therefore be the server id. `DELETE /{id}` either soft-deletes that row
-   or answers 404, which is treated as success; either way the outcome is
-   known. A non-UUID id predates `crypto.randomUUID` and so cannot be a server
-   id, making the row purely local: it is removed with no request at all.
+3. **No identifier is manufactured at deletion time.** `chooseDeletionTarget`
+   resolves `client_id`, then `backendId`, and otherwise returns `localOnly` —
+   the row is removed locally and *nothing is claimed about the server*. There
+   is no third source of identity, and both attempts to invent one were
+   destructive:
 
-   Minting a `client_id` here was the earlier design and was wrong. The minted
-   id named nothing the server had seen, so the placeholder deletion succeeded
-   while the real row stayed live — and the guard was then retired on that
-   false confirmation, letting an ordinary pull resurrect the workout.
+   - **Minting a `client_id`** named nothing the server had seen, so the
+     placeholder deletion succeeded while the real row stayed live — and the
+     guard was then retired on that false confirmation, letting an ordinary
+     pull resurrect the workout.
+   - **Treating a UUID-shaped local id as the server id** was false at the
+     root. `generateId` already returned `crypto.randomUUID()` *before* commit
+     `8b88b49`, which is the commit that first wrote `client_id` and
+     `backendId` at all. So a workout finished before then has a local id `L`
+     unrelated to its server row's id `S`. `DELETE /L` answers 404, the client
+     treats 404 as success, the guard retires, and `S` returns on the next
+     pull.
+
+   Content matching cannot stand in for either, on the client *or* on the
+   server: counting rows that look alike establishes how many candidates
+   exist, never that a candidate **is** this row.
+
+   **Scope limit, deliberate and measured.** A row carrying neither identifier
+   that *had* already reached the cloud under a pre-`8b88b49` client keeps its
+   server copy. No automatic fix is possible — the correspondence was never
+   recorded — so the alternatives are an explicit user-resolution flow or this
+   documented limit. A production census found **zero** cloud rows with a NULL
+   `client_id`, and `POST ""` now stamps one on every insert, so that
+   population is empty and cannot grow.
 
 4. **The backfill uploads only what carries a stable identifier.** See
    `backfillDisposition`. A `backendId` means the server has seen the row, so it
@@ -762,18 +785,14 @@ silently forgotten and an in-flight create could commit with nothing left to
 undo it.
 
 - **Which endpoint** — `chooseDeletionTarget` (module scope, returns exactly one
-  of `clientId` / `backendId`). A row with a `client_id` is deleted by client
-  id. A row that is already on the server but predates client ids is deleted by
-  its **server id**: minting an id for it would record the deletion against an
-  identifier nothing refers to, since the real row carries `client_id` NULL and
-  could never collide with the placeholder. Only a row with neither gets a
-  minted id.
+  of `clientId` / `backendId`, or `localOnly`). A row with a `client_id` is
+  deleted by client id; a row already known to the server but predating client
+  ids is deleted by its **server id**; a row with neither is local-only.
 - **`mapServerWorkout` stamps `backendId`** on every pulled row, and that is
-  what makes the branch above work. Local ids are UUIDs too, so without it a
-  pulled legacy row is indistinguishable from a never-uploaded local one —
-  review caught exactly that: the mapper dropped `backendId`, so deleting a
-  pulled legacy row minted an id naming nothing while the real row lived on,
-  and reconciliation then reissued that useless id for ever.
+  what makes the branch above work. **Local ids are UUIDs too**, so without it
+  a pulled legacy row is indistinguishable from a never-uploaded local one —
+  review caught exactly that twice, and the second time it was the shape of the
+  fix itself. The id alone carries no provenance; only `backendId` does.
 - `crypto.randomUUID()` at `startWorkout` means every normally-created workout
   already has an identifier; `ensureWorkoutClientId` only stamps legacy and
   restored rows, and the login backfill stamps and **persists** before queueing.

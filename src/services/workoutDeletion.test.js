@@ -86,16 +86,20 @@ describe('chooseDeletionTarget', () => {
             .toEqual({ clientId: null, backendId: 'srv-1' });
     });
 
-    it('deletes an unidentified UUID row by its OWN id, never a minted one', () => {
-        // The old mapper stored pulled rows as { id: <server uuid> } with no
-        // backendId, so this row's id may BE the server id. Minting instead
-        // would delete a placeholder that names nothing while the real row
-        // stayed live, and the guard would retire on that false confirmation.
-        const { clientId, backendId } = chooseDeletionTarget(
+    it('claims nothing remotely for an unidentified UUID row', () => {
+        // Both manufactured identifiers have been tried here and both were
+        // destructive. Minting named nothing the server had seen. Using the
+        // row's own UUID assumed it was the server id — false, because
+        // generateId already returned crypto.randomUUID() BEFORE 8b88b49, the
+        // commit that first wrote client_id and backendId. Local id L and
+        // server id S are unrelated, so DELETE /L 404s, the client reads 404
+        // as success, and S comes back on the next pull.
+        const { clientId, backendId, localOnly } = chooseDeletionTarget(
             { id: '11111111-2222-3333-4444-555555555555' }
         );
-        expect(backendId).toBe('11111111-2222-3333-4444-555555555555');
-        expect(clientId).toBeNull();
+        expect(localOnly).toBe(true);
+        expect(backendId, 'a UUID local id is not a server id').toBeNull();
+        expect(clientId, 'minted an identifier the server has never seen').toBeNull();
     });
 
     it('treats a NON-uuid id as purely local, with nothing to delete remotely', () => {
