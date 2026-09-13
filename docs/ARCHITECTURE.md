@@ -549,14 +549,20 @@ when none exists (`if user is None`), so an account first registered with a
 password keeps its real hash and can then sign in either way. A real hash
 therefore means "password-capable", not "signs in with a password".
 
-There is one live defect on this path, found in review of Fix 2 but predating
-it: `verify_password` hands the sentinel straight to passlib, which raises
-`UnknownHashError` on a value that is not a hash, and it escapes as a **500**.
-So typing a password for a Google account returns a server error instead of
-"Invalid email or password" — and every real account on this deployment is
-OAuth. **Still live; fix not yet cleared.** The right repair is for
-`verify_password` to fail closed on a value passlib cannot parse, rather than
-for each caller to special-case the sentinel.
+`verify_password` **fails closed** on anything passlib cannot parse. Handing it
+the sentinel raises `UnknownHashError`, which used to escape the login handler
+as a **500** — so typing a password for a Google account returned a server
+error rather than "Invalid email or password", and since every real account on
+this deployment is OAuth, that was the common case. Found in review of Fix 2
+but predating it.
+
+The `try/except` lives in `verify_password`, not at the call sites, so both
+callers (`login` and `delete_account`) are covered and a future caller cannot
+reintroduce it by forgetting the sentinel. A value that is not a recognisable
+hash cannot match any password, so `False` is correct as well as safe — but
+note the tempting wrong fix, comparing the plaintext to the stored value, is an
+authentication bypass for anyone who knows the constant. There is a test for
+exactly that.
   GET  /google                   → OAuth redirect — CSRF state cookie (S8) +
                                     PKCE S256 challenge/verifier cookie (S18)
   GET  /google/callback          → validates state + PKCE verifier (missing

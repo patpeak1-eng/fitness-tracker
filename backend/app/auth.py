@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,7 +51,29 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Check a password, failing CLOSED on anything passlib cannot parse.
+
+    Google accounts store the literal ``GOOGLE_OAUTH_SENTINEL`` in
+    ``hashed_password`` — it satisfies the NOT NULL column and is not a hash.
+    Handing it to passlib raises ``UnknownHashError``, which used to escape the
+    login handler as a **500**: typing a password for a Google account returned
+    a server error instead of "Invalid email or password". Every real account
+    on this deployment is OAuth, so that was the common case, not the rare one.
+
+    Fixed here rather than at each call site so ``login`` and ``delete_account``
+    — the only two callers — are both covered, and so a future caller cannot
+    reintroduce it by forgetting to special-case the sentinel.
+
+    A stored value that is not a recognisable hash cannot match any password,
+    so False is the correct answer as well as the safe one. Returning it early
+    is measurably faster than a real bcrypt verify, which in principle lets an
+    attacker distinguish OAuth-only accounts by timing; that is not a new leak,
+    since the caller already short-circuits on an unknown email.
+    """
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except UnknownHashError:
+        return False
 
 
 def create_access_token(
