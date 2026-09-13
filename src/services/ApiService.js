@@ -298,6 +298,17 @@ export const updateFoodLog = async (id, updates) => {
   return r.json();
 };
 
+export const deleteWorkout = async (id) => {
+  const r = await apiFetch(`/api/workouts/${id}`, { method: 'DELETE' });
+  // 404 means the row is already gone, which is the state we wanted. Treating
+  // it as success keeps a retry after a lost response from looping forever.
+  if (!r.ok && r.status !== 404) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, `/api/workouts/${id}`, text);
+  }
+  // 204 No Content on success — nothing to parse.
+};
+
 export const deleteFoodLog = async (id) => {
   const r = await apiFetch(`/api/nutrition/log/${id}`, {
     method: 'DELETE'

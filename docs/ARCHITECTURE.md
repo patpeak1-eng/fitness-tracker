@@ -576,13 +576,33 @@ attribute access on it during the re-query rather than the session as a whole
 being unusable. A savepoint was tried and the concurrency test still failed.
 The fix removes the exception path instead of depending on which explanation
 is right. **The same `IntegrityError`-then-re-query pattern still exists in
-`PUT /active`** (repaired with the S32 Fix 3 fence) **and in `nutrition.py`'s
-food-log idempotency** (own follow-up); neither is fixed by this change.
+`PUT /active`** and is repaired with the S32 Fix 3 fence. The food-log
+variant in `nutrition.py` **has since been fixed** the same way (S32,
+`ON CONFLICT DO NOTHING … RETURNING` plus a read-back).
 
 One accepted edge: if an account is hard-deleted between the insert and the
 read-back, the cascade removes the row and the read-back raises, returning
 500. The data outcome is correct — account and row are both gone — and every
 other authenticated route races account deletion the same way.
+
+**Client side (S32 Fix 1b).** `deleteWorkout` (`WorkoutContext.jsx`) drops the
+row locally, writes a **tombstone**, then resolves the server id and calls
+`ApiService.deleteWorkout`, enqueuing `workout_delete` if that fails.
+
+- `resolveWorkoutBackendId` (module scope) maps a local row to its server id:
+  explicit `backendId`, else a `client_id` match, else an exact `id` match for
+  legacy rows that have no `client_id`. It returns `null` **only** when a
+  successful fetch proves the workout was never synced, and **throws** when it
+  could not check — so a failed lookup retries instead of silently discarding
+  the deletion.
+- Tombstones live in the profile-scoped `fitness_deleted_workouts`, keyed on
+  **both** ids, and gate two places: the pull merge (a pull that started
+  before the delete can land after it) and the backfill (which uploads
+  anything local-and-absent — the exact shape of a just-deleted workout, or
+  one reinstated by restoring an older backup). A tombstone is retired by the
+  first pull whose result no longer contains the row.
+- `ApiService.deleteWorkout` treats 404 as success: already gone is the state
+  we wanted, and a retry after a lost response must not loop.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)
