@@ -414,16 +414,42 @@ describe('the three P1s review left open', () => {
         // test wedges later mounts.
         const flushing = SyncQueue.flush();
 
+        // The upload must genuinely be CAPTURED and in flight — that is the
+        // precondition the whole limitation rests on. Without asserting it,
+        // this test passes even with the queue setup removed, which is exactly
+        // how the first version of it was vacuous.
+        expect(ApiService.saveWorkout,
+            'precondition: the legacy upload was never dispatched, so nothing ' +
+            'is in flight and this test proves nothing'
+        ).toHaveBeenCalledWith(expect.objectContaining({ id: L }));
+
         await act(async () => { ctx.deleteWorkout(L); });
         expect(ctx.history.map(w => w.id)).not.toContain(L);
 
+        // The response arrives NORMALLY. This is the case the docs used to
+        // claim was closed.
         release({ id: S, client_id: S });
         await act(async () => { await flushing; });
 
         expect(ApiService.deleteWorkoutByClientId,
-            'if this now fires, the limitation is CLOSED — update the docs and ' +
-            'rewrite this test rather than deleting it'
+            'a deletion intent now exists for the stamped id — the limitation ' +
+            'is CLOSED; rewrite this test and the docs rather than deleting it'
         ).not.toHaveBeenCalled();
+
+        // The actual damage: a later pull returns the row the server kept, and
+        // nothing suppresses it. Asserting the resurrection itself is what
+        // makes this a pin rather than a statement about one absent call.
+        ApiService.getHistory.mockResolvedValue({
+            total: 1,
+            items: [serverRow({ id: S, client_id: S, name: 'Ancient Local' })],
+        });
+        await unmount();
+        await mount();
+
+        expect(ctx.history.map(w => w.client_id),
+            'the deleted workout did NOT come back — the limitation is CLOSED; ' +
+            'rewrite this test and the docs rather than deleting it'
+        ).toContain(S);
     });
 
     it('a stamped identity is never adopted onto an ambiguous duplicate', async () => {
