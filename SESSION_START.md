@@ -233,7 +233,96 @@ docs/preparation_controls_visual_contract_s25_3.md):
   Arnold Press's previous “No Visual Available” state was a field-name mismatch,
   not missing image files.
 
-## Session 30 — 2026-09-10 (in progress)
+## Session 32 — 2026-09-12/13 (deletion, identity, auth)
+
+**Shipped to `main` and verified live:**
+1. `1b528a3` + `dcfab71` — workout soft-delete backend, and the food-log
+   duplicate-sync 500. Both were the same pre-existing bug: `IntegrityError`
+   escaping `commit()` leaves the asyncpg session unusable (`MissingGreenlet`),
+   and the client retries 5xx forever. Replaced with
+   `INSERT … ON CONFLICT DO NOTHING … RETURNING`.
+2. `1a924b6` — **S32 Fix 2a**: `Token.user_id`. Password sign-in had no stable
+   identity, so `Login.jsx` minted `'cloud_' + Date.now()` on *every* sign-in
+   and orphaned the previous profile's local data.
+3. `5e3ebfb` — **Fix 2b**: `Login.jsx` uses `result.user_id` or refuses. Shipped
+   *after* 2a was live, deliberately: the reverse order would have blocked
+   sign-in for anyone reaching a not-yet-rolled-over backend.
+4. `6309a92` — **OAuth password 500**, pre-existing. `verify_password` handed
+   the `GOOGLE_OAUTH_SENTINEL` to passlib, which raises `UnknownHashError` on a
+   value that is not a hash; it escaped as a 500. Every real account here is
+   OAuth, so typing a password on the sign-in form was the common path to it.
+   Now fails closed at the verifier, covering `login` and `delete_account`.
+
+**Not merged — `traycer/fitness-tracker-zesty-walrus` (S32 Fix 1b, deletion).**
+Server-side deletion intent (`DELETE /api/workouts/deletions/by-client-id`),
+plus the client rework. Three review rounds; two P1s still open:
+- An **unambiguous** fingerprint still is not proof of identity — a cached row
+  with no identifiers can adopt a *different* workout's `client_id` when only
+  one server row shares its name and start time. Fix: delete the fingerprint
+  fallback entirely (verified: all 22 provider tests still pass without it).
+- Deleting a **minted placeholder** can wrongly retire the guard for a legacy
+  server row whose identity was never resolved, after which an ordinary pull
+  resurrects it. Fix: keep unresolved guards until a positively identified
+  server-row deletion is acknowledged.
+- Plus a mislabelled test: "an unambiguous fingerprint still enriches" uses the
+  same id for both sides, so it never reaches the fallback it claims to cover.
+
+**Process.** Six assertions across this feature turned out to be incapable of
+failing — they passed against deliberately broken code. Mutation-checking every
+new test (revert the fix, confirm red) is now standard and is written up in
+`docs/skills/provider-level-testing.md`. `DOC_PLACEMENT_RULE` was added to
+`AGENTS.md` after a mutation count ended up in `ARCHITECTURE.md`, the same drift
+that once put an exercise count in the Coach prompt.
+
+---
+
+## OPEN ITEMS — consolidated 2026-09-13
+
+Supersedes the per-session lists below, which are kept for context.
+
+**Blocking work in flight**
+1. **P1 — S32 Fix 1b deletion.** Two P1s + one mislabelled test, above. Branch
+   is unmerged; `main` is unaffected.
+
+**Real defects, not started**
+2. **P2 — `PUT /active` still has the `IntegrityError`-then-re-query shape**
+   that 500'd in `create_workout` and `create_food_log`. Same bug class, last
+   instance. Fix lands with S32 Fix 3.
+3. **P2 — S32 Fix 3: active-workout sync + server fence.** Spec written
+   (`docs/three_fixes_spec_s32.md`), not built.
+4. **P2 — Timed exercises with an external load** are unsupported across eight
+   surfaces. HIGH zone. Blocks any loaded hold or carry.
+5. **P3 — A distinct server row sharing a name and start time with a local row
+   is suppressed from `newItems`** by the fingerprint filter, so it never
+   becomes visible. Pre-existing, non-destructive, tracked separately from the
+   deletion work.
+6. **P3 — Remove an exercise from an existing custom template.** No UI path.
+
+**Owner-only verification (needs a real phone; cannot be done from here)**
+7. P1 — Real-device barcode camera test.
+8. P1 — Real phone-camera photo through the Coach photo path.
+9. P1 — Coach nutrition commentary spot-check once real meals are logged.
+
+**Product / feature backlog**
+10. P2 — Feedback in Settings. Decided: a `mailto:` link, not a Google Form.
+    One file, LOW zone.
+11. P2 — Rep-range double progression (8–10 target style).
+
+**Accepted, documented, not being fixed**
+12. Timing distinguishability of OAuth-only accounts at login — the caller
+    already short-circuits on unknown email, so the channel exists regardless.
+13. Unbounded tombstone growth on a profile that is permanently offline.
+14. A genuinely local-only legacy workout (no `client_id`, no `backendId`) will
+    never sync. It stays on the device; the alternative resurrects deletions.
+
+**Housekeeping**
+15. P3 — Four `example.com` fixture accounts on production. Deleting them is a
+    production write and needs an explicit go-ahead.
+16. P3 — GitNexus index stale; `npx gitnexus analyze --skip-agents-md`.
+
+---
+
+## Session 30 — 2026-09-10
 
 **Shipped and live at `520d6f0`** (both Railway services SUCCESS, verified
 by `scripts/poll_deploy.sh`; live-URL Playwright pass at desktop and 375px,

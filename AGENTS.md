@@ -329,6 +329,31 @@ the completion report's `Coach knowledge:` line says so. Prefer pointing the
 model at data it already receives (`app_templates`, `available_exercises`)
 over restating facts that will go stale.
 
+## DOC_PLACEMENT_RULE
+
+Document everything durable — but each fact lives in exactly one file. Before
+writing, ask: **does this become false when the CODE changes, or when WORK
+HAPPENS around the code?** The first is architecture; the second is not.
+
+| What it is | Where it goes |
+|---|---|
+| How it is wired, and why it is wired that way | `docs/ARCHITECTURE.md` |
+| A reusable technique, recipe, or gotcha | `docs/skills/<name>.md` |
+| What is open, in progress, or decided this session | `SESSION_START.md` |
+| The approach for one feature, frozen once built | `docs/<feature>_spec_s<N>.md` |
+| A rule every agent must follow | `AGENTS.md` |
+| Process, precedent, worked examples | `docs/PROJECT_OPERATING_MODEL.md` |
+
+**Never in `ARCHITECTURE.md`:** test or mutation counts, pass/fail totals,
+review verdicts, merge status, "awaiting…", or anything that turns false
+because someone added a test or finished a review. Counts belong in the commit
+message, which is dated by construction.
+
+*Prevents:* the drift that already happened twice. The Coach prompt went stale
+because an exercise **count** was written into it; `ARCHITECTURE.md` then
+repeated it with a mutation count that was wrong the day it was written. A
+number that dates itself is the tell.
+
 ## SKILL_CAPTURE_RULE
 
 A session that produces a reusable pattern writes it to `docs/skills/` as
@@ -424,6 +449,8 @@ not a proof — it is the input to the coordinator's independent verification.
 TASK COMPLETE — [Task Name]
 Files modified:      [list with line delta]
 ARCHITECTURE.md:     [updated — <what changed>  |  no architectural change this task]
+Other docs:          [file(s) written, and why that file — see DOC_PLACEMENT_RULE
+                      |  none]
 Coach knowledge:     [updated — <what changed>  |  no coach-relevant change]
 Zero regressions:    [CONFIRMED / issues found]
 Verification method: [how it was checked — build, lint, endpoint probe, railway deployment list, disposable account]

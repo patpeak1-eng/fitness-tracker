@@ -690,8 +690,8 @@ attribute access on it during the re-query rather than the session as a whole
 being unusable. A savepoint was tried and the concurrency test still failed.
 The fix removes the exception path instead of depending on which explanation
 is right. **The same `IntegrityError`-then-re-query pattern still exists in
-`PUT /active`** (`workouts.py`, unchanged) and is *planned* to be repaired with
-the S32 Fix 3 fence — that work has not shipped. The food-log
+`PUT /active`** (`workouts.py`, unchanged) — it catches `IntegrityError` from
+`commit()` and re-queries, the shape that 500s here. The food-log
 variant in `nutrition.py` **has since been fixed** the same way (S32,
 `ON CONFLICT DO NOTHING … RETURNING` plus a read-back).
 
