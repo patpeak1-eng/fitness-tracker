@@ -5,20 +5,21 @@ Spec: docs/nutrition_spec_s18.md Section 3. Design invariants:
   edits the estimate, then POSTs /log with the final values.
 - The frontend never calls Open Food Facts or the Anthropic API directly;
   all external calls and their throttles live here.
-- ``client_id`` upserts are idempotent per user (same IntegrityError pattern
-  as workout_history) so offline sync replays never duplicate rows.
+- ``client_id`` upserts are idempotent per user (``ON CONFLICT DO NOTHING``
+  plus a read-back, same as workout_history) so offline sync replays never
+  duplicate rows and never 500.
 """
 import json
 import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -84,26 +85,45 @@ async def create_food_log(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FoodLogResponse:
-    entry = FoodLog(user_id=current_user.id, **payload.model_dump())
-    db.add(entry)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        # client_id already exists for this user — return the existing record
-        # so re-syncs are idempotent instead of 500ing on the unique constraint.
-        if payload.client_id:
-            result = await db.execute(
-                select(FoodLog).where(
-                    FoodLog.user_id == current_user.id,
-                    FoodLog.client_id == payload.client_id,
-                )
-            )
-            existing = result.scalar_one_or_none()
-            if existing:
-                return FoodLogResponse.model_validate(existing)
-        raise  # unexpected constraint — re-raise
-    await db.refresh(entry)
+    # Let PostgreSQL resolve the conflict; never let one reach the session.
+    #
+    # This previously caught IntegrityError from commit() and re-queried. A
+    # regression test shows that path 500'd on a plain sequential duplicate:
+    # the re-query raised MissingGreenlet, and the client queue retries 5xx
+    # forever, so every duplicate food-log sync became a permanent retry loop.
+    # Identical to the create_workout defect fixed in S32 Fix 1a; the precise
+    # trigger was not isolated (rollback expires current_user, so attribute
+    # access on it during the re-query is the likeliest cause), so the fix
+    # removes the exception path rather than betting on an explanation.
+    #
+    # client_id-less entries are accepted, as before: rejecting them would
+    # make the client queue dead-letter the entry permanently.
+    values = {"user_id": current_user.id, **payload.model_dump()}
+    values.setdefault("id", uuid4())
+    inserted_id = (
+        await db.execute(
+            pg_insert(FoodLog)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["user_id", "client_id"])
+            .returning(FoodLog.id)
+        )
+    ).scalar_one_or_none()
+    await db.commit()
+
+    # Read back by the id actually inserted; fall back to client_id only when
+    # a conflict suppressed the insert, which implies a non-null client_id.
+    # Looking up by client_id unconditionally would match every client_id-less
+    # row for this user and blow up scalar_one().
+    lookup = (
+        FoodLog.id == inserted_id
+        if inserted_id is not None
+        else FoodLog.client_id == payload.client_id
+    )
+    entry = (
+        await db.execute(
+            select(FoodLog).where(FoodLog.user_id == current_user.id, lookup)
+        )
+    ).scalar_one()
     return FoodLogResponse.model_validate(entry)
 
 
