@@ -5,6 +5,22 @@ import './Login.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Shown when a sign-in response cannot establish who the user is (S32 Fix 2b).
+//
+// This used to fall back to `'cloud_' + Date.now()`. Because
+// activateProfileAndGo REPLACES the whole profiles array, that minted a new
+// local profile on every single sign-in and orphaned everything scoped to the
+// previous one — and it could never be corrected later, since the frontend
+// getMe is cookie-only and a password session is Bearer-only.
+//
+// Refusing is the safer failure. A retry costs the user seconds; a silent
+// wrong identity costs them their local data with no signal that anything
+// happened. The backend has returned user_id since Fix 2a (live, verified),
+// so in practice this is reachable only if the backend is rolled back.
+const IDENTITY_MISSING =
+    'Sign-in could not be completed: the server did not identify your account. ' +
+    'Please try again.';
+
 const Login = () => {
     const [mode, setMode] = useState('login'); // 'login' | 'register'
     const [name, setName] = useState('');
@@ -59,18 +75,25 @@ const Login = () => {
         setLoading(true);
         try {
             const result = await ApiService.register(email.trim(), password, name.trim());
-            if (result && result.access_token) {
-                const cleanName = name.trim();
-                activateProfileAndGo({
-                    id: result.user_id || 'cloud_' + Date.now(),
-                    name: cleanName,
-                    color: '#ff5c2a',
-                    avatar: cleanName.charAt(0).toUpperCase(),
-                    // Every cloud-sync gate keys on profile.email — without it
-                    // an email/password account never syncs in either direction.
-                    email: email.trim()
-                }, result.access_token);
+            // Both are required. A missing token used to fall through silently
+            // and leave the spinner running for ever; a missing user_id used to
+            // be papered over with a per-sign-in id. Neither is recoverable
+            // here, so both surface as one error the user can act on.
+            if (!result?.access_token || !result?.user_id) {
+                setError(IDENTITY_MISSING);
+                setLoading(false);
+                return;
             }
+            const cleanName = name.trim();
+            activateProfileAndGo({
+                id: result.user_id,
+                name: cleanName,
+                color: '#ff5c2a',
+                avatar: cleanName.charAt(0).toUpperCase(),
+                // Every cloud-sync gate keys on profile.email — without it
+                // an email/password account never syncs in either direction.
+                email: email.trim()
+            }, result.access_token);
         } catch (err) {
             setError(err.message || 'Could not reach the server. Check your connection and try again.');
             setLoading(false);
@@ -84,17 +107,21 @@ const Login = () => {
         setLoading(true);
         try {
             const result = await ApiService.login(email.trim(), password);
-            if (result && result.access_token) {
-                const cleanName = result.name || email.trim().split('@')[0];
-                activateProfileAndGo({
-                    id: result.user_id || 'cloud_' + Date.now(),
-                    name: cleanName,
-                    color: '#ff5c2a',
-                    avatar: cleanName.charAt(0).toUpperCase(),
-                    // Same email gate as register — see canSyncToBackend.
-                    email: email.trim()
-                }, result.access_token);
+            // Same guard as register — see the comment there.
+            if (!result?.access_token || !result?.user_id) {
+                setError(IDENTITY_MISSING);
+                setLoading(false);
+                return;
             }
+            const cleanName = result.name || email.trim().split('@')[0];
+            activateProfileAndGo({
+                id: result.user_id,
+                name: cleanName,
+                color: '#ff5c2a',
+                avatar: cleanName.charAt(0).toUpperCase(),
+                // Same email gate as register — see canSyncToBackend.
+                email: email.trim()
+            }, result.access_token);
         } catch (err) {
             setError(err.message || 'Could not reach the server. Check your connection and try again.');
             setLoading(false);

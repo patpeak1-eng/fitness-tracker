@@ -521,10 +521,22 @@ design, so a Bearer-only password session never learned who it was. Google
 users were never affected — the OAuth callback sets a cookie and `/me` returns
 the canonical id.
 
-Deploy order matters and is not optional: **2a (backend) ships and is verified
-live before 2b (frontend)**. 2b refuses to activate a profile without a
-`user_id`, so a new frontend against a not-yet-rolled-over backend would block
-sign-in outright. The two services deploy from one push but not atomically.
+Deploy order mattered and was not optional: **2a (backend) shipped and was
+verified live (`1a924b6`) before 2b (frontend)**. 2b refuses to activate a
+profile without a `user_id`, so a new frontend against a not-yet-rolled-over
+backend would have blocked sign-in outright. The two services deploy from one
+push but not atomically.
+
+**Client side (S32 Fix 2b).** `Login.jsx` takes the id from `result.user_id`
+and nothing else — both `'cloud_' + Date.now()` fallbacks are deleted. A
+response missing either `access_token` or `user_id` sets an error and does not
+activate a profile. Refusing is the safer failure: a retry costs seconds,
+while a silently wrong identity costs the user their local data with no signal.
+The missing-token half of that guard also fixes a pre-existing hang — the old
+code fell through and left the spinner running for ever.
+
+`handleContinueWithout` is deliberately untouched. The local-only profile has
+no server identity by design and still activates `user_default`.
 
 Sign-in method is recoverable from the data: Google users store the literal
 `GOOGLE_OAUTH_SENTINEL` (`"google_oauth_no_password"`) in `hashed_password`.
