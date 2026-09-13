@@ -1030,12 +1030,35 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                     if (workoutData?.items?.length > 0) {
                         setHistory(prev => {
                             const localKeys = new Set(prev.map(w => keyOf(w.name, w.startTime, w.id)));
-                            const newItems = workoutData.items
-                                .filter(w => !isPendingDelete(w))
+                            const live = workoutData.items.filter(w => !isPendingDelete(w));
+                            const newItems = live
                                 .filter(w => !localKeys.has(keyOf(w.name, w.start_time, w.id)))
                                 .map(mapServerWorkout);
-                            if (!newItems.length) return prev;
-                            const merged = [...newItems, ...prev]
+
+                            // Rows we ALREADY hold need the server's identity
+                            // adopted too, not just newly-seen ones. A row
+                            // cached before mapServerWorkout existed carries no
+                            // backendId, and the fingerprint filter above means
+                            // it would never gain one — so deleting it would
+                            // mint an id naming nothing, and the backfill would
+                            // read it as never-uploaded and re-upload it after
+                            // another device deleted it.
+                            const serverByKey = new Map(
+                                live.map(w => [keyOf(w.name, w.start_time, w.id), w])
+                            );
+                            let adopted = 0;
+                            const enriched = prev.map(w => {
+                                const match = serverByKey.get(keyOf(w.name, w.startTime, w.id));
+                                if (!match) return w;
+                                const backendId = w.backendId || match.id;
+                                const clientId = w.client_id || match.client_id || null;
+                                if (backendId === w.backendId && clientId === w.client_id) return w;
+                                adopted++;
+                                return { ...w, backendId, client_id: clientId };
+                            });
+
+                            if (!newItems.length && !adopted) return prev;
+                            const merged = [...newItems, ...enriched]
                                 .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
                             StorageService.saveHistory(profile.id, merged);
                             return merged;
@@ -2055,14 +2078,31 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // re-add it, and delete it on the server (queued if that fails).
     const deleteWorkout = (workoutId) => {
         const target = history.find(w => w.id === workoutId);
-        setHistory(prev => prev.filter(w => w.id !== workoutId));
-        if (!target || !currentProfile) return;
+        const drop = () => setHistory(prev => prev.filter(w => w.id !== workoutId));
+        if (!target || !currentProfile) { drop(); return; }
 
         // Local-only profiles never sync — nothing to tell the server, and a
         // tombstone would only grow a store nothing retires.
-        if (!canSyncRef.current()) return;
+        if (!canSyncRef.current()) { drop(); return; }
 
         const { clientId, backendId } = chooseDeletionTarget(target);
+
+        // Persist a MINTED identifier to stored history before anything else.
+        //
+        // chooseDeletionTarget mints one for a row that has neither identifier,
+        // and the deletion is recorded against it. If that mint lives only in
+        // the queue entry, a crash before this row's removal is persisted
+        // leaves a surviving history row that does not carry it — and the
+        // backfill then mints a DIFFERENT id, whose upload cannot collide with
+        // the deletion. Writing it here means the surviving row and the
+        // deletion always name the same thing.
+        if (clientId && !target.client_id) {
+            const stored = StorageService.loadProfileState(currentProfile.id).history || [];
+            StorageService.saveHistory(
+                currentProfile.id,
+                stored.map(w => (w.id === target.id ? { ...w, client_id: clientId } : w))
+            );
+        }
 
         // One residual case, from queue entries written by a PRE-redesign
         // client: a create for a row with no client_id, keyed on its local id.
@@ -2083,7 +2123,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // the client. It cannot be: a lost response or a crash leaves the
         // outcome unknown. Recording intent server-side removes the question.
         const key = clientId || backendId;
-        SyncQueue.enqueue({
+        const queued = SyncQueue.enqueue({
             type: 'workout_delete',
             key,
             payload: clientId ? { client_id: clientId } : { backendId },
@@ -2101,13 +2141,34 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             clientId,
         });
 
+        // Remove the row optimistically ONLY when the intent is genuinely on
+        // disk. `enqueue` swallowed storage failures, so a full quota meant the
+        // workout vanished from the UI with nothing recorded anywhere — it
+        // would be back on the next pull, and the user would reasonably think
+        // the delete had worked. When the write fails the row stays visible and
+        // the deletion completes only if the request itself succeeds, which is
+        // a known outcome rather than an assumed one.
+        if (queued) {
+            drop();
+        } else {
+            console.warn(
+                '[delete-workout] intent could not be stored; keeping the row ' +
+                'visible until the request is confirmed'
+            );
+        }
+
         const attempt = clientId
             ? ApiService.deleteWorkoutByClientId(clientId)
             : ApiService.deleteWorkout(backendId);
         attempt
-            .then(() => SyncQueue.remove('workout_delete', key))
+            .then(() => {
+                SyncQueue.remove('workout_delete', key);
+                if (!queued) drop();
+            })
             .catch(err => {
-                // Already queued; the retry will carry it.
+                // Queued: the retry carries it. Not queued: the row is still on
+                // screen, which is the honest state — nothing durable records
+                // the deletion and the request did not land either.
                 console.warn('[delete-workout] queued for retry:', err?.message || err);
             });
     };

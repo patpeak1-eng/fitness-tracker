@@ -783,26 +783,40 @@ undo it.
   the fact, so no recorded deletion can catch it. `deleteWorkout` cancels such a
   create while it is still cancellable (`SyncQueue.remove`); once `flush` has
   captured it, nothing local can help.
-- **Cached pre-upgrade rows never gain provenance (P1, open).** The pull merge
-  filters already-known rows by fingerprint *before* `mapServerWorkout` runs, so
-  a row cached by the old mapper keeps `backendId: undefined` for ever. The
-  backfill then reads it as never-uploaded, mints an identifier and re-uploads
-  it — cross-device legacy resurrection, needing no race and no old queue entry.
-  The fix is to enrich matched existing rows with the server identity, not only
-  newly-seen ones.
-- **A minted identity is not persisted before the intent (P1, open).** For a row
-  with neither identifier, `chooseDeletionTarget` mints one and the queue entry
-  records it, but the mint is never written back to stored history. A crash
-  before the tombstone lands leaves the delete keyed on an id the surviving
-  history row does not carry, so the backfill mints a *different* one and the
-  upload cannot collide with the deletion.
-- **`SyncQueue.enqueue` cannot fail loudly (P1, open).** It swallows
-  `localStorage` write errors and returns nothing, so `deleteWorkout` removes
-  the row and reports success even when no durable intent was stored.
-
 Earlier revisions of this section claimed the already-transmitted legacy create
-was the only resurrection path left. That was wrong twice over: the three items
-above are all still open.
+was the only resurrection path left. That was wrong twice over. Three further
+P1s were found in review and are now **fixed**, each with a provider-level
+regression test:
+
+- **The pull merge now enriches rows it already holds.** It filters known rows
+  by fingerprint *before* mapping, so a row cached by the old mapper kept
+  `backendId: undefined` for ever, and the backfill read it as never-uploaded.
+  Matched existing rows now adopt the server's `id` and `client_id`, not just
+  newly-seen ones.
+- **A minted identifier is persisted to stored history before the intent is
+  queued.** `chooseDeletionTarget` mints one for a row that has neither, and the
+  deletion is recorded against it. Left only in the queue entry, a crash before
+  the row's removal was persisted meant the surviving history row did not carry
+  it — and the backfill minted a *different* one, whose upload could not collide
+  with the deletion.
+- **`SyncQueue.enqueue` now returns whether the op reached storage.** It
+  swallowed `localStorage` failures, so on a full quota `deleteWorkout` removed
+  the row and reported success with nothing recorded anywhere. The optimistic
+  removal is now conditional: if the write failed the row stays visible, and the
+  deletion completes only when the request itself succeeds — a known outcome
+  rather than an assumed one.
+
+**Deletion is covered by provider-level tests**
+(`src/context/workoutDeletion.provider.test.jsx`, jsdom). This exists because
+every earlier deletion test passed while `deleteWorkout` did nothing at all:
+review stubbed the handler body and all 54 helper tests stayed green. Helper
+tests only show the helpers agree with the assumptions of whatever calls them;
+they never show the UI is wired to them. These mount `WorkoutProvider`, take
+`deleteWorkout` off the context the UI consumes, and call it — the same stub now
+fails 7 of 8. Use `react-dom/client` plus `React.act`; there is deliberately no
+`@testing-library/react` dependency. Note that Node's experimental
+`localStorage` global shadows jsdom's, so the file installs a small storage
+shim.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)

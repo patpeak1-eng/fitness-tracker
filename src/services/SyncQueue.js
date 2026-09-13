@@ -28,11 +28,17 @@ const safeParse = (raw, fallback) => {
 };
 
 const loadQueue = () => safeParse(localStorage.getItem(QUEUE_KEY), []);
+// Returns whether the queue actually reached storage. Callers that treat an
+// enqueue as a durable record of intent — deletion does — must be able to tell,
+// because swallowing the failure silently lets them report success when nothing
+// was saved and the intent dies with the tab.
 const persistQueue = (ops) => {
     try {
         localStorage.setItem(QUEUE_KEY, JSON.stringify(ops));
+        return true;
     } catch (e) {
         console.warn('[SyncQueue] could not persist queue (quota?):', e);
+        return false;
     }
 };
 
@@ -87,8 +93,13 @@ const SyncQueue = {
             uid,
             attempts: 0
         });
-        persistQueue(ops);
+        const stored = persistQueue(ops);
         notify();
+        // Truthy only when the op is genuinely durable. Most callers can ignore
+        // this — a failed settings push is not worth blocking on — but anything
+        // that would otherwise report success on the strength of the enqueue
+        // alone needs to know.
+        return stored;
     },
 
     // Drop a queued op that is no longer wanted. Deleting a workout whose
