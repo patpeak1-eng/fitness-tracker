@@ -55,6 +55,10 @@ const executors = {};   // type -> async (op) => void
 const listeners = new Set();
 let authExpired = false; // in-memory only: re-derived on each flush attempt
 let flushing = false;
+// Op ids captured by the running flush. Not persisted: a reload means nothing
+// is in flight any more. See hasPending — an in-flight create's outcome is
+// unknown, and treating that as "never uploaded" resurrects deleted rows.
+const inFlightIds = new Set();
 let initialized = false;
 
 const notify = () => {
@@ -87,6 +91,33 @@ const SyncQueue = {
         notify();
     },
 
+    // Drop a queued op that is no longer wanted. Deleting a workout whose
+    // upload is still pending must CANCEL that upload — otherwise the create
+    // flushes later, the server row appears, and the next pull resurrects the
+    // workout the user deleted.
+    remove(type, key) {
+        const id = `${type}:${key}`;
+        const before = loadQueue();
+        const after = before.filter(op => op.id !== id);
+        if (after.length !== before.length) {
+            persistQueue(after);
+            notify();
+        }
+        return before.length - after.length;
+    },
+
+    // Is there an op for this type/key whose outcome is not yet known —
+    // either still queued, or captured by a running flush and in flight?
+    //
+    // A server lookup cannot distinguish "never uploaded" from "upload sent,
+    // result unknown", and treating the second as the first is how a deleted
+    // workout comes back: the delete finds nothing, a pull finds nothing, the
+    // guard is retired, and then the create commits.
+    hasPending(type, key) {
+        const id = `${type}:${key}`;
+        return inFlightIds.has(id) || loadQueue().some(op => op.id === id);
+    },
+
     getState() {
         return { pendingCount: loadQueue().length, authExpired };
     },
@@ -108,10 +139,15 @@ const SyncQueue = {
         if (ops.length === 0) return;
 
         flushing = true;
+        // Ops captured by this snapshot are no longer cancellable via
+        // remove(), but their outcome is still unknown. Track them so callers
+        // can tell "not queued" from "queued, sent, result unknown" — an
+        // absent server row is NOT confirmation while a create is in flight.
+        ops.forEach(op => inFlightIds.add(op.id));
         try {
             for (const op of ops) {
                 const exec = executors[op.type];
-                if (!exec) continue; // keep — executor registers later in boot
+                if (!exec) { inFlightIds.delete(op.id); continue; } // registers later in boot
 
                 try {
                     await exec(op);
@@ -142,9 +178,14 @@ const SyncQueue = {
                         );
                         persistQueue(kept);
                     }
+                } finally {
+                    // Outcome known (applied, dead-lettered, or kept for
+                    // retry): no longer ambiguous.
+                    inFlightIds.delete(op.id);
                 }
             }
         } finally {
+            ops.forEach(op => inFlightIds.delete(op.id));   // 401 break, etc.
             flushing = false;
             notify();
         }

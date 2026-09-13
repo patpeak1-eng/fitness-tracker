@@ -287,6 +287,81 @@ const getExerciseById = (id, masterList) => {
     return found;
 };
 
+// Decide what a completed pull means for each outstanding deletion.
+//
+// Pure so it can be tested directly — the interesting cases are orderings, and
+// driving them through the provider is far less reliable than calling this.
+//
+//   serverItems  rows the pull returned
+//   tombstones   [{ id, clientId }] deletions not yet settled
+//   isOutstanding(key) whether an upload/delete for that key is still unresolved
+//
+// Returns { retire, reissue }.
+//   retire  — server does not have it AND nothing is outstanding, so the
+//             deletion is done. An absent row alone is NOT confirmation: a
+//             create captured by a running flush may still commit.
+//   reissue — server still has it, so a create landed after the delete; send
+//             the delete again rather than assuming it worked.
+export const planTombstoneReconciliation = (serverItems, tombstones, isOutstanding) => {
+    const present = new Map();
+    (serverItems || []).forEach(w => {
+        if (w.id) present.set(w.id, w);
+        if (w.client_id) present.set(w.client_id, w);
+    });
+
+    const retire = [];
+    const reissue = [];
+    (tombstones || []).forEach(t => {
+        const onServer = present.get(t.id) || present.get(t.clientId);
+        if (onServer) {
+            reissue.push({ tombstone: t, serverRow: onServer });
+        } else if (!isOutstanding(t.clientId || t.id)) {
+            retire.push(t);
+        }
+    });
+    return { retire, reissue };
+};
+
+// Every workout that leaves this device must carry a stable client_id.
+//
+// Without one the server cannot recognise a re-upload: PostgreSQL treats
+// NULLs as distinct under (user_id, client_id), so the row inserts fresh and
+// undoes a deletion — and because saveWorkout does not send the local id
+// either, the new server id can never be matched back. Legacy and restored
+// rows are the ones that lack it, so they are stamped here, in place, before
+// anything is uploaded. Returns the (possibly updated) workout.
+export const ensureWorkoutClientId = (workout) => {
+    if (!workout) return workout;
+    if (workout.client_id) return workout;
+    const id = (globalThis.crypto?.randomUUID?.()
+        || `cid_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+    return { ...workout, client_id: id };
+};
+
+// Which server row does this local workout correspond to?
+//
+// Row shapes in circulation: created locally (local UUID id + client_id,
+// backendId only after a direct save), pulled (server id, client_id possibly
+// NULL — migration 0002 allows it), or restored from a backup (any of those).
+// Local ids are UUIDs too, so shape alone cannot tell them apart.
+//
+// Returns null ONLY when a successful fetch proves the workout is not on the
+// server. If the fetch FAILS it throws, so the caller retries rather than
+// silently concluding "never synced" and dropping the deletion on the floor.
+const resolveWorkoutBackendId = async (payload) => {
+    if (payload.backendId) return payload.backendId;
+    const page = await ApiService.getHistory();   // throws if it cannot check
+    const rows = page?.items || [];
+    if (payload.client_id) {
+        const byClient = rows.find(r => r.client_id === payload.client_id);
+        if (byClient) return byClient.id;
+    }
+    // Legacy rows carry no client_id; there the local id IS the server id.
+    const localId = payload.localId || payload.id;
+    const byId = localId ? rows.find(r => r.id === localId) : null;
+    return byId ? byId.id : null;
+};
+
 export const WorkoutProvider = ({ children, timerApiRef }) => {
     // Shared Data
     const [exercises, setExercises] = useState(DEFAULT_EXERCISES);
@@ -337,11 +412,51 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     const canSyncRef = useRef(canSyncToBackend);
     canSyncRef.current = canSyncToBackend;
 
+    // The server told us this workout is deleted (it returns retained rows
+    // marked with deleted_at). Drop the local copy and tombstone it so the
+    // backfill does not immediately offer it again. setHistory is stable, so
+    // this is safe to call from the []-deps executor effect below.
+    const dropLocallyAsDeleted = useCallback((uid, serverRow) => {
+        if (!uid) return;
+        const matches = (w) => (
+            (serverRow.client_id && w.client_id === serverRow.client_id)
+            || w.id === serverRow.id
+            || w.backendId === serverRow.id
+        );
+        StorageService.addDeletedWorkout(uid, {
+            id: serverRow.id,
+            clientId: serverRow.client_id || null,
+        });
+        // Always edit the STORED history for uid. A queued op can resolve
+        // after the user has switched profiles, and React state then belongs
+        // to someone else — filtering it would remove the wrong person's row
+        // and leave the real one on disk, visible again when they return.
+        const stored = StorageService.loadHistory
+            ? StorageService.loadHistory(uid)
+            : (StorageService.loadProfileState(uid).history || []);
+        const pruned = stored.filter(w => !matches(w));
+        if (pruned.length !== stored.length) StorageService.saveHistory(uid, pruned);
+        // Only touch React state when uid is the profile actually on screen.
+        if (latestProfileIdRef.current === uid) {
+            setHistory(prev => prev.filter(w => !matches(w)));
+        }
+    }, []);
+
     // Retry queue for failed cloud pushes. Executors are registered here (the
     // one place with access to both ApiService and StorageService) and the
     // queue's flush triggers (online / foreground / boot) are installed once.
     useEffect(() => {
-        SyncQueue.registerExecutor('workout', op => ApiService.saveWorkout(op.payload));
+        SyncQueue.registerExecutor('workout', async op => {
+            const saved = await ApiService.saveWorkout(op.payload);
+            // The server retains deleted rows and returns them marked, so a
+            // re-upload of something deleted elsewhere comes back with
+            // deleted_at. The list hides deleted rows, so this response is
+            // the ONLY way a stale device — or one restored from a
+            // pre-deletion backup — learns to drop its copy. Ignoring it left
+            // the workout visible locally and re-offered on every boot.
+            if (saved?.deleted_at) dropLocallyAsDeleted(op.uid, saved);
+            return saved;
+        });
         SyncQueue.registerExecutor('weight', op =>
             ApiService.addWeightEntry(op.payload.weight, op.payload.date));
         SyncQueue.registerExecutor('assessment', async op => {
@@ -410,8 +525,18 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             const backendId = await resolveFoodBackendId(op.payload);
             if (backendId) await ApiService.deleteFoodLog(backendId);
         });
+        SyncQueue.registerExecutor('workout_delete', async op => {
+            const backendId = await resolveWorkoutBackendId(op.payload);
+            // A null id means the fetch proved this workout was never synced,
+            // so there is nothing to delete. resolveWorkoutBackendId THROWS if
+            // it could not check — the queue then retries rather than
+            // concluding "never synced" from a failed lookup.
+            if (backendId) await ApiService.deleteWorkout(backendId);
+        });
         SyncQueue.init();
-    }, []);
+        // dropLocallyAsDeleted is a []-deps useCallback, so it is stable and
+        // listing it does not re-register the executors.
+    }, [dropLocallyAsDeleted]);
 
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
@@ -799,10 +924,44 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                         const ms = t ? new Date(t).getTime() : NaN;
                         return Number.isNaN(ms) ? `${name}|id:${id}` : `${name}|${ms}`;
                     };
+                    // Workouts deleted locally whose server delete has not yet
+                    // been confirmed. A pull that started BEFORE the delete can
+                    // land after it, so without this gate the merge below puts
+                    // the row straight back.
+                    const pendingDeletes = StorageService.loadDeletedWorkouts(profile.id);
+                    const isPendingDelete = (w) => pendingDeletes.some(
+                        d => (d.id && d.id === w.id) || (d.clientId && d.clientId === w.client_id)
+                    );
+                    // This pull's result is authoritative for anything it does
+                    // NOT contain: if the server no longer returns a row we
+                    // deleted, the deletion is confirmed and the tombstone can
+                    // go. Anything still present stays tombstoned.
+                    if (workoutData?.items) {
+                        // "Outstanding" covers a create still queued or in
+                        // flight AND a delete not yet confirmed — either means
+                        // this workout's fate is undecided, so an absent row
+                        // proves nothing.
+                        const { retire, reissue } = planTombstoneReconciliation(
+                            workoutData.items,
+                            pendingDeletes,
+                            (key) => SyncQueue.hasPending('workout', key)
+                                || SyncQueue.hasPending('workout_delete', key),
+                        );
+                        retire.forEach(d => StorageService.removeDeletedWorkout(profile.id, d));
+                        reissue.forEach(({ tombstone: d, serverRow }) => {
+                            SyncQueue.enqueue({
+                                type: 'workout_delete',
+                                key: d.clientId || d.id,
+                                payload: { backendId: serverRow.id, client_id: serverRow.client_id || null },
+                                uid: profile.id,
+                            });
+                        });
+                    }
                     if (workoutData?.items?.length > 0) {
                         setHistory(prev => {
                             const localKeys = new Set(prev.map(w => keyOf(w.name, w.startTime, w.id)));
                             const newItems = workoutData.items
+                                .filter(w => !isPendingDelete(w))
                                 .filter(w => !localKeys.has(keyOf(w.name, w.start_time, w.id)))
                                 .map(w => ({
                                     id: w.id,
@@ -1038,14 +1197,49 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                             workoutData.items.map(w => keyOf(w.name, w.start_time, w.id))
                         );
                         const localHistory = StorageService.loadProfileState(profile.id).history || [];
+                        // Second tombstone gate. The backfill pushes anything
+                        // present locally and absent on the server — which is
+                        // exactly the shape of a workout we just deleted, or
+                        // one reinstated by restoring an older backup. Without
+                        // this it would re-upload the deletion away.
+                        const deletedHere = StorageService.loadDeletedWorkouts(profile.id);
+                        const wasDeleted = (w) => deletedHere.some(
+                            d => (d.id && (d.id === w.id || d.id === w.backendId))
+                                || (d.clientId && d.clientId === w.client_id)
+                        );
+                        // Stamp an identifier on anything that lacks one
+                        // BEFORE it is queued, and persist it, so the row the
+                        // server receives can be recognised again later.
+                        const stamped = [];
                         localHistory
+                            .filter(w => !wasDeleted(w))
                             .filter(w => !cloudWorkoutKeys.has(keyOf(w.name, w.startTime, w.id)))
-                            .forEach(w => backfill.push({
-                                type: 'workout',
-                                key: w.client_id || w.id,
-                                payload: w,
-                                uid: profile.id
-                            }));
+                            .forEach(w => {
+                                const withId = ensureWorkoutClientId(w);
+                                if (withId !== w) stamped.push(withId);
+                                backfill.push({
+                                    type: 'workout',
+                                    key: withId.client_id,
+                                    payload: withId,
+                                    uid: profile.id
+                                });
+                            });
+                        if (stamped.length > 0) {
+                            const byId = new Map(stamped.map(w => [w.id, w]));
+                            // Persist SYNCHRONOUSLY, before the queue is
+                            // written. The history persist effect is
+                            // hydration-gated and runs later; a crash in
+                            // between would leave the uploaded row carrying an
+                            // identifier that local history does not have,
+                            // which is the mismatch this stamping exists to
+                            // prevent.
+                            StorageService.saveHistory(
+                                profile.id,
+                                (StorageService.loadProfileState(profile.id).history || [])
+                                    .map(w => byId.get(w.id) || w)
+                            );
+                            setHistory(prev => prev.map(w => byId.get(w.id) || w));
+                        }
                     }
                     if (Array.isArray(weightData)) {
                         const cloudWeightMs = new Set(
@@ -1747,8 +1941,11 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             ? Math.max(0, Date.now() - new Date(activeWorkout.pausedAt).getTime())
             : 0;
         const totalPausedMs = (activeWorkout.totalPausedMs || 0) + openPauseMs;
+        // A workout restored from an old backup can reach this point without
+        // an identifier. Stamp before anything is uploaded — otherwise the
+        // server row cannot be matched later and a deletion cannot stick.
         const completedWorkout = {
-            ...activeWorkout,
+            ...ensureWorkoutClientId(activeWorkout),
             units: units, // unit active at completion → drives displayWeight() in history/analytics
             endTime,
             status: 'completed',
@@ -1768,7 +1965,14 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         if (currentProfile?.email && ApiService.isAvailable()) {
             try {
                 const savedWorkout = await ApiService.saveWorkout(completedWorkout);
-                if (savedWorkout?.id) {
+                if (savedWorkout?.deleted_at) {
+                    // This client_id was deleted elsewhere. The server keeps
+                    // the row marked rather than resurrecting it, and says so
+                    // here — the only channel, since the list hides deleted
+                    // rows. Drop the local copy instead of treating the
+                    // response as a successful save.
+                    dropLocallyAsDeleted(currentProfile.id, savedWorkout);
+                } else if (savedWorkout?.id) {
                     setHistory(prev => prev.map(w =>
                         w.client_id === completedWorkout.client_id
                             ? { ...w, backendId: savedWorkout.id }
@@ -1789,8 +1993,74 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         return completedWorkout; // RETURN for immediate UI use
     };
 
+    // Deleting a workout used to filter local state and nothing else, so the
+    // row survived on the server and the next pull merged it straight back.
+    // Now: drop it locally, record a tombstone so an in-flight pull cannot
+    // re-add it, and delete it on the server (queued if that fails).
     const deleteWorkout = (workoutId) => {
+        const target = history.find(w => w.id === workoutId);
         setHistory(prev => prev.filter(w => w.id !== workoutId));
+        if (!target || !currentProfile) return;
+
+        const key = target.client_id || target.id;
+
+        // Drop a create that has not been sent. Best effort only: one already
+        // captured by a running flush cannot be recalled, which is exactly
+        // why the durable delete intent below is not conditional.
+        SyncQueue.remove('workout', key);
+
+        // Local-only profiles never sync, so there is no pull to guard
+        // against and no server row to delete. A tombstone there would only
+        // grow a store nothing ever retires.
+        if (!canSyncRef.current()) return;
+
+        StorageService.addDeletedWorkout(currentProfile.id, {
+            id: target.backendId || target.id,
+            clientId: target.client_id || null,
+        });
+
+        // Queue the delete UNCONDITIONALLY, before attempting it.
+        //
+        // An earlier version queued it only when the immediate attempt failed,
+        // and leaned on a memory-only in-flight marker for the rest. That lost
+        // the intent in two real cases: a POST whose response never arrived
+        // (the executor throws, and the retry branch cannot re-persist an op
+        // that delete had already removed), and a crash (memory is gone).
+        // Either way the create could still commit server-side with nothing
+        // durable left to undo it.
+        //
+        // The queue entry IS the durable record. It survives reloads, is
+        // removed only once the delete actually succeeds, and blocks tombstone
+        // retirement until then.
+        SyncQueue.enqueue({
+            type: 'workout_delete',
+            key,
+            payload: {
+                backendId: target.backendId || null,
+                client_id: target.client_id || null,
+                localId: target.id,
+            },
+            uid: currentProfile.id,
+        });
+
+        (async () => {
+            const backendId = await resolveWorkoutBackendId({
+                backendId: target.backendId || null,
+                client_id: target.client_id || null,
+                localId: target.id,
+            });
+            // Null means the fetch succeeded and found nothing — NOT proof it
+            // was never synced, since an in-flight create may still land. The
+            // queued intent stays; a later pull settles it.
+            if (!backendId) return;
+            await ApiService.deleteWorkout(backendId);
+            // Confirmed gone. Retire the durable intent; the tombstone waits
+            // for a pull so an in-flight create cannot slip in behind it.
+            SyncQueue.remove('workout_delete', key);
+        })().catch(err => {
+            // Intent is already queued — nothing to do but say so.
+            console.warn('[delete-workout] queued for retry:', err?.message || err);
+        });
     };
 
     const cancelWorkout = () => {

@@ -37,7 +37,14 @@ const KEY = {
     equipmentEnvironments: 'fitness_equipment_environments',
     experienceLevel: 'fitness_experience_level',
     foodLog: 'fitness_food_log',
-    nutritionTargets: 'fitness_nutrition_targets'
+    nutritionTargets: 'fitness_nutrition_targets',
+    // Workouts deleted locally whose deletion the server has not yet been
+    // seen to honour. Gates both the pull merge and the backfill, so neither
+    // an in-flight sync nor a restored backup can re-add a row the user
+    // deleted. An entry retires when a pull shows the row gone AND no upload
+    // of it is still outstanding; if a pull finds it still there, the delete
+    // is re-issued. See deleteWorkout / refreshProfileData.
+    deletedWorkouts: 'fitness_deleted_workouts'
 };
 
 const PROFILE_SCOPED_BASE_KEYS = [
@@ -64,8 +71,13 @@ const PROFILE_SCOPED_BASE_KEYS = [
     KEY.equipmentEnvironments,
     KEY.experienceLevel,
     KEY.foodLog,
-    KEY.nutritionTargets
+    KEY.nutritionTargets,
+    KEY.deletedWorkouts
 ];
+
+// Warn (never evict) once a profile is carrying this many unconfirmed
+// workout deletions — see addDeletedWorkout for why eviction is unsafe.
+const DELETED_WORKOUTS_WARN_AT = 200;
 
 const safeParse = (raw, fallback) => {
     try {
@@ -329,6 +341,44 @@ const StorageService = {
     },
 
     saveHistory(uid, history) { writeJSON(KEY.history, history, { uid }); },
+
+    // --- Pending workout deletions (see KEY.deletedWorkouts) ---
+    // Stored as [{ id, clientId, at }]. Keyed on BOTH ids because legacy rows
+    // are allowed to have no client_id (migration 0002).
+    loadDeletedWorkouts(uid) { return readJSON(KEY.deletedWorkouts, [], { uid }); },
+    saveDeletedWorkouts(uid, entries) {
+        writeJSON(KEY.deletedWorkouts, entries, { uid });
+    },
+    addDeletedWorkout(uid, { id, clientId }) {
+        const entries = this.loadDeletedWorkouts(uid);
+        const already = entries.some(
+            e => (id && e.id === id) || (clientId && e.clientId === clientId)
+        );
+        if (already) return entries;
+        const next = [...entries, { id: id || null, clientId: clientId || null, at: Date.now() }];
+        // Deliberately NOT capped by eviction. Every entry here is an
+        // unconfirmed deletion, and dropping the oldest would silently let a
+        // workout come back — exactly the bug this store exists to prevent.
+        // Entries retire themselves on the first pull that shows the row gone
+        // from the server, so this only grows while deletions are unconfirmed
+        // (offline). Each is a few dozen bytes; a warning is preferable to
+        // losing one.
+        if (next.length > DELETED_WORKOUTS_WARN_AT) {
+            console.warn(
+                `[StorageService] ${next.length} unconfirmed workout deletions for `
+                + `profile ${uid}. They retire once a sync confirms them.`
+            );
+        }
+        this.saveDeletedWorkouts(uid, next);
+        return next;
+    },
+    removeDeletedWorkout(uid, { id, clientId }) {
+        const next = this.loadDeletedWorkouts(uid).filter(
+            e => !((id && e.id === id) || (clientId && e.clientId === clientId))
+        );
+        this.saveDeletedWorkouts(uid, next);
+        return next;
+    },
     saveActiveWorkout(uid, workoutOrNull) {
         if (workoutOrNull) writeJSON(KEY.activeWorkout, workoutOrNull, { uid });
         else remove(KEY.activeWorkout, { uid });
