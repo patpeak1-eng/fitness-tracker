@@ -538,10 +538,25 @@ code fell through and left the spinner running for ever.
 `handleContinueWithout` is deliberately untouched. The local-only profile has
 no server identity by design and still activates `user_default`.
 
-Sign-in method is recoverable from the data: Google users store the literal
-`GOOGLE_OAUTH_SENTINEL` (`"google_oauth_no_password"`) in `hashed_password`.
-`hashed_password` is `NOT NULL` for every user, so it cannot be used to tell
-the two apart — only the sentinel comparison can.
+**Credential capability** — not sign-in method — is what the data records.
+`hashed_password` is `NOT NULL` for every user, so its presence tells you
+nothing; only equality with `GOOGLE_OAUTH_SENTINEL`
+(`"google_oauth_no_password"`) does, and what it proves is that the account has
+**no usable local password**.
+
+It is not a log of how anyone signs in. `google_callback` only creates a user
+when none exists (`if user is None`), so an account first registered with a
+password keeps its real hash and can then sign in either way. A real hash
+therefore means "password-capable", not "signs in with a password".
+
+There is one live defect on this path, found in review of Fix 2 but predating
+it: `verify_password` hands the sentinel straight to passlib, which raises
+`UnknownHashError` on a value that is not a hash, and it escapes as a **500**.
+So typing a password for a Google account returns a server error instead of
+"Invalid email or password" — and every real account on this deployment is
+OAuth. **Still live; fix not yet cleared.** The right repair is for
+`verify_password` to fail closed on a value passlib cannot parse, rather than
+for each caller to special-case the sentinel.
   GET  /google                   → OAuth redirect — CSRF state cookie (S8) +
                                     PKCE S256 challenge/verifier cookie (S18)
   GET  /google/callback          → validates state + PKCE verifier (missing

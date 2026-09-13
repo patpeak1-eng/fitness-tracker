@@ -158,8 +158,45 @@ describe('password sign-in identity', () => {
         expect(invented).toEqual([]);
     });
 
-    it('refuses, and stops loading, when there is no token either', async () => {
-        // This used to fall through silently and leave the spinner for ever.
+    it('refuses when the token is missing even though the identity is present', async () => {
+        // Discriminating on purpose. The previous version of this test passed
+        // {} , which the missing-user_id half already rejects — so removing the
+        // access_token check entirely still left all nine tests green.
+        ApiService.login.mockResolvedValue({ user_id: SERVER_ID });   // no token
+        await mount();
+        await signIn();
+
+        expect(storedProfiles(), 'activated a profile with no token').toEqual([]);
+        expect(StorageService.loadAuthToken?.() ?? null).toBeFalsy();
+        expect(navigatedTo, 'navigated with no token').toBeNull();
+        expect(errorText()).toMatch(/did not identify your account/i);
+    });
+
+    it('registration also refuses when the token is missing', async () => {
+        ApiService.register.mockResolvedValue({ user_id: SERVER_ID });   // no token
+        await mount();
+        const tabs = [...container.querySelectorAll('button')];
+        const registerTab = tabs.find(b => /create account|register|sign up/i.test(b.textContent));
+        expect(registerTab, 'register tab not found').toBeTruthy();
+        await act(async () => { registerTab.click(); });
+
+        await type('input[type="text"]', 'Tester');
+        await type('input[type="email"]', 'new@example.com');
+        const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype, 'value').set;
+        for (const el of container.querySelectorAll('input[type="password"]')) {
+            await act(async () => {
+                setter.call(el, 'pw12345678');
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        }
+        await submit();
+
+        expect(storedProfiles()).toEqual([]);
+        expect(navigatedTo).toBeNull();
+    });
+
+    it('refuses an empty response, and leaves the form usable', async () => {
         ApiService.login.mockResolvedValue({});
         await mount();
         await signIn();
@@ -167,7 +204,9 @@ describe('password sign-in identity', () => {
         expect(errorText()).toMatch(/did not identify your account/i);
         expect(storedProfiles()).toEqual([]);
         const submitBtn = container.querySelector('button[type="submit"]');
-        expect(submitBtn?.disabled, 'the form stayed stuck in its loading state').toBeFalsy();
+        expect(submitBtn, 'no submit button found - the assertion below is vacuous')
+            .toBeTruthy();
+        expect(submitBtn.disabled, 'the form stayed stuck loading').toBe(false);
     });
 
     it('a server error still shows the server message, not the identity one', async () => {
