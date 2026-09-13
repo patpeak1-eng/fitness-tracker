@@ -422,13 +422,19 @@ export const deletionOpFor = (serverRow, uid) => {
 export const wasDeletedOnServer = (workout) => Boolean(workout?.backendId);
 
 // What the login backfill should do with a locally-held row the pull did not
-// return. Absence is never by itself evidence that the server has not seen it.
+// return. Absence is never by itself evidence of anything: a moving-OFFSET page
+// walk can skip a still-live row, so "not in this result" does not even
+// establish that the row is gone, let alone why.
 //
-//   'skip-known-to-server' — it carries a backendId, so the server DID have it.
-//        Absent now means deleted elsewhere. Re-uploading undoes that deletion.
-//   'upload' — it carries a client_id, minted by startWorkout, so this device
-//        created it. Safe: if the server has since recorded a deletion for that
-//        id, the upload collides with it and comes back marked deleted.
+//   'skip-known-to-server' — it carries a backendId, so the server has seen it.
+//        We cannot tell from absence whether it was deleted elsewhere or merely
+//        missed by this walk, and re-uploading would undo a deletion in the
+//        first case. Skipping is correct under both.
+//   'upload' — it carries a stable client_id. The safe property is NOT that
+//        this device created it (a pulled row carries another device's
+//        client_id): it is that re-uploading under a stable id is idempotent,
+//        so if the server holds a deletion for that id the upload collides with
+//        it and comes back marked deleted rather than resurrecting anything.
 //   'skip-ambiguous' — NEITHER identifier. The old mapper stored pulled rows
 //        without a backendId, so this may well be a server row another device
 //        has since deleted; a restored backup looks the same. Minting an id and

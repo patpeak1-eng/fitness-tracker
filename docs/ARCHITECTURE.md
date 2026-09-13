@@ -700,10 +700,8 @@ read-back, the cascade removes the row and the read-back raises, returning
 500. The data outcome is correct — account and row are both gone — and every
 other authenticated route races account deletion the same way.
 
-> **STATUS: NOT MERGED.** This section describes the branch
-> `traycer/fitness-tracker-zesty-walrus`, not `main`. The four P1 blockers from
-> the review of `b299b1f` are fixed and each is pinned by a provider test that
-> fails when the fix is reverted; the branch is awaiting re-review.
+> This section describes the branch `traycer/fitness-tracker-zesty-walrus`, not
+> `main`. Open items and review state live in `SESSION_START.md`.
 
 **Client side (S32 Fix 1b).** `deleteWorkout` (`WorkoutContext.jsx`) records a
 deletion, **enqueues** `workout_delete`, writes a **tombstone**, and only then
@@ -734,13 +732,19 @@ Four rules earn their place here, each from a defect that reached review:
    an id that exists only in memory recreates the identity split the write was
    added to prevent. The React row is updated too, so a second press reuses the
    same identifier rather than minting another.
-4. **The backfill uploads only what it can positively identify.** See
-   `backfillDisposition`: a `backendId` means the server knew it (absence means
-   deleted elsewhere), a `client_id` means this device made it, and *neither*
-   is ambiguous — the old mapper stored pulled rows without a `backendId`, so
-   such a row may be one another device deleted. Ambiguous rows are kept
-   locally, never uploaded, and reconciled if a later pull identifies them. No
-   identifier is minted during backfill at all.
+4. **The backfill uploads only what carries a stable identifier.** See
+   `backfillDisposition`. A `backendId` means the server has seen the row, so it
+   is skipped. A `client_id` makes re-upload **idempotent** — that, not "this
+   device created it", is the property being relied on, since a pulled row
+   carries another device's `client_id`; if the server holds a deletion for that
+   id the upload collides with it and comes back marked deleted. *Neither*
+   identifier is ambiguous: the old mapper stored pulled rows without a
+   `backendId`, so such a row may be one another device has deleted. Ambiguous
+   rows are kept locally, never uploaded, and reconciled if a later pull
+   identifies them. No identifier is minted during backfill at all.
+
+   Absence from a pull proves nothing on its own — a moving-`OFFSET` page walk
+   can skip a still-live row — so no branch here infers deletion from it.
 
 The ordering is load-bearing. The queue entry is the durable intent; the
 tombstone is only a local display guard. Writing the guard first meant a crash
@@ -821,9 +825,10 @@ undo it.
   create while it is still cancellable (`SyncQueue.remove`); once `flush` has
   captured it, nothing local can help.
 Earlier revisions of this section claimed the already-transmitted legacy create
-was the only resurrection path left. That was wrong twice over. Three further
-P1s were found in review and are now **fixed**, each with a provider-level
-regression test:
+was the only resurrection path left. That has been wrong at every revision so
+far, so this list is written as *what is currently handled*, not as a closure
+claim. Each item below has a provider-level regression test; open items are in
+`SESSION_START.md`.
 
 - **The pull merge now enriches rows it already holds.** It filters known rows
   by fingerprint *before* mapping, so a row cached by the old mapper kept
@@ -843,32 +848,10 @@ regression test:
   deletion completes only when the request itself succeeds — a known outcome
   rather than an assumed one.
 
-**Deletion is covered by provider-level tests**
-(`src/context/workoutDeletion.provider.test.jsx`, jsdom). This exists because
-every earlier deletion test passed while `deleteWorkout` did nothing at all:
-review stubbed the handler body and all 54 helper tests stayed green. Helper
-tests only show the helpers agree with the assumptions of whatever calls them;
-they never show the UI is wired to them. These mount `WorkoutProvider`, take
-`deleteWorkout` off the context the UI consumes, and call it — the same stub now
-fails 13 of 22. Use `react-dom/client` plus `React.act`; there is deliberately no
-`@testing-library/react` dependency. Note that Node's experimental
-`localStorage` global shadows jsdom's, so the file installs a small storage
-shim.
-
-**Every new test here is mutation-checked, and that is not ceremony.** Five
-assertions in this area turned out to be incapable of failing: a
-`ctx.refreshProfileData?.(...)` call on a function that is not on the context, a
-`getState().deadLetterCount` field that is never populated, a token guard whose
-fixture the *other* half of the condition already rejected, a profile-switch
-test where `switchProfile` silently did nothing because the provider's
-`profiles` state had one entry, and a boot-replay test satisfied by the request
-made *before* the restart. Each passed against deliberately broken code. Two
-habits catch this: revert the fix and confirm the test goes red, and assert a
-precondition when the setup itself could silently no-op.
-
-`beforeEach` must call `vi.restoreAllMocks()`, not just `clearAllMocks()` —
-`clear` keeps spy *implementations*, so a `localStorage.setItem` spy that throws
-leaks into every later test in the file and quietly changes what they exercise.
+Deletion behaviour is exercised through the real provider in
+`src/context/workoutDeletion.provider.test.jsx`. How that harness works, and why
+helper-level tests were not enough here, is in
+`docs/skills/provider-level-testing.md`.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)
