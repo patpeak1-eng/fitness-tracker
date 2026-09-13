@@ -233,21 +233,6 @@ describe('deleteWorkout, through the provider the UI actually uses', () => {
         expect(pendingDeletes()).toEqual([]);
     });
 
-    it('does not let a stale pull put the workout back', async () => {
-        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
-        await mount();
-        await act(async () => { ctx.deleteWorkout('srv-1'); });
-        expect(ctx.history.map(w => w.id)).not.toContain('srv-1');
-
-        // A pull that started before the delete resolves after it, still
-        // carrying the row. The tombstone is what keeps it out.
-        await act(async () => {
-            await ctx.refreshProfileData?.({ id: USER.id, email: USER.email, name: USER.name });
-        });
-
-        expect(ctx.history.map(w => w.id)).not.toContain('srv-1');
-    });
-
     it('writes a tombstone scoped to the profile', async () => {
         ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
         await mount();
@@ -367,5 +352,82 @@ describe('the three P1s review left open', () => {
         // may go — the outcome is known at that point rather than assumed.
         await act(async () => { release(); await Promise.resolve(); });
         expect(ctx.history.map(w => w.id)).not.toContain('srv-1');
+    });
+});
+
+// Pulls are driven by the effect on `currentProfile`, so a new profile OBJECT
+// starts a real one — the same path the app takes when getMe refreshes the
+// profile. `refreshProfileData` is NOT on the context: an earlier version of
+// the stale-pull test called `ctx.refreshProfileData?.(...)`, and the optional
+// chaining turned the whole test into a no-op that asserted nothing.
+const startPull = async (n) => {
+    await act(async () => { ctx.updateProfile({ name: `Tester ${n}` }); });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+};
+
+describe('overlapping pulls', () => {
+    it('a pull carrying a deleted row cannot re-add it while the guard stands', async () => {
+        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
+        await mount();
+        await act(async () => { ctx.deleteWorkout('srv-1'); });
+        expect(ctx.history.map(w => w.id)).not.toContain('srv-1');
+
+        // A pull that still reports the row. The tombstone keeps it out.
+        await startPull(1);
+
+        expect(ctx.history.map(w => w.id)).not.toContain('srv-1');
+    });
+
+    it('a pull that started BEFORE the delete cannot re-add the row when it lands late', async () => {
+        // P1 starts holding a live row and stalls. The user deletes; the server
+        // agrees. P2 returns empty and retires the guard. P1 then resolves,
+        // still carrying the row, and re-adds it to state and storage.
+        // latestProfileIdRef guards profile identity, not request ORDER.
+        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
+        await mount();
+        expect(ctx.history.map(w => w.id)).toContain('srv-1');
+
+        // P1: in flight, will answer with the row still present.
+        let landP1;
+        ApiService.getHistory.mockReturnValue(new Promise(r => { landP1 = r; }));
+        await startPull(1);
+
+        // The delete happens while P1 is outstanding, and succeeds.
+        await act(async () => { ctx.deleteWorkout('srv-1'); });
+        expect(ApiService.deleteWorkoutByClientId).toHaveBeenCalledWith('cid-1');
+
+        // P2: newer, authoritative, sees the row gone and retires the guard.
+        ApiService.getHistory.mockResolvedValue({ total: 0, items: [] });
+        await startPull(2);
+        expect(StorageService.loadDeletedWorkouts(USER.id),
+            'precondition: P2 should have retired the tombstone').toEqual([]);
+
+        // P1 finally lands, carrying the workout the user deleted.
+        await act(async () => {
+            landP1({ total: 1, items: [serverRow()] });
+            await new Promise(r => setTimeout(r, 0));
+        });
+
+        expect(ctx.history.map(w => w.id),
+            'a stale pull resurrected the workout in the UI'
+        ).not.toContain('srv-1');
+        const stored = StorageService.loadProfileState(USER.id).history || [];
+        expect(stored.map(w => w.id),
+            'a stale pull resurrected the workout on disk'
+        ).not.toContain('srv-1');
+    });
+
+    it('the newest pull still applies normally', async () => {
+        // Guard against "fixing" ordering by ignoring results altogether.
+        ApiService.getHistory.mockResolvedValue({ total: 0, items: [] });
+        await mount();
+
+        ApiService.getHistory.mockResolvedValue({
+            total: 1,
+            items: [serverRow({ id: 'srv-new', client_id: 'cid-new', name: 'Leg Day' })],
+        });
+        await startPull(1);
+
+        expect(ctx.history.map(w => w.id)).toContain('srv-new');
     });
 });

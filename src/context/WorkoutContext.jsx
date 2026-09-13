@@ -772,12 +772,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // Tracks the profile whose load is currently active, so an in-flight cloud
     // pull can detect a profile switch and avoid cross-writing the wrong state.
     const latestProfileIdRef = useRef(null);
+    // Orders pulls for the SAME profile. latestProfileIdRef cannot: it only
+    // says which profile is current, so two overlapping pulls for one profile
+    // both pass it and the slower one overwrites the newer result.
+    const pullGenerationRef = useRef(0);
     // Profiles already backfilled this app boot — see the backfill block below.
     const backfilledProfilesRef = useRef(new Set());
 
     const refreshProfileData = (profile) => {
         if (!profile) return;
         latestProfileIdRef.current = profile.id;
+        const pullGeneration = ++pullGenerationRef.current;
         equipmentEnvironmentsEditedRef.current = false;
 
         // Remember this user
@@ -896,6 +901,16 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                     // The user may have switched profiles while these were in flight.
                     // Abandon the results rather than write them into another profile.
                     if (latestProfileIdRef.current !== profile.id) return;
+
+                    // A NEWER pull for this same profile may also have finished
+                    // first. Profile identity does not order requests, and
+                    // applying an older result on top of a newer one resurrects
+                    // whatever changed in between: a pull that started before a
+                    // deletion still carries the row, and if a later pull has
+                    // already retired that deletion's guard, this one puts the
+                    // workout back into state and storage. The server stays
+                    // correct; the UI does not. Newest result wins.
+                    if (pullGeneration !== pullGenerationRef.current) return;
 
                     // Profile stats — backend wins (most recently saved from any device)
                     if (profileData?.stats) {

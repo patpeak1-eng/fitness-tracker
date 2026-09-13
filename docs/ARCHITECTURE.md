@@ -771,13 +771,14 @@ undo it.
 
 **Known gaps, stated rather than guessed away.**
 
-- **Overlapping pulls (P2, open).** Tombstone retirement uses the tombstone set
-  as of when a pull *resolves*. If pull P1 stalls while holding a live row, the
-  delete succeeds, a newer pull P2 returns empty and retires the guard, then P1
-  resolves — P1 re-adds the row to local state and storage. The server stays
-  correct; History can show the workout again until later reconciliation.
-  `latestProfileIdRef` guards profile identity, not request order. Fixing it
-  needs a pull generation counter.
+- **Overlapping pulls — FIXED.** `pullGenerationRef` orders pulls for the same
+  profile: `refreshProfileData` takes a generation on entry, and results are
+  discarded if a newer pull has since started. `latestProfileIdRef` could not do
+  this — it says which profile is current, so two overlapping pulls for one
+  profile both pass it and the slower one overwrites the newer result. The
+  failure that motivated it: P1 stalls holding a live row, the delete succeeds,
+  P2 returns empty and retires the guard, then P1 lands and puts the workout
+  back into state and storage. The server stayed correct; the UI did not.
 - **Already-transmitted legacy creates.** A create that has *already left* a
   pre-redesign client carrying no `client_id` cannot be made identifiable after
   the fact, so no recorded deletion can catch it. `deleteWorkout` cancels such a
