@@ -700,6 +700,25 @@ read-back, the cascade removes the row and the read-back raises, returning
 500. The data outcome is correct — account and row are both gone — and every
 other authenticated route races account deletion the same way.
 
+> **STATUS: NOT MERGED — four open P1 blockers.** Everything in this section
+> describes the branch `traycer/fitness-tracker-zesty-walrus`, not `main`, and
+> describes it **as designed rather than as verified**. Cross-review of
+> `b299b1f` returned CHANGES-REQUIRED:
+>
+> 1. Fingerprint enrichment matches on name/time only, so two workouts sharing
+>    a name and start time can cross identities — and the delete then targets
+>    the wrong row. Destructive.
+> 2. The storage-failure completion callback is an unscoped `setHistory`, so it
+>    edits whichever profile is current when the request resolves.
+> 3. The minted-identifier write is best-effort and never reaches the React
+>    row, so two Delete presses can mint two different ids.
+> 4. A cached legacy row still re-uploads if it was deleted elsewhere before
+>    this client's first successful pull.
+>
+> Treat the claims below as intent. `deleteWorkout` in particular drops the row
+> only *after* a successful enqueue now, not before, and "persisted before
+> intent" below means an *attempted* write, not a verified one.
+
 **Client side (S32 Fix 1b).** `deleteWorkout` (`WorkoutContext.jsx`) drops the
 row locally, **enqueues** `workout_delete`, writes a **tombstone**, and then
 attempts the call. There is **no lookup** — the earlier `resolveWorkoutBackendId`
