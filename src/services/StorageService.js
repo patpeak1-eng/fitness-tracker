@@ -121,13 +121,18 @@ const readRaw = (baseKey, fallback = null, opts = {}) => {
     return fallback;
 };
 
+// Returns whether the value actually reached storage. Callers that are about
+// to commit something ELSE keyed on this write - a deletion intent keyed on an
+// identifier being persisted here, say - must check it, or they can end up
+// referring to state that only ever existed in memory.
 const writeRaw = (baseKey, value, opts = {}) => {
     const key = resolveKey(baseKey, opts);
-    safeSetItem(key, String(value));
+    const ok = safeSetItem(key, String(value));
 
     if (!opts.global && opts.uid) {
         localStorage.removeItem(legacyScopedKey(baseKey, opts.uid));
     }
+    return ok;
 };
 
 const readJSON = (baseKey, fallback, opts = {}) => safeParse(readRaw(baseKey, null, opts), fallback);
@@ -340,7 +345,8 @@ const StorageService = {
         };
     },
 
-    saveHistory(uid, history) { writeJSON(KEY.history, history, { uid }); },
+    // Returns false when the write did not reach storage (quota).
+    saveHistory(uid, history) { return writeJSON(KEY.history, history, { uid }); },
 
     // --- Pending workout deletions (see KEY.deletedWorkouts) ---
     // Stored as [{ id, clientId, at }]. Keyed on BOTH ids because legacy rows

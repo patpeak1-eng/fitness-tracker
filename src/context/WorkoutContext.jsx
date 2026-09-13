@@ -421,6 +421,31 @@ export const deletionOpFor = (serverRow, uid) => {
 // that no future deletion can catch.
 export const wasDeletedOnServer = (workout) => Boolean(workout?.backendId);
 
+// What the login backfill should do with a locally-held row the pull did not
+// return. Absence is never by itself evidence that the server has not seen it.
+//
+//   'skip-known-to-server' — it carries a backendId, so the server DID have it.
+//        Absent now means deleted elsewhere. Re-uploading undoes that deletion.
+//   'upload' — it carries a client_id, minted by startWorkout, so this device
+//        created it. Safe: if the server has since recorded a deletion for that
+//        id, the upload collides with it and comes back marked deleted.
+//   'skip-ambiguous' — NEITHER identifier. The old mapper stored pulled rows
+//        without a backendId, so this may well be a server row another device
+//        has since deleted; a restored backup looks the same. Minting an id and
+//        uploading would make the resurrection permanent, because a fresh id
+//        collides with nothing. Keep it locally and wait for a pull to identify
+//        it — enrichment adopts real identity on a positive match, after which
+//        it becomes uploadable and deletable normally.
+//
+// The trade is deliberate: an ambiguous row that genuinely was local-only stays
+// un-synced, and the user still has it on the device. The alternative loses the
+// argument — it makes deleted workouts come back.
+export const backfillDisposition = (workout) => {
+    if (workout?.backendId) return 'skip-known-to-server';
+    if (workout?.client_id) return 'upload';
+    return 'skip-ambiguous';
+};
+
 export const chooseDeletionTarget = (workout) => {
     if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
     if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
@@ -1058,16 +1083,54 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                             // mint an id naming nothing, and the backfill would
                             // read it as never-uploaded and re-upload it after
                             // another device deleted it.
-                            const serverByKey = new Map(
-                                live.map(w => [keyOf(w.name, w.start_time, w.id), w])
-                            );
+                            // Identity is adopted only on a POSITIVE match.
+                            //
+                            // keyOf is `${name}|${startMs}` — the id is merely a
+                            // fallback for an unparseable date — so two workouts
+                            // sharing a name and start time collide, and a Map
+                            // keeps the last. Matching on that alone let a row
+                            // keep its own backendId while adopting a DIFFERENT
+                            // workout's client_id, and the next delete then
+                            // removed that other workout. Content is not
+                            // evidence of identity.
+                            const byServerId = new Map();
+                            const byClientId = new Map();
+                            const byFingerprint = new Map();
+                            const ambiguous = new Set();
+                            live.forEach(w => {
+                                if (w.id) byServerId.set(w.id, w);
+                                if (w.client_id) byClientId.set(w.client_id, w);
+                                const fp = keyOf(w.name, w.start_time, w.id);
+                                if (byFingerprint.has(fp)) ambiguous.add(fp);
+                                else byFingerprint.set(fp, w);
+                            });
+
+                            const matchFor = (w) => {
+                                // A known identifier names exactly one row, and
+                                // outranks anything the content suggests.
+                                if (w.backendId) return byServerId.get(w.backendId) || null;
+                                if (w.client_id) return byClientId.get(w.client_id) || null;
+                                // A local id that IS a server id counts as
+                                // positive too — that is how the old mapper
+                                // stored pulled rows.
+                                if (w.id && byServerId.has(w.id)) return byServerId.get(w.id);
+                                // Nothing else to go on. The fingerprint is
+                                // usable only when it is unambiguous; a
+                                // collision means we cannot tell which row this
+                                // is, and guessing is what caused the deletion.
+                                const fp = keyOf(w.name, w.startTime, w.id);
+                                if (ambiguous.has(fp)) return null;
+                                return byFingerprint.get(fp) || null;
+                            };
+
                             let adopted = 0;
                             const enriched = prev.map(w => {
-                                const match = serverByKey.get(keyOf(w.name, w.startTime, w.id));
+                                const match = matchFor(w);
                                 if (!match) return w;
                                 const backendId = w.backendId || match.id;
                                 const clientId = w.client_id || match.client_id || null;
-                                if (backendId === w.backendId && clientId === w.client_id) return w;
+                                if (backendId === w.backendId
+                                    && clientId === (w.client_id ?? null)) return w;
                                 adopted++;
                                 return { ...w, backendId, client_id: clientId };
                             });
@@ -1300,39 +1363,36 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                                 || (d.clientId && d.clientId === w.client_id)
                         );
                         const onCloud = (w) => cloudWorkoutKeys.has(keyOf(w.name, w.startTime, w.id));
-                        // Stamp an identifier on anything that lacks one
-                        // BEFORE it is queued, and persist it, so the row the
-                        // server receives can be recognised again later.
-                        const stamped = [];
-                        localHistory
+
+                        // Only rows we can POSITIVELY identify as created here
+                        // are uploaded. No identifier is minted at this point:
+                        // minting one for an ambiguous row is precisely what
+                        // made a resurrection permanent, since a fresh id
+                        // collides with nothing the server has recorded.
+                        const candidates = localHistory
                             .filter(w => !wasDeleted(w))
-                            .filter(w => !onCloud(w))
-                            .filter(w => !wasDeletedOnServer(w))
+                            .filter(w => !onCloud(w));
+                        const ambiguous = candidates
+                            .filter(w => backfillDisposition(w) === 'skip-ambiguous');
+                        candidates
+                            .filter(w => backfillDisposition(w) === 'upload')
                             .forEach(w => {
-                                const withId = ensureWorkoutClientId(w);
-                                if (withId !== w) stamped.push(withId);
                                 backfill.push({
                                     type: 'workout',
-                                    key: withId.client_id,
-                                    payload: withId,
+                                    key: w.client_id,
+                                    payload: w,
                                     uid: profile.id
                                 });
                             });
-                        if (stamped.length > 0) {
-                            const byId = new Map(stamped.map(w => [w.id, w]));
-                            // Persist SYNCHRONOUSLY, before the queue is
-                            // written. The history persist effect is
-                            // hydration-gated and runs later; a crash in
-                            // between would leave the uploaded row carrying an
-                            // identifier that local history does not have,
-                            // which is the mismatch this stamping exists to
-                            // prevent.
-                            StorageService.saveHistory(
-                                profile.id,
-                                (StorageService.loadProfileState(profile.id).history || [])
-                                    .map(w => byId.get(w.id) || w)
+                        if (ambiguous.length > 0) {
+                            // Kept locally, deliberately not uploaded. Visible
+                            // so this does not look like silent data loss.
+                            console.warn(
+                                `[backfill] ${ambiguous.length} workout(s) have no ` +
+                                'server identity and predate client ids; keeping them ' +
+                                'locally rather than risking re-uploading something ' +
+                                'deleted on another device.'
                             );
-                            setHistory(prev => prev.map(w => byId.get(w.id) || w));
                         }
                     }
                     if (Array.isArray(weightData)) {
@@ -2100,23 +2160,56 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // tombstone would only grow a store nothing retires.
         if (!canSyncRef.current()) { drop(); return; }
 
+        // Capture the owner NOW. Everything below may resolve after the user
+        // has switched profiles, and an unscoped edit then lands on whoever is
+        // on screen — removing the wrong person's workout and leaving the real
+        // one on disk. Same ownership rule as dropLocallyAsDeleted.
+        const uid = currentProfile.id;
+        const dropOwned = () => {
+            const stored = StorageService.loadProfileState(uid).history || [];
+            const pruned = stored.filter(w => w.id !== workoutId);
+            if (pruned.length !== stored.length) StorageService.saveHistory(uid, pruned);
+            if (latestProfileIdRef.current === uid) {
+                setHistory(prev => prev.filter(w => w.id !== workoutId));
+            }
+        };
+
         const { clientId, backendId } = chooseDeletionTarget(target);
 
-        // Persist a MINTED identifier to stored history before anything else.
+        // Persist a MINTED identifier before committing any intent keyed on it.
         //
-        // chooseDeletionTarget mints one for a row that has neither identifier,
-        // and the deletion is recorded against it. If that mint lives only in
-        // the queue entry, a crash before this row's removal is persisted
-        // leaves a surviving history row that does not carry it — and the
-        // backfill then mints a DIFFERENT id, whose upload cannot collide with
-        // the deletion. Writing it here means the surviving row and the
-        // deletion always name the same thing.
+        // chooseDeletionTarget mints one for a row that has neither identifier.
+        // If that mint lives only in the queue entry, a crash before this row's
+        // removal is persisted leaves a surviving history row that does not
+        // carry it — and the next attempt mints a DIFFERENT one, whose upload
+        // cannot collide with the recorded deletion.
+        //
+        // The write is CHECKED, not attempted: a smaller queue entry can fit
+        // where replacing the whole history value cannot, so "storage failed"
+        // is not all-or-nothing. If the identity cannot be recorded we do not
+        // delete at all — the row stays visible and the user can retry, which
+        // is honest, where a delete keyed on an id that exists only in memory
+        // is not. The React row is updated too, so a second press reuses this
+        // identifier instead of minting another.
         if (clientId && !target.client_id) {
-            const stored = StorageService.loadProfileState(currentProfile.id).history || [];
-            StorageService.saveHistory(
-                currentProfile.id,
+            const stored = StorageService.loadProfileState(uid).history || [];
+            const persisted = StorageService.saveHistory(
+                uid,
                 stored.map(w => (w.id === target.id ? { ...w, client_id: clientId } : w))
             );
+            if (!persisted) {
+                console.warn(
+                    '[delete-workout] could not persist an identifier for this ' +
+                    'workout, so the deletion was not recorded; the row is left ' +
+                    'in place. Free some space and try again.'
+                );
+                return;
+            }
+            if (latestProfileIdRef.current === uid) {
+                setHistory(prev => prev.map(
+                    w => (w.id === target.id ? { ...w, client_id: clientId } : w)
+                ));
+            }
         }
 
         // One residual case, from queue entries written by a PRE-redesign
@@ -2142,7 +2235,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             type: 'workout_delete',
             key,
             payload: clientId ? { client_id: clientId } : { backendId },
-            uid: currentProfile.id,
+            uid,
         });
 
         // Tombstone AFTER the queue entry, never before. The queue entry is the
@@ -2151,7 +2244,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // intent behind it — and reconciliation retires a tombstone the moment
         // the queue holds nothing for it, so the delete was silently forgotten
         // and an in-flight create could commit with nothing left to undo it.
-        StorageService.addDeletedWorkout(currentProfile.id, {
+        StorageService.addDeletedWorkout(uid, {
             id: target.backendId || target.id,
             clientId,
         });
@@ -2164,7 +2257,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // the deletion completes only if the request itself succeeds, which is
         // a known outcome rather than an assumed one.
         if (queued) {
-            drop();
+            dropOwned();
         } else {
             console.warn(
                 '[delete-workout] intent could not be stored; keeping the row ' +
@@ -2178,7 +2271,9 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         attempt
             .then(() => {
                 SyncQueue.remove('workout_delete', key);
-                if (!queued) drop();
+                // Owner-scoped: this resolves long after the call, and the
+                // profile on screen may no longer be the one that deleted.
+                if (!queued) dropOwned();
             })
             .catch(err => {
                 // Queued: the retry carries it. Not queued: the row is still on
@@ -3329,7 +3424,8 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         saveAssessment, // NEW
         lastPerformance: getLastExerciseStats, // Alias for legacy if needed, or just use below
         getLastExerciseStats, // NEW
-        checkPersonalRecord, // NEW - Phase E        getMuscleVolumeDistribution, // NEW - Phase B
+        checkPersonalRecord, // NEW - Phase E
+        getMuscleVolumeDistribution, // NEW - Phase B
         // Guided Mode Exports
         currentExerciseIndex,
         setCurrentExerciseIndex,

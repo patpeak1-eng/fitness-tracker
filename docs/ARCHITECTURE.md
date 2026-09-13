@@ -700,30 +700,47 @@ read-back, the cascade removes the row and the read-back raises, returning
 500. The data outcome is correct — account and row are both gone — and every
 other authenticated route races account deletion the same way.
 
-> **STATUS: NOT MERGED — four open P1 blockers.** Everything in this section
-> describes the branch `traycer/fitness-tracker-zesty-walrus`, not `main`, and
-> describes it **as designed rather than as verified**. Cross-review of
-> `b299b1f` returned CHANGES-REQUIRED:
->
-> 1. Fingerprint enrichment matches on name/time only, so two workouts sharing
->    a name and start time can cross identities — and the delete then targets
->    the wrong row. Destructive.
-> 2. The storage-failure completion callback is an unscoped `setHistory`, so it
->    edits whichever profile is current when the request resolves.
-> 3. The minted-identifier write is best-effort and never reaches the React
->    row, so two Delete presses can mint two different ids.
-> 4. A cached legacy row still re-uploads if it was deleted elsewhere before
->    this client's first successful pull.
->
-> Treat the claims below as intent. `deleteWorkout` in particular drops the row
-> only *after* a successful enqueue now, not before, and "persisted before
-> intent" below means an *attempted* write, not a verified one.
+> **STATUS: NOT MERGED.** This section describes the branch
+> `traycer/fitness-tracker-zesty-walrus`, not `main`. The four P1 blockers from
+> the review of `b299b1f` are fixed and each is pinned by a provider test that
+> fails when the fix is reverted; the branch is awaiting re-review.
 
-**Client side (S32 Fix 1b).** `deleteWorkout` (`WorkoutContext.jsx`) drops the
-row locally, **enqueues** `workout_delete`, writes a **tombstone**, and then
-attempts the call. There is **no lookup** — the earlier `resolveWorkoutBackendId`
-is gone, along with the unsafe inference that a successful-but-empty lookup
-proved the workout was never uploaded.
+**Client side (S32 Fix 1b).** `deleteWorkout` (`WorkoutContext.jsx`) records a
+deletion, **enqueues** `workout_delete`, writes a **tombstone**, and only then
+removes the row — and it removes it *after* a successful enqueue, not before.
+There is **no lookup**: the earlier `resolveWorkoutBackendId` is gone, along
+with the unsafe inference that a successful-but-empty lookup proved the workout
+was never uploaded.
+
+Four rules earn their place here, each from a defect that reached review:
+
+1. **Identity is adopted only on a positive match.** `keyOf` is
+   `${name}|${startMs}` — the id is merely a fallback for an unparseable date —
+   so two workouts sharing a name and start time collide, and a `Map` keeps the
+   last. Matching on that let a row keep its own `backendId` while adopting a
+   *different* workout's `client_id`, and the next delete removed that other
+   workout. `matchFor` now tries `backendId`, then `client_id`, then a local id
+   that is itself a server id, and only then an **unambiguous** fingerprint.
+   Content is not evidence of identity.
+2. **Async completions are owner-scoped.** `dropOwned` captures the profile id
+   at call time, always prunes that profile's *stored* history, and touches
+   React state only while that profile is still current. An unscoped
+   `setHistory` in the request's `.then` removed whichever profile happened to
+   be on screen and left the real row on disk. Same rule as
+   `dropLocallyAsDeleted`.
+3. **A minted identifier is verified on disk before any intent is committed.**
+   `StorageService.saveHistory` now returns whether the write landed. If it did
+   not, the deletion is abandoned and the row stays visible — a delete keyed on
+   an id that exists only in memory recreates the identity split the write was
+   added to prevent. The React row is updated too, so a second press reuses the
+   same identifier rather than minting another.
+4. **The backfill uploads only what it can positively identify.** See
+   `backfillDisposition`: a `backendId` means the server knew it (absence means
+   deleted elsewhere), a `client_id` means this device made it, and *neither*
+   is ambiguous — the old mapper stored pulled rows without a `backendId`, so
+   such a row may be one another device deleted. Ambiguous rows are kept
+   locally, never uploaded, and reconciled if a later pull identifies them. No
+   identifier is minted during backfill at all.
 
 The ordering is load-bearing. The queue entry is the durable intent; the
 tombstone is only a local display guard. Writing the guard first meant a crash
@@ -833,10 +850,25 @@ review stubbed the handler body and all 54 helper tests stayed green. Helper
 tests only show the helpers agree with the assumptions of whatever calls them;
 they never show the UI is wired to them. These mount `WorkoutProvider`, take
 `deleteWorkout` off the context the UI consumes, and call it — the same stub now
-fails 7 of 8. Use `react-dom/client` plus `React.act`; there is deliberately no
+fails 13 of 22. Use `react-dom/client` plus `React.act`; there is deliberately no
 `@testing-library/react` dependency. Note that Node's experimental
 `localStorage` global shadows jsdom's, so the file installs a small storage
 shim.
+
+**Every new test here is mutation-checked, and that is not ceremony.** Five
+assertions in this area turned out to be incapable of failing: a
+`ctx.refreshProfileData?.(...)` call on a function that is not on the context, a
+`getState().deadLetterCount` field that is never populated, a token guard whose
+fixture the *other* half of the condition already rejected, a profile-switch
+test where `switchProfile` silently did nothing because the provider's
+`profiles` state had one entry, and a boot-replay test satisfied by the request
+made *before* the restart. Each passed against deliberately broken code. Two
+habits catch this: revert the fix and confirm the test goes red, and assert a
+precondition when the setup itself could silently no-op.
+
+`beforeEach` must call `vi.restoreAllMocks()`, not just `clearAllMocks()` —
+`clear` keeps spy *implementations*, so a `localStorage.setItem` spy that throws
+leaks into every later test in the file and quietly changes what they exercise.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)

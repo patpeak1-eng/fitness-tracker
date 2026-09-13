@@ -63,7 +63,8 @@ vi.mock('../services/ApiService', async (importOriginal) => {
     return mocked;
 });
 
-const ApiService = await import('../services/ApiService');
+const topApiService = await import('../services/ApiService');
+const ApiService = topApiService;
 const StorageService = (await import('../services/StorageService')).default;
 const SyncQueue = (await import('../services/SyncQueue')).default;
 const { WorkoutContext, WorkoutProvider } = await import('./WorkoutContext');
@@ -82,7 +83,7 @@ const serverRow = (over = {}) => ({
     ...over,
 });
 
-const emptyPulls = () => {
+const emptyPulls = (ApiService = topApiService) => {
     ApiService.isAvailable.mockReturnValue(true);
     ApiService.getMe.mockResolvedValue(USER);
     ApiService.getProfile.mockResolvedValue({ user: USER, stats: {} });
@@ -134,6 +135,9 @@ const unmount = async () => {
 };
 
 beforeEach(() => {
+    // restoreAllMocks, not clearAllMocks: clear keeps spy IMPLEMENTATIONS, so a
+    // localStorage.setItem spy that throws leaks into every later test.
+    vi.restoreAllMocks();
     localStorage.clear();
     vi.clearAllMocks();
     emptyPulls();
@@ -205,31 +209,6 @@ describe('deleteWorkout, through the provider the UI actually uses', () => {
         expect(pendingDeletes().map(o => o.key)).toEqual(['cid-1']);
 
         await act(async () => { release(); await Promise.resolve(); });
-        expect(pendingDeletes()).toEqual([]);
-    });
-
-    it('keeps the intent queued when the request fails, and survives a remount', async () => {
-        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
-        ApiService.deleteWorkoutByClientId.mockRejectedValue(
-            Object.assign(new Error('offline'), { status: undefined })
-        );
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
-        await mount();
-
-        await act(async () => { ctx.deleteWorkout('srv-1'); });
-        expect(pendingDeletes().map(o => o.key)).toEqual(['cid-1']);
-
-        // Restart. The server never heard about this deletion, so the intent
-        // has to outlive the process or the workout comes back.
-        await unmount();
-        expect(pendingDeletes().map(o => o.key)).toEqual(['cid-1']);
-
-        ApiService.deleteWorkoutByClientId.mockResolvedValue(undefined);
-        ApiService.getHistory.mockResolvedValue({ total: 0, items: [] });
-        await mount();
-        await act(async () => { await SyncQueue.flush(); });
-
-        expect(ApiService.deleteWorkoutByClientId).toHaveBeenCalledWith('cid-1');
         expect(pendingDeletes()).toEqual([]);
     });
 
@@ -429,5 +408,273 @@ describe('overlapping pulls', () => {
         await startPull(1);
 
         expect(ctx.history.map(w => w.id)).toContain('srv-new');
+    });
+});
+
+describe('review round 2 — the four blockers', () => {
+    const SAME_NAME = 'Push Day';
+    const SAME_START = '2026-09-01T10:00:00.000Z';
+
+    const cached = (over = {}) => ({
+        id: 'srv-A', name: SAME_NAME,
+        startTime: SAME_START, endTime: '2026-09-01T11:00:00.000Z',
+        status: 'completed', completed: true, notes: '',
+        exercises: [], recommendations: [], ...over,
+    });
+
+    it('B1: a colliding fingerprint must not hand one workout another’s identity', async () => {
+        // keyOf is `${name}|${startMs}` -- the id is only a fallback for an
+        // unparseable date. Two workouts with the same name and start time
+        // therefore collide, and Map keeps the LAST one. Local A then adopted
+        // B's client_id while keeping its own backendId, and deleting A
+        // deleted B instead.
+        StorageService.saveHistory(USER.id, [cached({ backendId: 'srv-A', client_id: null })]);
+        ApiService.getHistory.mockResolvedValue({
+            total: 2,
+            items: [
+                serverRow({ id: 'srv-A', client_id: null, name: SAME_NAME, start_time: SAME_START }),
+                serverRow({ id: 'srv-B', client_id: 'cid-B', name: SAME_NAME, start_time: SAME_START }),
+            ],
+        });
+        await mount();
+
+        const row = ctx.history.find(w => w.id === 'srv-A');
+        expect(row, 'the cached row vanished').toBeTruthy();
+        expect(row.client_id,
+            "row A adopted another workout's client_id"
+        ).not.toBe('cid-B');
+
+        await act(async () => { ctx.deleteWorkout('srv-A'); });
+
+        expect(ApiService.deleteWorkoutByClientId,
+            'deleting A issued a delete keyed on B'
+        ).not.toHaveBeenCalledWith('cid-B');
+        expect(ApiService.deleteWorkout).toHaveBeenCalledWith('srv-A');
+    });
+
+    it('B1: an unambiguous fingerprint still enriches', async () => {
+        // Guard against fixing the collision by refusing to enrich at all.
+        StorageService.saveHistory(USER.id, [cached({ client_id: null })]);
+        ApiService.getHistory.mockResolvedValue({
+            total: 1,
+            items: [serverRow({ id: 'srv-A', client_id: 'cid-A', name: SAME_NAME, start_time: SAME_START })],
+        });
+        await mount();
+
+        const row = ctx.history.find(w => w.id === 'srv-A');
+        expect(row.backendId).toBe('srv-A');
+        expect(row.client_id).toBe('cid-A');
+    });
+
+    it('B1: a known backendId wins over any fingerprint match', async () => {
+        // Positive identity must beat content matching, even when the
+        // fingerprint points somewhere else entirely.
+        StorageService.saveHistory(USER.id, [cached({ backendId: 'srv-A', client_id: null })]);
+        ApiService.getHistory.mockResolvedValue({
+            total: 2,
+            items: [
+                serverRow({ id: 'srv-B', client_id: 'cid-B', name: SAME_NAME, start_time: SAME_START }),
+                serverRow({ id: 'srv-A', client_id: 'cid-A', name: 'Renamed Later', start_time: SAME_START }),
+            ],
+        });
+        await mount();
+
+        const row = ctx.history.find(w => w.id === 'srv-A');
+        expect(row.client_id, 'took the id of the fingerprint match, not of its own server row')
+            .toBe('cid-A');
+    });
+
+    it('B4: a cached legacy row deleted elsewhere is not re-uploaded', async () => {
+        // The old mapper left cached rows with no backendId. If another device
+        // deletes the row BEFORE this client's first successful pull, that pull
+        // correctly returns empty -- there is nothing to enrich -- and the
+        // backfill reads the row as never-uploaded and uploads it again.
+        StorageService.saveHistory(USER.id, [cached({ id: 'srv-A', client_id: null })]);
+        ApiService.getHistory.mockResolvedValue({ total: 0, items: [] });
+
+        await mount();
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+
+        const uploaded = ApiService.saveWorkout.mock.calls.map(([w]) => w?.name);
+        expect(uploaded,
+            'a legacy row absent from the server was re-uploaded; it may have ' +
+            'been deleted on another device'
+        ).not.toContain(SAME_NAME);
+    });
+});
+
+describe('review round 2 — B2 and B3', () => {
+    const OTHER = { id: 'user-2', name: 'Other', email: 'other@example.com' };
+
+    it('B2: a delete resolving after a profile switch edits the ORIGINATING profile', async () => {
+        // drop() was an unscoped setHistory filter invoked in the request's
+        // .then. Queue storage fails, so the row stays visible; the user
+        // switches profile while the request is pending; the request then
+        // succeeds and drop() edits whoever is on screen instead of the owner.
+        //
+        // switchProfile reads the provider's React `profiles` state, which
+        // refreshGlobalState seeds from storage on mount — so both profiles
+        // must exist BEFORE mounting or the switch silently does nothing and
+        // this test proves nothing. There is an explicit assertion below that
+        // the switch really happened, because an earlier version of this test
+        // did not switch at all and passed against the unfixed code.
+        StorageService.saveProfiles([
+            { id: USER.id, name: USER.name, email: USER.email },
+            { id: OTHER.id, name: OTHER.name, email: OTHER.email },
+        ]);
+        StorageService.saveCurrentProfileId(USER.id);
+        StorageService.saveHistory(OTHER.id, [{
+            id: 'srv-1', client_id: 'cid-1', name: 'Another persons workout',
+            startTime: '2026-09-05T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
+        let release;
+        ApiService.deleteWorkoutByClientId.mockReturnValue(new Promise(r => { release = r; }));
+        await mount();
+
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSet = localStorage.setItem.bind(localStorage);
+        vi.spyOn(localStorage, 'setItem').mockImplementation((k, v) => {
+            if (k.startsWith('fitness_sync_queue')) throw new Error('QuotaExceededError');
+            return realSet(k, v);
+        });
+
+        await act(async () => { ctx.deleteWorkout('srv-1'); });
+        expect(pendingDeletes(), 'precondition: the queue write must fail').toEqual([]);
+        expect(ctx.history.map(w => w.id),
+            'precondition: an unqueued delete keeps the row visible'
+        ).toContain('srv-1');
+
+        ApiService.getHistory.mockResolvedValue({ total: 0, items: [] });
+        await act(async () => { ctx.switchProfile(OTHER.id); });
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        expect(ctx.currentProfile?.id,
+            'precondition: the profile switch did not happen, so this test would ' +
+            'pass against the unfixed code'
+        ).toBe(OTHER.id);
+
+        // A's delete finally lands, while B is on screen.
+        await act(async () => { release(); await new Promise(r => setTimeout(r, 0)); });
+
+        const bStored = StorageService.loadProfileState(OTHER.id).history || [];
+        expect(bStored.map(w => w.id),
+            'the other profile stored workout was removed by someone elses delete'
+        ).toContain('srv-1');
+        expect(ctx.history.map(w => w.id),
+            'the other profile visible workout was removed by someone elses delete'
+        ).toContain('srv-1');
+
+        const aStored = StorageService.loadProfileState(USER.id).history || [];
+        expect(aStored.map(w => w.id),
+            'the originating profile kept the row it deleted'
+        ).not.toContain('srv-1');
+    });
+
+    it('B3: a second Delete press reuses the identifier, never mints a new one', async () => {
+        // The minted id was written to storage but never to the React row, so
+        // the row the second press read still had no client_id.
+        StorageService.saveHistory(USER.id, [{
+            id: 'local-1', name: 'Legacy Session',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        let release;
+        ApiService.deleteWorkoutByClientId.mockReturnValue(new Promise(r => { release = r; }));
+        await mount();
+
+        await act(async () => { ctx.deleteWorkout('local-1'); });
+        await act(async () => { ctx.deleteWorkout('local-1'); });
+
+        const minted = ApiService.deleteWorkoutByClientId.mock.calls.map(([c]) => c);
+        const distinct = new Set(minted);
+        expect(distinct.size,
+            `two presses minted ${distinct.size} different identifiers: ${[...distinct]}`
+        ).toBeLessThanOrEqual(1);
+        release?.();
+    });
+
+    it('B3: no intent is queued when the identity write itself fails', async () => {
+        // Committing a delete keyed on an id that never reached disk recreates
+        // the identity-split the persistence was added to close.
+        StorageService.saveHistory(USER.id, [{
+            id: 'local-2', name: 'Legacy Two',
+            startTime: '2026-09-03T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        await mount();
+
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSet = localStorage.setItem.bind(localStorage);
+        vi.spyOn(localStorage, 'setItem').mockImplementation((k, v) => {
+            // The history write fails; the smaller queue write would fit.
+            if (k.startsWith('fitness_history')) throw new Error('QuotaExceededError');
+            return realSet(k, v);
+        });
+
+        await act(async () => { ctx.deleteWorkout('local-2'); });
+
+        expect(pendingDeletes(),
+            'queued a delete keyed on an identifier that was never persisted'
+        ).toEqual([]);
+        expect(ctx.history.map(w => w.id),
+            'removed the row although its identity could not be recorded'
+        ).toContain('local-2');
+    });
+});
+
+describe('boot replay', () => {
+    // A true cold start is not reachable in-process: SyncQueue is a module
+    // singleton whose init() is guarded by an `initialized` flag, and
+    // vi.resetModules does not clear the vi.mock factory cache, so re-importing
+    // hands back the same mocked module. Rather than pretend, the two things
+    // boot recovery depends on are pinned separately, and each one fails on
+    // its own if broken.
+
+    it('the provider wires SyncQueue.init() on mount', async () => {
+        // Half one: without this call nothing replays after a restart. The
+        // previous remount test called flush() by hand, so deleting init()
+        // from the provider left every test green.
+        const init = vi.spyOn(SyncQueue, 'init');
+        await mount();
+        expect(init, 'the provider never calls SyncQueue.init()').toHaveBeenCalled();
+    });
+
+    it('a replayed delete issues a NEW request, not a remembered one', async () => {
+        // Half two: the executor must actually contact the API when the queue
+        // replays. Call history is cleared at the restart boundary, so the
+        // original pre-restart request cannot satisfy the assertion — that was
+        // the flaw that let a no-op replay executor pass.
+        ApiService.getHistory.mockResolvedValue({ total: 1, items: [serverRow()] });
+        ApiService.deleteWorkoutByClientId.mockRejectedValue(new Error('offline'));
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        await mount();
+
+        await act(async () => { ctx.deleteWorkout('srv-1'); });
+        expect(pendingDeletes().map(o => o.key),
+            'precondition: the failed delete must be queued'
+        ).toEqual(['cid-1']);
+
+        await unmount();
+
+        // --- restart boundary: forget everything the first session did -------
+        ApiService.deleteWorkoutByClientId.mockClear();
+        ApiService.deleteWorkoutByClientId.mockResolvedValue(undefined);
+        ApiService.getHistory.mockResolvedValue({ total: 0, items: [] });
+        expect(ApiService.deleteWorkoutByClientId.mock.calls.length,
+            'precondition: history cleared, so any call below is genuinely new'
+        ).toBe(0);
+        expect(pendingDeletes().map(o => o.key),
+            'precondition: the intent survived the restart'
+        ).toEqual(['cid-1']);
+
+        await mount();
+        await act(async () => { await SyncQueue.flush(); });
+
+        expect(ApiService.deleteWorkoutByClientId,
+            'the replay never reached the API - a no-op executor would look ' +
+            'identical from the queue side'
+        ).toHaveBeenCalledWith('cid-1');
+        expect(pendingDeletes(), 'a confirmed delete must leave the queue').toEqual([]);
     });
 });
