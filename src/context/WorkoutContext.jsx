@@ -452,10 +452,32 @@ export const backfillDisposition = (workout) => {
     return 'skip-ambiguous';
 };
 
+// Local ids are UUIDs (crypto.randomUUID). The pre-UUID fallback in generateId
+// produced `${base36 time}${base36 random}`, which never matches this — so a
+// non-UUID id proves the row was made locally by an older client and was never
+// a server row.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const chooseDeletionTarget = (workout) => {
     if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
     if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
-    return { clientId: ensureWorkoutClientId(workout).client_id, backendId: null };
+
+    // No identifiers at all — a row the OLD mapper cached, before it recorded
+    // backendId. That mapper stored `id: w.id`, so this row's own id may BE the
+    // server id, and deleting by it is a positive act: the server either
+    // soft-deletes that row or answers 404, which the client treats as success.
+    //
+    // This replaces minting a client id here. A minted id names nothing the
+    // server has ever seen, so the placeholder deletion it creates succeeds
+    // while the real row stays live — and the guard is then retired on that
+    // false confirmation, letting an ordinary pull resurrect the workout.
+    if (workout?.id && UUID_RE.test(String(workout.id))) {
+        return { clientId: null, backendId: workout.id };
+    }
+
+    // A non-UUID id cannot be a server id, so there is nothing to delete
+    // remotely. Purely local; remove it and stop.
+    return { clientId: null, backendId: null, localOnly: true };
 };
 
 export const WorkoutProvider = ({ children, timerApiRef }) => {
@@ -1120,13 +1142,18 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                                 // positive too — that is how the old mapper
                                 // stored pulled rows.
                                 if (w.id && byServerId.has(w.id)) return byServerId.get(w.id);
-                                // Nothing else to go on. The fingerprint is
-                                // usable only when it is unambiguous; a
-                                // collision means we cannot tell which row this
-                                // is, and guessing is what caused the deletion.
-                                const fp = keyOf(w.name, w.startTime, w.id);
-                                if (ambiguous.has(fp)) return null;
-                                return byFingerprint.get(fp) || null;
+                                // No positive identifier matched. There is
+                                // deliberately NO content fallback: a name and
+                                // start time being unique within one page of
+                                // results does not make them proof of identity.
+                                // The row we hold may have been deleted
+                                // elsewhere while a *different* workout happens
+                                // to share its name and time, and adopting that
+                                // row's client_id makes the next delete remove
+                                // the wrong workout. Leave it unidentified; a
+                                // later pull that returns its real row matches
+                                // positively through `id`.
+                                return null;
                             };
 
                             let adopted = 0;
@@ -2180,42 +2207,15 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             }
         };
 
-        const { clientId, backendId } = chooseDeletionTarget(target);
+        const { clientId, backendId, localOnly } = chooseDeletionTarget(target);
 
-        // Persist a MINTED identifier before committing any intent keyed on it.
-        //
-        // chooseDeletionTarget mints one for a row that has neither identifier.
-        // If that mint lives only in the queue entry, a crash before this row's
-        // removal is persisted leaves a surviving history row that does not
-        // carry it — and the next attempt mints a DIFFERENT one, whose upload
-        // cannot collide with the recorded deletion.
-        //
-        // The write is CHECKED, not attempted: a smaller queue entry can fit
-        // where replacing the whole history value cannot, so "storage failed"
-        // is not all-or-nothing. If the identity cannot be recorded we do not
-        // delete at all — the row stays visible and the user can retry, which
-        // is honest, where a delete keyed on an id that exists only in memory
-        // is not. The React row is updated too, so a second press reuses this
-        // identifier instead of minting another.
-        if (clientId && !target.client_id) {
-            const stored = StorageService.loadProfileState(uid).history || [];
-            const persisted = StorageService.saveHistory(
-                uid,
-                stored.map(w => (w.id === target.id ? { ...w, client_id: clientId } : w))
-            );
-            if (!persisted) {
-                console.warn(
-                    '[delete-workout] could not persist an identifier for this ' +
-                    'workout, so the deletion was not recorded; the row is left ' +
-                    'in place. Free some space and try again.'
-                );
-                return;
-            }
-            if (latestProfileIdRef.current === uid) {
-                setHistory(prev => prev.map(
-                    w => (w.id === target.id ? { ...w, client_id: clientId } : w)
-                ));
-            }
+        // Nothing was ever uploaded and nothing can be: a non-UUID id predates
+        // crypto.randomUUID, and the backfill will not upload a row with no
+        // identifiers. Removing it locally IS the whole deletion — no request,
+        // and no tombstone, since there is no pull that could bring it back.
+        if (localOnly) {
+            dropOwned();
+            return;
         }
 
         // One residual case, from queue entries written by a PRE-redesign

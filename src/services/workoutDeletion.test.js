@@ -86,16 +86,36 @@ describe('chooseDeletionTarget', () => {
             .toEqual({ clientId: null, backendId: 'srv-1' });
     });
 
-    it('mints a client id for a row that was never uploaded', () => {
-        const { clientId, backendId } = chooseDeletionTarget({ id: 'l1' });
-        expect(clientId).toBeTruthy();
+    it('deletes an unidentified UUID row by its OWN id, never a minted one', () => {
+        // The old mapper stored pulled rows as { id: <server uuid> } with no
+        // backendId, so this row's id may BE the server id. Minting instead
+        // would delete a placeholder that names nothing while the real row
+        // stayed live, and the guard would retire on that false confirmation.
+        const { clientId, backendId } = chooseDeletionTarget(
+            { id: '11111111-2222-3333-4444-555555555555' }
+        );
+        expect(backendId).toBe('11111111-2222-3333-4444-555555555555');
+        expect(clientId).toBeNull();
+    });
+
+    it('treats a NON-uuid id as purely local, with nothing to delete remotely', () => {
+        // generateId's pre-UUID fallback was base36 time + random, which no
+        // server id can match, so such a row was never uploaded.
+        const { clientId, backendId, localOnly } = chooseDeletionTarget({ id: 'lx8f2a9q1z' });
+        expect(localOnly).toBe(true);
+        expect(clientId).toBeNull();
         expect(backendId).toBeNull();
     });
 
-    it('always returns exactly one identifier', () => {
-        for (const row of [{ id: 'a', client_id: 'c' }, { id: 'b', backendId: 's' }, { id: 'c' }]) {
+    it('never returns both identifiers at once', () => {
+        for (const row of [
+            { id: 'a', client_id: 'c' },
+            { id: 'b', backendId: 's' },
+            { id: '11111111-2222-3333-4444-555555555555' },
+            { id: 'lx8f2a9q1z' },
+        ]) {
             const { clientId, backendId } = chooseDeletionTarget(row);
-            expect(Boolean(clientId) !== Boolean(backendId)).toBe(true);
+            expect(Boolean(clientId) && Boolean(backendId)).toBe(false);
         }
     });
 });

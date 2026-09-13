@@ -712,26 +712,34 @@ was never uploaded.
 
 Four rules earn their place here, each from a defect that reached review:
 
-1. **Identity is adopted only on a positive match.** `keyOf` is
-   `${name}|${startMs}` — the id is merely a fallback for an unparseable date —
-   so two workouts sharing a name and start time collide, and a `Map` keeps the
-   last. Matching on that let a row keep its own `backendId` while adopting a
-   *different* workout's `client_id`, and the next delete removed that other
-   workout. `matchFor` now tries `backendId`, then `client_id`, then a local id
-   that is itself a server id, and only then an **unambiguous** fingerprint.
-   Content is not evidence of identity.
+1. **Identity is adopted only on a positive match, with no content fallback.**
+   `matchFor` tries `backendId`, then `client_id`, then a local id that is
+   itself a server id — and then gives up. A name and start time are not
+   evidence of identity even when unique in the result: the row held locally
+   may have been deleted elsewhere while a *different* workout happens to share
+   them, and adopting that row's `client_id` makes the next delete remove the
+   wrong workout. An unidentified row simply stays unidentified until a pull
+   returns its real row.
+
 2. **Async completions are owner-scoped.** `dropOwned` captures the profile id
    at call time, always prunes that profile's *stored* history, and touches
    React state only while that profile is still current. An unscoped
    `setHistory` in the request's `.then` removed whichever profile happened to
    be on screen and left the real row on disk. Same rule as
    `dropLocallyAsDeleted`.
-3. **A minted identifier is verified on disk before any intent is committed.**
-   `StorageService.saveHistory` now returns whether the write landed. If it did
-   not, the deletion is abandoned and the row stays visible — a delete keyed on
-   an id that exists only in memory recreates the identity split the write was
-   added to prevent. The React row is updated too, so a second press reuses the
-   same identifier rather than minting another.
+3. **Nothing is minted at deletion time.** `chooseDeletionTarget` resolves
+   `client_id`, then `backendId`, then — for a row the old mapper cached with
+   neither — the row's **own id**, because that mapper stored `id: w.id` and it
+   may therefore be the server id. `DELETE /{id}` either soft-deletes that row
+   or answers 404, which is treated as success; either way the outcome is
+   known. A non-UUID id predates `crypto.randomUUID` and so cannot be a server
+   id, making the row purely local: it is removed with no request at all.
+
+   Minting a `client_id` here was the earlier design and was wrong. The minted
+   id named nothing the server had seen, so the placeholder deletion succeeded
+   while the real row stayed live — and the guard was then retired on that
+   false confirmation, letting an ordinary pull resurrect the workout.
+
 4. **The backfill uploads only what carries a stable identifier.** See
    `backfillDisposition`. A `backendId` means the server has seen the row, so it
    is skipped. A `client_id` makes re-upload **idempotent** — that, not "this

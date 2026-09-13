@@ -264,45 +264,130 @@ describe('the three P1s review left open', () => {
         expect(ApiService.deleteWorkoutByClientId).not.toHaveBeenCalled();
     });
 
-    it('P1-B: a minted identifier is persisted to stored history before the intent', async () => {
-        // Otherwise a crash after the enqueue leaves a surviving history row
-        // that does not carry the id the deletion was recorded against, and the
-        // backfill mints a DIFFERENT one whose upload cannot collide with it.
-        //
-        // Two things are needed to reach the mint at all, and getting them
-        // wrong the first time made this test pass vacuously:
-        //   - the pull must FAIL, or the login backfill stamps the row itself;
-        //   - the request must HANG, or it succeeds and clears the very queue
-        //     entry the test is trying to inspect.
-        const local = {
-            id: 'local-1', name: 'Legacy Session',
-            startTime: '2026-09-02T10:00:00.000Z', endTime: '2026-09-02T11:00:00.000Z',
-            status: 'completed', completed: true, notes: '', exercises: [], recommendations: [],
-        };                                    // no client_id, no backendId
-        StorageService.saveHistory(USER.id, [local]);
-        ApiService.getHistory.mockRejectedValue(new Error('offline'));
-        ApiService.deleteWorkoutByClientId.mockReturnValue(new Promise(() => {}));
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('deletes an unidentified cached row by its OWN id, minting nothing', async () => {
+        // Replaces the old "a minted identifier is persisted" test. Minting is
+        // gone: it created a placeholder naming nothing, the placeholder delete
+        // succeeded, the real row stayed live, and the guard retired on that
+        // false confirmation.
+        const SERVER_UUID = '11111111-2222-3333-4444-555555555555';
+        StorageService.saveHistory(USER.id, [{
+            id: SERVER_UUID, name: 'Legacy Session',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
         await mount();
 
-        expect(ctx.history.find(w => w.id === 'local-1')?.client_id,
-            'precondition: the row must still be unidentified here').toBeFalsy();
+        await act(async () => { ctx.deleteWorkout(SERVER_UUID); });
 
-        const saved = vi.spyOn(StorageService, 'saveHistory');
-        await act(async () => { ctx.deleteWorkout('local-1'); });
+        expect(ApiService.deleteWorkout).toHaveBeenCalledWith(SERVER_UUID);
+        expect(ApiService.deleteWorkoutByClientId,
+            'minted a client id for a row whose own id may be the server id'
+        ).not.toHaveBeenCalled();
+    });
 
-        const op = JSON.parse(localStorage.getItem('fitness_sync_queue') || '[]')
-            .find(o => o.type === 'workout_delete');
-        const mintedId = op?.payload?.client_id;
-        expect(mintedId, 'no deletion intent was queued at all').toBeTruthy();
+    it('does not call the server for a pre-UUID local row', async () => {
+        StorageService.saveHistory(USER.id, [{
+            id: 'lx8f2a9q1z', name: 'Ancient Local',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        await mount();
 
-        const stampedWrite = saved.mock.calls.find(([, rows]) =>
-            (rows || []).some(w => w.id === 'local-1' && w.client_id === mintedId)
-        );
-        expect(stampedWrite,
-            'the minted id was never written to stored history, so a crash here ' +
-            'leaves the surviving row unable to collide with its own deletion'
-        ).toBeTruthy();
+        await act(async () => { ctx.deleteWorkout('lx8f2a9q1z'); });
+
+        expect(ApiService.deleteWorkout).not.toHaveBeenCalled();
+        expect(ApiService.deleteWorkoutByClientId).not.toHaveBeenCalled();
+        expect(ctx.history.map(w => w.id)).not.toContain('lx8f2a9q1z');
+    });
+
+    it('R3-1: a lone same-name/time server row must not lend its identity', async () => {
+        // The narrower fingerprint case. Cached A has no identifiers. A was
+        // deleted elsewhere, so the pull returns only B — a DIFFERENT workout
+        // that happens to share A's name and start time. One candidate, so
+        // nothing looks ambiguous, and A adopted B's client_id. Deleting A then
+        // deleted B.
+        const NAME = 'Push Day';
+        const START = '2026-09-01T10:00:00.000Z';
+        StorageService.saveHistory(USER.id, [{
+            id: '99999999-8888-7777-6666-555555555555', name: NAME,
+            startTime: START, endTime: '2026-09-01T11:00:00.000Z',
+            status: 'completed', completed: true, notes: '',
+            exercises: [], recommendations: [],
+        }]);
+        ApiService.getHistory.mockResolvedValue({
+            total: 1,
+            items: [serverRow({ id: 'srv-B', client_id: 'cid-B', name: NAME, start_time: START })],
+        });
+        await mount();
+
+        const a = ctx.history.find(w => w.id === '99999999-8888-7777-6666-555555555555');
+        expect(a, 'the cached row vanished').toBeTruthy();
+        expect(a.client_id, 'adopted an unrelated workout client id').toBeFalsy();
+        expect(a.backendId, 'adopted an unrelated workout server id').toBeFalsy();
+
+        await act(async () => { ctx.deleteWorkout('99999999-8888-7777-6666-555555555555'); });
+
+        expect(ApiService.deleteWorkoutByClientId,
+            'deleting the cached row issued a delete for a different workout'
+        ).not.toHaveBeenCalledWith('cid-B');
+        expect(ApiService.deleteWorkout)
+            .toHaveBeenCalledWith('99999999-8888-7777-6666-555555555555');
+    });
+
+    it('R3-1: a positive id match still enriches', async () => {
+        // Replaces the mislabelled "unambiguous fingerprint still enriches",
+        // which used the same id on both sides and so never reached the
+        // fallback it claimed to cover. This is the real legitimate path: the
+        // local id IS the server id, matched positively, not by content.
+        StorageService.saveHistory(USER.id, [{
+            id: 'srv-A', name: 'Push Day', startTime: '2026-09-01T10:00:00.000Z',
+            status: 'completed', completed: true, notes: '',
+            exercises: [], recommendations: [],
+        }]);
+        ApiService.getHistory.mockResolvedValue({
+            total: 1, items: [serverRow({ id: 'srv-A', client_id: 'cid-A' })],
+        });
+        await mount();
+
+        const row = ctx.history.find(w => w.id === 'srv-A');
+        expect(row.backendId).toBe('srv-A');
+        expect(row.client_id).toBe('cid-A');
+    });
+
+    it('R3-3: a second Delete press while the first is unresolved', async () => {
+        // The old version had working queue persistence, so the first press
+        // removed the row and the second found no target - it passed with ZERO
+        // requests. Forcing the queue write to fail keeps the row visible, so
+        // the second press genuinely runs.
+        const SERVER_UUID = '22222222-3333-4444-5555-666666666666';
+        StorageService.saveHistory(USER.id, [{
+            id: SERVER_UUID, name: 'Legacy Session',
+            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
+            completed: true, notes: '', exercises: [], recommendations: [],
+        }]);
+        let release;
+        ApiService.deleteWorkout.mockReturnValue(new Promise(r => { release = r; }));
+        await mount();
+
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSet = localStorage.setItem.bind(localStorage);
+        vi.spyOn(localStorage, 'setItem').mockImplementation((k, v) => {
+            if (k.startsWith('fitness_sync_queue')) throw new Error('QuotaExceededError');
+            return realSet(k, v);
+        });
+
+        await act(async () => { ctx.deleteWorkout(SERVER_UUID); });
+        expect(ctx.history.map(w => w.id),
+            'precondition: an unqueued delete must keep the row visible'
+        ).toContain(SERVER_UUID);
+
+        await act(async () => { ctx.deleteWorkout(SERVER_UUID); });
+
+        const calls = ApiService.deleteWorkout.mock.calls.map(([id]) => id);
+        expect(calls.length, 'the second press did not reach the API').toBe(2);
+        expect(new Set(calls).size, 'the two attempts used different targets').toBe(1);
+        expect(calls[0]).toBe(SERVER_UUID);
+        release?.();
     });
 
     it('P1-C: a deletion is not completed locally when the intent cannot be stored', async () => {
@@ -452,20 +537,6 @@ describe('review round 2 — the four blockers', () => {
         expect(ApiService.deleteWorkout).toHaveBeenCalledWith('srv-A');
     });
 
-    it('B1: an unambiguous fingerprint still enriches', async () => {
-        // Guard against fixing the collision by refusing to enrich at all.
-        StorageService.saveHistory(USER.id, [cached({ client_id: null })]);
-        ApiService.getHistory.mockResolvedValue({
-            total: 1,
-            items: [serverRow({ id: 'srv-A', client_id: 'cid-A', name: SAME_NAME, start_time: SAME_START })],
-        });
-        await mount();
-
-        const row = ctx.history.find(w => w.id === 'srv-A');
-        expect(row.backendId).toBe('srv-A');
-        expect(row.client_id).toBe('cid-A');
-    });
-
     it('B1: a known backendId wins over any fingerprint match', async () => {
         // Positive identity must beat content matching, even when the
         // fingerprint points somewhere else entirely.
@@ -571,56 +642,7 @@ describe('review round 2 — B2 and B3', () => {
         ).not.toContain('srv-1');
     });
 
-    it('B3: a second Delete press reuses the identifier, never mints a new one', async () => {
-        // The minted id was written to storage but never to the React row, so
-        // the row the second press read still had no client_id.
-        StorageService.saveHistory(USER.id, [{
-            id: 'local-1', name: 'Legacy Session',
-            startTime: '2026-09-02T10:00:00.000Z', status: 'completed',
-            completed: true, notes: '', exercises: [], recommendations: [],
-        }]);
-        let release;
-        ApiService.deleteWorkoutByClientId.mockReturnValue(new Promise(r => { release = r; }));
-        await mount();
 
-        await act(async () => { ctx.deleteWorkout('local-1'); });
-        await act(async () => { ctx.deleteWorkout('local-1'); });
-
-        const minted = ApiService.deleteWorkoutByClientId.mock.calls.map(([c]) => c);
-        const distinct = new Set(minted);
-        expect(distinct.size,
-            `two presses minted ${distinct.size} different identifiers: ${[...distinct]}`
-        ).toBeLessThanOrEqual(1);
-        release?.();
-    });
-
-    it('B3: no intent is queued when the identity write itself fails', async () => {
-        // Committing a delete keyed on an id that never reached disk recreates
-        // the identity-split the persistence was added to close.
-        StorageService.saveHistory(USER.id, [{
-            id: 'local-2', name: 'Legacy Two',
-            startTime: '2026-09-03T10:00:00.000Z', status: 'completed',
-            completed: true, notes: '', exercises: [], recommendations: [],
-        }]);
-        await mount();
-
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const realSet = localStorage.setItem.bind(localStorage);
-        vi.spyOn(localStorage, 'setItem').mockImplementation((k, v) => {
-            // The history write fails; the smaller queue write would fit.
-            if (k.startsWith('fitness_history')) throw new Error('QuotaExceededError');
-            return realSet(k, v);
-        });
-
-        await act(async () => { ctx.deleteWorkout('local-2'); });
-
-        expect(pendingDeletes(),
-            'queued a delete keyed on an identifier that was never persisted'
-        ).toEqual([]);
-        expect(ctx.history.map(w => w.id),
-            'removed the row although its identity could not be recorded'
-        ).toContain('local-2');
-    });
 });
 
 describe('boot replay', () => {
