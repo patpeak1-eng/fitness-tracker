@@ -203,6 +203,56 @@ durable desired state first: a pending or confirmed clear at a sequence at
 or above the server's means the server copy is stale. `getActiveWorkout`
 gains an `r.ok` check and maps `workout_data`.
 
+### 3b corrections — revision 5, from the plan review
+
+Four integration defects, each verified against source before accepting.
+The first two are blockers: without them the fence is bypassed or the
+newer edit is lost.
+
+**1. Retire the unversioned active-workout writer FIRST.** `syncToApi`
+still calls `saveActiveWorkout(state.activeWorkout)` / `clearActiveWorkout()`
+with no sequence (`StorageService.js:485-507`), and
+`WorkoutContext.jsx:1606` invokes it on every history change. So the
+*current* client bypasses its own fence: a queued revision at seq 6 is
+overtaken when a history change fires an unversioned write that advances
+the server to 7 by arrival order — and that write can itself clobber newer
+remote state. Remove only the active-workout leg of `syncToApi`, or route
+it through the same dispatcher, **before** 3b is enabled. The legacy
+branch exists for deployed OLD clients, never for a live source path.
+
+**2. Acknowledgement must be conditional, in the QUEUE, not the executor.**
+`SyncQueue.flush()` removes the captured op by `op.id` unconditionally on
+success (`:163-168` — the spec's earlier `:116-120` was stale), and dedupe
+keys only on `(type, key)` (`:86-102`). So revision A/seq 6 in flight,
+then revision B/seq 7 replacing the same `type:key` entry, then A
+succeeding, deletes **B** — the server stays at A, B never dispatches, and
+the newer in-progress workout is lost remotely. An executor-side
+convention cannot fix this, because `flush()` owns the removal. Add an
+explicit queue acknowledgement API that removes only while the stored op
+still carries the captured `desiredRevision` AND `client_seq`; `flush()`
+calls it, and the 409 rebase path uses the same conditional contract.
+
+**3. Do NOT widen `SyncQueue`'s retryable handling.** The spec claimed
+only active-workout code sets `err.retryable`. False:
+`ApiService.js:317` already marks the workout-deletion rolling-deploy 404
+retryable and `SyncQueue.js:178-203` already honours it. The mechanism
+exists — express the 409 rebase within the executor and the acknowledgement
+contract above rather than touching the queue's retry semantics again.
+
+**4. The pull half must actually be added.** `getActiveWorkout` having no
+caller is verified — and is precisely the problem. The cloud pull fetches
+seven resources and omits the active workout entirely
+(`WorkoutContext.jsx:1007-1018`), so device A starting a workout is never
+visible to device B no matter what the server does. 3b adds
+`getActiveWorkout` to that pull and defines the local-vs-server sequence
+merge against durable desired state, per the paragraph above. Without it
+the cross-device criterion under "Done means" cannot be met.
+
+**Sequencing consequence:** 3b is now ordered — retire the unversioned
+writer, add the conditional acknowledgement, then the executor and gated
+push, then the pull merge. Enabling the push before the first two is the
+bypass and the data-loss case respectively.
+
 ### Done means
 
 Start a workout with an exercise on one device → appears on another.
@@ -224,7 +274,7 @@ late → B does **not** resurrect. Offline 409 → not dead-lettered.
 | 2a | `Token.user_id` | — | **active** — canonical id adopted on next login |
 | 2b | `Login.jsx` uses it, fallbacks deleted | 2a live | — |
 | 3a | Migration `0012`, fenced upsert, legacy branch, GET contract | — | API-compatible |
-| 3b | Executor, gated push, 409 rebase, immutable ack, corrected pull | 3a live | — |
+| 3b | Retire unversioned writer, conditional queue ack, executor, gated push, 409 rebase, pull merge | 3a live | — |
 
 ## Verification
 
