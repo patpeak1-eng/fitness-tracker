@@ -596,7 +596,8 @@ exactly that.
   GET  /active                   → ActiveWorkoutResponse | null
   PUT  /active                   → upsert active workout blob
   DELETE /active                 → 204
-  DELETE /by-client-id?client_id= → 204 (SOFT delete by the CLIENT's identifier,
+  DELETE /deletions/by-client-id?client_id=
+                                 → 204 (SOFT delete by the CLIENT's identifier,
                                     valid even for a row the server has never
                                     seen — declared before /{id})
   DELETE /{id}                   → 204 (SOFT delete — sets deleted_at)
@@ -612,7 +613,7 @@ resurrecting the workout. Because the list hides deleted rows, that POST
 response is the only channel through which a client can learn its copy was
 deleted elsewhere.
 
-**`DELETE /by-client-id` is what makes deletion safe (S32 Fix 1b).**
+**`DELETE /deletions/by-client-id` is what makes deletion safe (S32 Fix 1b).**
 `DELETE /{id}` can only remove a row that already exists. While an upload is
 in flight there is nothing to delete, so a client is forced to *infer* from an
 absent row whether that upload will land — and that inference cannot be made
@@ -651,6 +652,14 @@ build from the same push but land independently, so that window is real.
 `ApiService.deleteWorkoutByClientId` marks a 404 `retryable`, and `SyncQueue`
 keeps a `retryable` error queued instead of dead-lettering it — the only
 exception to "a non-auth 4xx means the payload is rejected".
+
+**The path needs TWO segments for that to work**, which is why it is
+`/deletions/by-client-id` and not `/by-client-id`. With one segment the old
+backend matches it against `DELETE /{id}`, fails to parse `by-client-id` as a
+UUID, and returns **422** — which is dead-lettered, discarding the deletion for
+good. Verified by loading `origin/main`'s router into a throwaway app: the
+one-segment path returns 422 with `loc=['path','id']`, the two-segment path
+returns a clean 404.
 
 **Remaining gap:** `POST ""` still **accepts** a create with no `client_id`.
 Such a row has no durable identity — PostgreSQL treats NULLs as distinct under
@@ -724,13 +733,18 @@ undo it.
   `workout` executor still transmits already-stored queue payloads as they were
   written.
 - **`wasDeletedOnServer`** guards the backfill, which uploads whatever is
-  local-and-absent. A `backendId` is positive proof the row was once on the
-  server, and the pull fetches every page — so a row with one that the pull did
-  not return has been deleted, here or on another device. It is not re-uploaded,
-  and the local copy is dropped. This is evidence, not absence-as-proof: a row
-  with no `backendId` says nothing either way and is left alone. Without it,
-  device A deleting a legacy row and device B re-uploading it needed no race and
-  no old queue entry at all.
+  local-and-absent. A row carrying a `backendId` is **not re-uploaded**, because
+  for a legacy row (`client_id` NULL) that upload is unrecognisable to the
+  server and lands as a brand-new workout no future deletion can catch.
+  **It is a skip and nothing more.** A first version also deleted the local copy
+  and wrote a tombstone, which was a destructive bug caught in review:
+  `getHistory` pages with a moving `OFFSET` over the *live* rows, so a
+  concurrent delete on another device shifts the window and a still-live row can
+  be omitted even though every request succeeded. The fabricated tombstone was
+  then read back as user intent, and reconciliation deleted that live workout on
+  the server. **Absence across a non-atomic page walk proves nothing** — the
+  same mistake this whole redesign exists to remove, reintroduced one layer
+  down. Skipping is safe under that uncertainty; deleting is not.
 - Tombstones live in the profile-scoped `fitness_deleted_workouts`, keyed on
   **both** ids, and gate the pull merge (a pull that started before the delete
   can land after it) and the backfill.
@@ -768,9 +782,27 @@ undo it.
   pre-redesign client carrying no `client_id` cannot be made identifiable after
   the fact, so no recorded deletion can catch it. `deleteWorkout` cancels such a
   create while it is still cancellable (`SyncQueue.remove`); once `flush` has
-  captured it, nothing local can help. This is genuinely narrow — but the
-  earlier claim that it was the *only* remaining resurrection path was wrong,
-  and `wasDeletedOnServer` above closes the one that was not.
+  captured it, nothing local can help.
+- **Cached pre-upgrade rows never gain provenance (P1, open).** The pull merge
+  filters already-known rows by fingerprint *before* `mapServerWorkout` runs, so
+  a row cached by the old mapper keeps `backendId: undefined` for ever. The
+  backfill then reads it as never-uploaded, mints an identifier and re-uploads
+  it — cross-device legacy resurrection, needing no race and no old queue entry.
+  The fix is to enrich matched existing rows with the server identity, not only
+  newly-seen ones.
+- **A minted identity is not persisted before the intent (P1, open).** For a row
+  with neither identifier, `chooseDeletionTarget` mints one and the queue entry
+  records it, but the mint is never written back to stored history. A crash
+  before the tombstone lands leaves the delete keyed on an id the surviving
+  history row does not carry, so the backfill mints a *different* one and the
+  upload cannot collide with the deletion.
+- **`SyncQueue.enqueue` cannot fail loudly (P1, open).** It swallows
+  `localStorage` write errors and returns nothing, so `deleteWorkout` removes
+  the row and reports success even when no durable intent was stored.
+
+Earlier revisions of this section claimed the already-transmitted legacy create
+was the only resurrection path left. That was wrong twice over: the three items
+above are all still open.
 
 /api/assessments (routers/assessments.py)   GET "", POST ""
 /api/weight      (routers/weight.py)         GET "", POST "" (201)

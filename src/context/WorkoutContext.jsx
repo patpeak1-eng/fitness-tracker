@@ -403,17 +403,22 @@ export const deletionOpFor = (serverRow, uid) => {
     };
 };
 
-// Was this locally-held row deleted on the server, by us or by another device?
+// May this locally-held row, absent from the pull, be re-uploaded by the
+// backfill? No, if it carries a backendId.
 //
-// Only ever asked about a row the pull did NOT return, and the pull fetches
-// every page. A backendId is positive proof the row was once on the server, so
-// its absence now means the server dropped it. That is evidence, not the
-// absence-as-proof inference this redesign removed: a row with no backendId
-// says nothing either way, and is left alone.
+// This is a SKIP, and deliberately nothing more. An earlier version also
+// deleted the local copy and wrote a tombstone, which was a destructive bug:
+// `getHistory` pages with a moving OFFSET over the live rows, so a concurrent
+// delete on another device shifts the window and a still-LIVE row can be
+// skipped even though every request succeeded. That fabricated tombstone was
+// then read back as user intent, and reconciliation deleted the live workout
+// on the server. Absence across a non-atomic page walk proves nothing.
 //
-// It matters because the backfill uploads whatever is local-and-absent. For a
-// legacy row (client_id NULL) that upload is unrecognisable to the server, so
-// it returns as a brand-new workout that no future deletion can catch.
+// Skipping is safe under the same uncertainty: not re-uploading a row leaves
+// both copies exactly as they are. It exists because the backfill uploads
+// whatever is local-and-absent, and for a legacy row (client_id NULL) that
+// upload is unrecognisable to the server — it returns as a brand-new workout
+// that no future deletion can catch.
 export const wasDeletedOnServer = (workout) => Boolean(workout?.backendId);
 
 export const chooseDeletionTarget = (workout) => {
@@ -1257,17 +1262,6 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
                                 || (d.clientId && d.clientId === w.client_id)
                         );
                         const onCloud = (w) => cloudWorkoutKeys.has(keyOf(w.name, w.startTime, w.id));
-                        // Drop our copy of anything the server has positively
-                        // dropped, or the user deletes on one device and the
-                        // other shows the workout for ever. Runs BEFORE the
-                        // stamped rows are persisted below, which re-reads
-                        // storage.
-                        localHistory
-                            .filter(w => !onCloud(w) && wasDeletedOnServer(w))
-                            .forEach(w => dropLocallyAsDeleted(profile.id, {
-                                id: w.backendId,
-                                client_id: w.client_id || null,
-                            }));
                         // Stamp an identifier on anything that lacks one
                         // BEFORE it is queued, and persist it, so the row the
                         // server receives can be recognised again later.

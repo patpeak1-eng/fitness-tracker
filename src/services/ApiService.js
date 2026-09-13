@@ -306,7 +306,7 @@ export const deleteWorkoutByClientId = async (clientId) => {
   // Query parameter, not a path segment: client_id is client-generated, and one
   // containing '/' encodes to %2F, which the server decodes before routing —
   // the request would 404 and the deletion would be dead-lettered.
-  const path = `/api/workouts/by-client-id?client_id=${encodeURIComponent(clientId)}`;
+  const path = `/api/workouts/deletions/by-client-id?client_id=${encodeURIComponent(clientId)}`;
   const r = await apiFetch(path, { method: 'DELETE' });
   if (!r.ok) {
     const text = await r.text().catch(() => '');

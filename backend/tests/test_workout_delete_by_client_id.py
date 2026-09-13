@@ -75,7 +75,7 @@ async def test_delete_before_the_workout_is_ever_uploaded(db, client):
     h = _auth(uid)
     cid = str(uuid.uuid4())
 
-    r = await client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h)
+    r = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h)
     assert r.status_code == 204, r.text
     assert (await _list(client, h))["total"] == 0
 
@@ -96,7 +96,7 @@ async def test_delete_after_upload_behaves_the_same(db, client):
     await client.post("/api/workouts", json=_payload(cid), headers=h)
     assert (await _list(client, h))["total"] == 1
 
-    r = await client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h)
+    r = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h)
     assert r.status_code == 204, r.text
     assert (await _list(client, h))["total"] == 0
 
@@ -107,9 +107,9 @@ async def test_repeat_delete_is_idempotent(db, client):
     uid = await _make_user(db, "repeat@example.com")
     h = _auth(uid)
     cid = str(uuid.uuid4())
-    first = await client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h)
-    second = await client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h)
-    third = await client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h)
+    first = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h)
+    second = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h)
+    third = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h)
     assert [first.status_code, second.status_code, third.status_code] == [204, 204, 204]
 
     rows = (
@@ -130,7 +130,7 @@ async def test_repeat_delete_is_idempotent(db, client):
     ).scalar_one()
     await asyncio.sleep(0.05)
     await client.delete(
-        "/api/workouts/by-client-id", params={"client_id": cid}, headers=h
+        "/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h
     )
     after = (
         await db.execute(
@@ -148,8 +148,8 @@ async def test_concurrent_deletes_create_one_record(db, client):
     h = _auth(uid)
     cid = str(uuid.uuid4())
     results = await asyncio.gather(
-        client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h),
-        client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h),
+        client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h),
+        client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h),
         return_exceptions=True,
     )
     for r in results:
@@ -170,7 +170,7 @@ async def test_delete_then_upload_race(db, client):
     h = _auth(uid)
     cid = str(uuid.uuid4())
     deleted, created = await asyncio.gather(
-        client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=h),
+        client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h),
         client.post("/api/workouts", json=_payload(cid), headers=h),
         return_exceptions=True,
     )
@@ -213,7 +213,7 @@ async def test_delete_is_owner_scoped(db, client):
     await client.post("/api/workouts", json=_payload(cid, "A's workout"), headers=_auth(a))
     await client.post("/api/workouts", json=_payload(cid, "B's workout"), headers=_auth(b))
 
-    r = await client.delete("/api/workouts/by-client-id", params={"client_id": cid}, headers=_auth(a))
+    r = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=_auth(a))
     assert r.status_code == 204
 
     assert (await _list(client, _auth(a)))["total"] == 0
@@ -223,7 +223,7 @@ async def test_delete_is_owner_scoped(db, client):
 
 
 async def test_unauthenticated_delete_is_rejected(db, client):
-    r = await client.delete("/api/workouts/by-client-id", params={"client_id": str(uuid.uuid4())})
+    r = await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": str(uuid.uuid4())})
     assert r.status_code in (401, 403), r.text
 
 
@@ -234,7 +234,7 @@ async def test_other_workouts_are_untouched(db, client):
     await client.post("/api/workouts", json=_payload(keep_cid, "Keep"), headers=h)
     await client.post("/api/workouts", json=_payload(drop_cid, "Drop"), headers=h)
 
-    await client.delete("/api/workouts/by-client-id", params={"client_id": drop_cid}, headers=h)
+    await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": drop_cid}, headers=h)
     body = await _list(client, h)
     assert [i["name"] for i in body["items"]] == ["Keep"]
     assert body["total"] == 1
@@ -245,7 +245,7 @@ async def test_placeholder_row_is_never_listed_or_counted(db, client):
     everywhere a user-facing count is produced."""
     uid = await _make_user(db, "placeholder@example.com")
     h = _auth(uid)
-    await client.delete("/api/workouts/by-client-id", params={"client_id": str(uuid.uuid4())}, headers=h)
+    await client.delete("/api/workouts/deletions/by-client-id", params={"client_id": str(uuid.uuid4())}, headers=h)
 
     body = await _list(client, h)
     assert body["items"] == []
@@ -281,7 +281,7 @@ async def test_client_id_containing_a_slash_still_routes(db, client):
     assert (await _list(client, h))["total"] == 1
 
     r = await client.delete(
-        "/api/workouts/by-client-id", params={"client_id": cid}, headers=h
+        "/api/workouts/deletions/by-client-id", params={"client_id": cid}, headers=h
     )
     assert r.status_code == 204, r.text
     assert (await _list(client, h))["total"] == 0
@@ -294,7 +294,7 @@ async def test_missing_client_id_is_a_validation_error_not_a_404(db, client):
     rejected payload, so a malformed call has to come back as 422.
     """
     uid = await _make_user(db, "noparam@example.com")
-    r = await client.delete("/api/workouts/by-client-id", headers=_auth(uid))
+    r = await client.delete("/api/workouts/deletions/by-client-id", headers=_auth(uid))
     assert r.status_code == 422, r.text
 
 
@@ -302,7 +302,7 @@ async def test_unknown_client_id_is_204_never_404(db, client):
     """The same guarantee from the other side: never seen before is success."""
     uid = await _make_user(db, "unknown@example.com")
     r = await client.delete(
-        "/api/workouts/by-client-id",
+        "/api/workouts/deletions/by-client-id",
         params={"client_id": "never-seen-" + str(uuid.uuid4())},
         headers=_auth(uid),
     )

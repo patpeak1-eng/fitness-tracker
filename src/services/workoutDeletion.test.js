@@ -221,6 +221,9 @@ describe('a 404 from the by-client-id route is retryable, not fatal', () => {
     // independently, so a call to a brand-new route can 404 purely because the
     // backend has not rolled over. Dead-lettering that would discard the
     // deletion for good, and the next pull would bring the workout back.
+    // SyncQueue writes dead letters straight to localStorage under this key.
+    const deadLetters = () =>
+        JSON.parse(localStorage.getItem('fitness_sync_deadletter') || '[]');
     const failWith = (status, retryable) => {
         const err = new Error(`HTTP ${status}`);
         err.status = status;
@@ -235,7 +238,10 @@ describe('a 404 from the by-client-id route is retryable, not fatal', () => {
         await SyncQueue.flush();
 
         expect(SyncQueue.hasPending('workout_delete', 'cid-1')).toBe(true);
-        expect(SyncQueue.getState().deadLetterCount || 0).toBe(0);
+        // Read the REAL dead-letter store. This previously asserted
+        // getState().deadLetterCount, which SyncQueue does not expose, so the
+        // check passed no matter what happened.
+        expect(deadLetters()).toEqual([]);
     });
 
     it('still dead-letters an ordinary 4xx, so the escape hatch is narrow', async () => {
@@ -246,6 +252,7 @@ describe('a 404 from the by-client-id route is retryable, not fatal', () => {
         await SyncQueue.flush();
 
         expect(SyncQueue.hasPending('workout_delete', 'cid-2')).toBe(false);
+        expect(deadLetters().map(d => d.key)).toContain('cid-2');
     });
 });
 

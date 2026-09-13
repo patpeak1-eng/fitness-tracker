@@ -193,7 +193,7 @@ async def clear_active_workout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete("/by-client-id", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/deletions/by-client-id", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workout_by_client_id(
     client_id: str = Query(..., min_length=1),
     current_user: User = Depends(get_current_user),
