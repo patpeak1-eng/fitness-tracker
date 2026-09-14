@@ -99,13 +99,16 @@ explicitly forbids.
    **built-in** source, START never forks; the removal persists only when Save
    creates a named custom copy. See §4b decision A.
 
-### 4b. Owner decisions reopened by the review — awaiting answers
+### 4b. Owner decisions reopened by the review — DECIDED (owner, 2026-09-13)
 
-| # | Decision | Recommendation |
+All three recommendations accepted by the owner in his own words ("Accept all
+three recommendations in spec 4b").
+
+| # | Decision | Decided |
 |---|---|---|
-| A | START after a removal on an own custom template: keep today's auto-save (decision 4 as written above), or add a confirm step, or suppress auto-save for structural changes (alters shipped S28 behaviour; scope growth) | **Keep today's auto-save.** Set edits already persist on START the same way; a removal is one more edit |
+| A | START after a removal on an own custom template | **Keep today's auto-save** (decision 4 as written above). Set edits already persist on START the same way; a removal is one more edit |
 | B | Prefilled fork name collides with an existing custom name (nothing prevents duplicate names locally or server-side: `saveCustomTemplate` always appends; `custom_templates.name` has no uniqueness constraint) | **Prefill the first free variant** (`"<name> (my version)"`, then `"<name> (my version 2)"`…, trimmed, case-insensitive) and reject a colliding submit with an inline error. UI-only, `TrackWorkout.jsx` |
-| C | Scope growth: the review found two guards that require touching `WorkoutContext.jsx` and `ActiveWorkoutService.js` (§6). Revision 1 forbade any context change | **Accept the two guards** — each is a few lines, both close real holes in the invariant the owner asked for, and the zone was already HIGH |
+| C | Scope growth: two guards require touching `WorkoutContext.jsx` and `ActiveWorkoutService.js` (§6); revision 1 forbade any context change | **Accept the two guards.** Each is a few lines, both close real holes in the invariant the owner asked for, and the zone was already HIGH |
 
 ## 5. Files
 
