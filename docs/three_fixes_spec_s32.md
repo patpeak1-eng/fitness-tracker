@@ -326,6 +326,27 @@ null, status, lastServerSeq}`, persisted **before** the legacy active key is
 changed or removed, with boot recovery defined over it. **The clear record must
 outlive `activeWorkout = null`** — that is the whole point of it.
 
+**And the write can FAIL, which "persisted before" does not cover.**
+`safeSetItem` returns false on a full quota (`StorageService.js:90-100`),
+`writeJSON` propagates that boolean (`:124-140`), and `saveActiveWorkout`
+**ignores it** (`:388-391`). So "record first, then the legacy key" still loses
+the clear: the record write silently fails, the legacy key is removed anyway,
+and boot sees a live server workout with no journal — resurrection.
+
+The rule is therefore conditional, not merely ordered:
+
+> Write the record first. **If and only if that write reports success**, apply
+> or remove the legacy active key and update React state. If it fails, leave
+> the prior local state exactly as it was and surface/retry the failed
+> desired-state write.
+
+Boot treats a successfully stored record as authoritative, which makes
+record-first safe in both crash orderings. **Mutation test required:** force
+`localStorage.setItem` to throw and assert that no local clear and no
+active-key removal occurs. This is the same defect class as the
+`saveHistory`-ignoring-its-boolean finding in Fix 1b — third time this pattern
+has appeared, so treat an ignored storage return value as a defect by default.
+
 **B. The merge rule needs a full table, not a clear-only rule.** "A pending or
 confirmed clear at a sequence ≥ the server's means the server copy is stale"
 protects clears and silently loses new workouts. Device B starts workout B at
