@@ -7,15 +7,16 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import delete, func, select
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import ActiveWorkout, User, WorkoutHistory
 from app.schemas import (
+    ActiveWorkoutConflict,
     ActiveWorkoutResponse,
     ActiveWorkoutUpsert,
     WorkoutCreate,
@@ -150,6 +151,15 @@ async def get_active_workout(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ActiveWorkoutResponse | None:
+    # A soft-cleared slot returns the ROW with `workout_data: null` and its
+    # `client_seq`, not JSON null. The sequence is what lets a client tell
+    # "cleared at 7" from "never had one", which is the difference between
+    # correctly staying empty and resurrecting a finished workout. Only a user
+    # who has never saved at all gets null.
+    #
+    # Changing this contract was free: `getActiveWorkout` had no caller in
+    # `src/` — which is itself the bug 3b fixes, since the cloud pull never
+    # asked for the active workout and so nothing crossed devices.
     result = await db.execute(
         select(ActiveWorkout).where(ActiveWorkout.user_id == current_user.id)
     )
@@ -159,51 +169,161 @@ async def get_active_workout(
     return ActiveWorkoutResponse.model_validate(active)
 
 
-@router.put("/active", response_model=ActiveWorkoutResponse)
+async def _write_active(db, user_id, workout_data, client_seq):
+    """One statement, RETURNING the whole row. Returns the mapping, or None.
+
+    None means a FENCED write was suppressed: the stored sequence was already
+    at or above the incoming one.
+
+    Everything comes back from the statement itself rather than a follow-up
+    read. Two reasons, and the second was found by review:
+
+    1. `except IntegrityError` -> rollback -> re-query raises MissingGreenlet
+       under asyncpg (the rollback expires `current_user`), and the client
+       retries 5xx forever. Third and last instance of a bug class already
+       fixed in `create_workout` and `create_food_log`.
+    2. Reading the row back AFTER the commit is itself a 500 window — a
+       concurrent clear for the same user lands in between, the read finds
+       nothing, `scalar_one()` raises, and the queue retries that forever too.
+       Correct final data, wrong response; the contract is no 5xx.
+
+    `updated_at` is set explicitly because its `onupdate=func.now()` is an
+    ORM-side hook that does not fire for a Core insert.
+    """
+    stmt = pg_insert(ActiveWorkout).values(
+        id=uuid4(),
+        user_id=user_id,
+        workout_data=workout_data,
+        client_seq=1 if client_seq is None else client_seq,
+        updated_at=func.now(),
+    )
+
+    if client_seq is None:
+        # LEGACY branch, for clients deployed before the fence. No sequenced
+        # WHERE, so it behaves exactly as today (last write wins by arrival)
+        # and never sees a 409 — rejecting it would drop the user's
+        # in-progress workout on a client we cannot update in the same deploy.
+        # It still advances the high-water mark, so a sequenced client that
+        # follows rebases above it rather than being stranded.
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={
+                "workout_data": stmt.excluded.workout_data,
+                "client_seq": ActiveWorkout.client_seq + 1,
+                "updated_at": func.now(),
+            },
+        )
+    else:
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={
+                "workout_data": stmt.excluded.workout_data,
+                "client_seq": stmt.excluded.client_seq,
+                "updated_at": func.now(),
+            },
+            # The fence. PostgreSQL locks the conflicting row and re-evaluates
+            # this predicate after waiting, so a stale save cannot win a race:
+            # strictly lower is suppressed, equal yields one winner and one
+            # 409. The conflict target is the unique index on user_id
+            # (`ix_active_workout_user_id`, 0001).
+            where=ActiveWorkout.client_seq < stmt.excluded.client_seq,
+        )
+
+    # Explicit COLUMNS, not the entity: `returning(ActiveWorkout)` yields an
+    # ORM instance, and one obtained this way is expired by the commit below,
+    # so touching an attribute afterwards triggers a lazy load with no greenlet
+    # — the same MissingGreenlet failure by another route. Plain column values
+    # survive the commit because they are already materialised.
+    row = (
+        await db.execute(
+            stmt.returning(
+                ActiveWorkout.id,
+                ActiveWorkout.user_id,
+                ActiveWorkout.workout_data,
+                ActiveWorkout.client_seq,
+                ActiveWorkout.updated_at,
+            )
+        )
+    ).mappings().one_or_none()
+    await db.commit()
+    return row
+
+
+async def _stale_seq_conflict(db, user_id) -> JSONResponse:
+    """409 body, FLAT: {"detail": "stale client_seq", "client_seq": N}.
+
+    Built as a JSONResponse from the declared model rather than raised as
+    HTTPException(detail={...}), which would nest it one level deeper as
+    {"detail": {"detail": ..., "client_seq": ...}} and disagree with the
+    `ActiveWorkoutConflict` schema this route advertises. Review caught that:
+    3b would have followed the OpenAPI model, read `body.client_seq`, got
+    undefined, and been unable to rebase — losing the user's edit.
+
+    RETURNING cannot report the current sequence when the fence suppressed the
+    write, so it is read here. That read is NOT the post-commit window in
+    `_write_active`: clearing is a SOFT clear, so the fence row is retained and
+    a concurrent write can only move the bound HIGHER, which is still valid to
+    rebase above. The row vanishing means account deletion, the ordinary
+    authenticated-route race.
+    """
+    current = (
+        await db.execute(
+            select(ActiveWorkout.client_seq).where(ActiveWorkout.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content=ActiveWorkoutConflict(client_seq=current or 0).model_dump(mode="json"),
+    )
+
+
+@router.put(
+    "/active",
+    response_model=ActiveWorkoutResponse,
+    responses={409: {"model": ActiveWorkoutConflict}},
+)
 async def upsert_active_workout(
     payload: ActiveWorkoutUpsert,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ActiveWorkoutResponse:
-    result = await db.execute(
-        select(ActiveWorkout).where(ActiveWorkout.user_id == current_user.id)
+    row = await _write_active(
+        db, current_user.id, payload.workout_data, payload.client_seq
     )
-    active = result.scalar_one_or_none()
-    if active is not None:
-        active.workout_data = payload.workout_data
-        await db.commit()
-        await db.refresh(active)
-        return ActiveWorkoutResponse.model_validate(active)
+    if row is not None:
+        return ActiveWorkoutResponse.model_validate(dict(row))
 
-    # No row yet: insert, but tolerate a concurrent insert for the same user.
-    # The unique constraint on active_workout.user_id guarantees one row.
-    active = ActiveWorkout(user_id=current_user.id, workout_data=payload.workout_data)
-    db.add(active)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        result = await db.execute(
-            select(ActiveWorkout).where(ActiveWorkout.user_id == current_user.id)
-        )
-        active = result.scalar_one()
-        active.workout_data = payload.workout_data
-        await db.commit()
-
-    await db.refresh(active)
-    return ActiveWorkoutResponse.model_validate(active)
+    return await _stale_seq_conflict(db, current_user.id)
 
 
-@router.delete("/active", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/active",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={409: {"model": ActiveWorkoutConflict}},
+)
 async def clear_active_workout(
+    client_seq: int | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    await db.execute(
-        delete(ActiveWorkout).where(ActiveWorkout.user_id == current_user.id)
-    )
-    await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    # SOFT clear: the row is RETAINED with `workout_data = NULL`, and the
+    # clear takes a sequence like any other write.
+    #
+    # Deleting the row was the hole. A sequence written on a row that DELETE
+    # removes fences nothing — a save still in flight simply re-inserts, and
+    # the workout the user just finished comes back. Keeping the row means a
+    # late save at a lower sequence is suppressed by the same fence as any
+    # other stale write. A clear arriving before any save CREATES the fence
+    # row, which closes the absent-row case too.
+    #
+    # `client_seq` is a query parameter so an old client's bare DELETE still
+    # works: it takes the legacy branch, clears by arrival order exactly as
+    # today, and advances the high-water mark.
+    row = await _write_active(db, current_user.id, None, client_seq)
+    if row is not None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    return await _stale_seq_conflict(db, current_user.id)
 
 
 @router.delete("/deletions/by-client-id", status_code=status.HTTP_204_NO_CONTENT)

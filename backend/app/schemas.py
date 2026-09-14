@@ -173,6 +173,11 @@ class WorkoutListResponse(BaseModel):
 
 class ActiveWorkoutUpsert(BaseModel):
     workout_data: Any
+    # Optional on purpose. A client that omits it takes the LEGACY branch and
+    # keeps exactly today's arrival-ordered behaviour — deployed old clients
+    # cannot be updated in the same deploy, and rejecting them would drop the
+    # user's in-progress workout. Present means the fenced branch.
+    client_seq: Optional[int] = None
 
 
 class ActiveWorkoutResponse(BaseModel):
@@ -180,8 +185,24 @@ class ActiveWorkoutResponse(BaseModel):
 
     id: UUID
     user_id: UUID
-    workout_data: Any
+    # None means the slot is soft-cleared: the row is retained so its sequence
+    # can still fence a late save, which a deleted row could not.
+    workout_data: Any = None
+    client_seq: int = 0
     updated_at: Optional[datetime] = None
+
+
+class ActiveWorkoutConflict(BaseModel):
+    """Body of a 409 — the caller's sequence lost to a newer one.
+
+    It carries the server's current sequence so the client can REBASE rather
+    than discard: reissue the still-current desired state at a strictly higher
+    sequence, or drop it if superseded. Returning a bare 409 would leave the
+    client unable to make progress without guessing.
+    """
+
+    detail: str = "stale client_seq"
+    client_seq: int
 
 
 # --------------------------------------------------------------------------- #

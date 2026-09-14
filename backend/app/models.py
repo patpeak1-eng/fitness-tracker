@@ -2,6 +2,7 @@
 import uuid
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Date,
@@ -177,7 +178,14 @@ class ActiveWorkout(Base):
         nullable=False,
         index=True,
     )
-    workout_data = Column(JSONB, nullable=False)
+    # NULLABLE, deliberately: clearing is a SOFT clear that keeps the row.
+    # A fence written on a row that DELETE removes cannot fence anything — the
+    # next stale save re-inserts and the finished workout comes back.
+    workout_data = Column(JSONB, nullable=True)
+    # Per-user Lamport counter. An upsert applies only when the incoming value
+    # is strictly higher, so a save delayed past a newer save or past a clear
+    # loses instead of winning by arrival order.
+    client_seq = Column(BigInteger, nullable=False, server_default=text("0"))
     updated_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),

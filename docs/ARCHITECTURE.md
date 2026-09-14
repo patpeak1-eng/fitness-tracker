@@ -695,16 +695,69 @@ so every duplicate sync became a permanent retry loop. The precise trigger was
 attribute access on it during the re-query rather than the session as a whole
 being unusable. A savepoint was tried and the concurrency test still failed.
 The fix removes the exception path instead of depending on which explanation
-is right. **The same `IntegrityError`-then-re-query pattern still exists in
-`PUT /active`** (`workouts.py`, unchanged) — it catches `IntegrityError` from
-`commit()` and re-queries, the shape that 500s here. The food-log
-variant in `nutrition.py` **has since been fixed** the same way (S32,
-`ON CONFLICT DO NOTHING … RETURNING` plus a read-back).
+is right. The other two instances of this pattern are also gone: the food-log
+variant in `nutrition.py` (`ON CONFLICT DO NOTHING … RETURNING` plus a
+read-back) and `PUT /active`.
 
-One accepted edge: if an account is hard-deleted between the insert and the
-read-back, the cascade removes the row and the read-back raises, returning
-500. The data outcome is correct — account and row are both gone — and every
-other authenticated route races account deletion the same way.
+`PUT /active` uses `ON CONFLICT (user_id) DO UPDATE`, so one statement covers
+the first save, a repeat save, and a genuine race — insert and update are the
+same operation, and nothing can reach the session to poison it. The conflict
+target is the unique index `ix_active_workout_user_id` (0001), which is what
+guarantees one active workout per user.
+
+Its `DO UPDATE` sets `updated_at` **explicitly**. The column's
+`onupdate=func.now()` is an ORM-side hook and does not fire for a Core insert,
+so without that the timestamp would freeze at the row's first insert — silently,
+since nothing else about the response changes.
+
+**The response is built from `RETURNING`, never from a read-back.** Reading the
+row again after the commit is its own 500 window: a concurrent clear for the
+same user lands in between, the read finds nothing, and the handler raises —
+correct final data, wrong response, and the queue retries a 5xx for ever. The
+columns are returned explicitly rather than the ORM entity, because an entity
+obtained that way is expired by the commit and touching it afterwards triggers
+a lazy load with no greenlet — the same failure by another route.
+
+### The active-workout fence (S32 Fix 3, migration `0012`)
+
+One row per user is not enough on its own: writes still applied in **arrival**
+order, so a save delayed behind a newer save — or behind the clear that ends
+the workout — won simply by landing last, and the finished workout came back.
+
+`active_workout.client_seq` (BIGINT, default 0) is a per-user Lamport counter,
+and the fenced branch applies a write only `WHERE active_workout.client_seq <
+EXCLUDED.client_seq`. PostgreSQL locks the conflicting row and re-evaluates
+that predicate after waiting, so a stale save cannot win a race: strictly lower
+is suppressed, equal yields one winner and one 409.
+
+**Clearing is a soft clear** — the row is retained with `workout_data = NULL`,
+which is why that column is now nullable. A sequence written on a row that
+`DELETE` removes fences nothing: a save still in flight just re-inserts. The
+retained row also means a clear arriving *before* any save creates the fence,
+closing the absent-row case. `GET /active` therefore returns
+`{workout_data: null, client_seq}` for a cleared slot rather than JSON null —
+only a user who has never saved gets null. That contract change was free
+because `getActiveWorkout` had no caller, which is itself the gap 3b closes.
+
+**A suppressed write returns 409 carrying the server's current sequence**, so
+the client rebases — reissues the still-current desired state above that bound
+— instead of discarding the user's edit. Reading the bound after suppression is
+safe precisely because the clear is soft: the fence row is retained, so a
+concurrent write can only move the bound higher.
+
+**An unversioned request takes a separate legacy statement** with no fenced
+`WHERE`, behaving exactly as before and never seeing a 409 — clients deployed
+before this cannot be updated in the same deploy, and rejecting them would drop
+the user's in-progress workout. Those writes still advance the high-water mark,
+so a sequenced client rebases above them rather than being stranded. *Transition
+limitation:* unversioned requests remain arrival-ordered until those clients are
+gone.
+
+One accepted edge, **in `POST ""`** — which still reads the row back, unlike
+`PUT /active` above: if an account is hard-deleted between the insert and that
+read-back, the cascade removes the row and the read-back raises, returning 500.
+The data outcome is correct — account and row are both gone — and every other
+authenticated route races account deletion the same way.
 
 > This section describes the branch `traycer/fitness-tracker-zesty-walrus`, not
 > `main`. Open items and review state live in `SESSION_START.md`.
