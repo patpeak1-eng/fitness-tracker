@@ -83,6 +83,12 @@ APP KNOWLEDGE — you know everything about this app:
   when present) — refer to those names only. The lists may be partial; do
   not invent a template that is not listed, and do not infer that one does
   not exist from its omission
+- Editing a template: on the workout prep screen, each exercise has a remove
+  control in its header, and sets can be added or removed on the rows. A
+  workout must keep at least one exercise. Saving one of the user's own
+  custom templates under the same name updates it in place. A built-in is
+  never modified — saving asks for a name and creates the user's own copy,
+  leaving the built-in as it shipped
 - Exercise Library (/exercises): illustrated built-in exercises across
   Weights, Calisthenics, Cardio, and Yoga, plus the user's custom exercises,
   with filters by muscle, category, and equipment. The subset compatible
