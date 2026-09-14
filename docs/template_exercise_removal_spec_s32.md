@@ -121,15 +121,15 @@ approved prep-screen route for the same outcome.
 ### 4b. Owner decisions reopened by review
 
 A–C decided by the owner 2026-09-13 in his own words ("Accept all three
-recommendations in spec 4b"). D is new in revision 3 — recommended, awaiting
-the owner.
+recommendations in spec 4b"). D decided by the owner 2026-09-13 ("Accept
+decision D").
 
 | # | Decision | Decided / recommended |
 |---|---|---|
 | A | START after a removal on an own custom template | **Decided: keep today's auto-save** (decision 4). START already invokes the structural save for dirty own-custom prep; set fields also have their separate immediate write-through through `syncToTemplate` |
 | B | Fork-name collisions (nothing prevents duplicate names locally or server-side: `saveCustomTemplate` always appends; `custom_templates.name` has no uniqueness constraint) | **Decided, rule made action-aware (N1):** a submission whose trimmed name **exactly** equals `sourceTemplate.name` of an own custom is the in-place-update branch and is allowed without collision validation. Every other submission is a create/fork: compare its normalized name with every custom template **including the source** and reject a match inline (modal stays open, `saveTemplateFromPrep` not called). So a case-only rename of your own custom is refused rather than silently forked into a normalized duplicate. Built-in fork prefill uses the first free normalized name. UI-only, `TrackWorkout.jsx` + the §3 helper |
 | C | Scope growth: guards in `WorkoutContext.jsx` and `ActiveWorkoutService.js` (§6) | **Decided: accept the two guards.** Each is a few lines, both close real holes in the invariant the owner asked for, and the zone was already HIGH |
-| D | **Same-session `backendId` loss (N2, verified).** The cloud acknowledgement in `saveCustomTemplate` (~3244-3252) and in `writeTemplate`'s create branch (~2760-2767) writes `backendId` into storage only, never into provider state. `writeTemplate` then reads the stale provider object (~2728), overwrites the stored row with it (~2748-2752) and POSTs instead of PUTs (~2757-2759): the stored `backendId` is erased and a second cloud row is created. This feature's main path — fork a built-in, then START (auto-save on the now-custom source) — triggers it | **Recommended: fix in scope.** In both acknowledgement handlers, also adopt the id into provider state: `setTemplates(prev => prev.map(t => t.id === localId && !t.backendId ? { ...t, backendId: resp.id } : t))`. Functional update, no new write path, no schema change. Regression test in §7 (test 3b). Excluding it would ship a feature whose primary flow duplicates cloud rows |
+| D | **Same-session `backendId` loss (N2, verified).** The cloud acknowledgement in `saveCustomTemplate` (~3244-3252) and in `writeTemplate`'s create branch (~2760-2767) writes `backendId` into storage only, never into provider state. `writeTemplate` then reads the stale provider object (~2728), overwrites the stored row with it (~2748-2752) and POSTs instead of PUTs (~2757-2759): the stored `backendId` is erased and a second cloud row is created. This feature's main path — fork a built-in, then START (auto-save on the now-custom source) — triggers it | **Decided: fix in scope.** In both acknowledgement handlers, also adopt the id into provider state: `setTemplates(prev => prev.map(t => t.id === localId && !t.backendId ? { ...t, backendId: resp.id } : t))`. Functional update, no new write path, no schema change. Regression test in §7 (test 3b). Excluding it would ship a feature whose primary flow duplicates cloud rows |
 
 ## 5. Files
 
