@@ -253,6 +253,64 @@ writer, add the conditional acknowledgement, then the executor and gated
 push, then the pull merge. Enabling the push before the first two is the
 bypass and the data-loss case respectively.
 
+### 3b implementation plan — written after 3a shipped (`8849a81`)
+
+Ordered, because two of these are prerequisites rather than refinements:
+enabling the push before steps 1 and 2 is the bypass and the data-loss case
+respectively.
+
+**Step 1 — retire the unversioned writer.** `StorageService.syncToApi`
+(`:485-507`) calls `saveActiveWorkout(state.activeWorkout)` /
+`clearActiveWorkout()` with no sequence, and `WorkoutContext.jsx:1606` fires
+it on every history change. Remove **only** the active-workout leg; the rest
+of `syncToApi` is unrelated and stays. Until this is gone the current client
+bypasses its own fence, and that write can clobber newer remote state.
+
+**Step 2 — conditional acknowledgement, in the queue.** `flush()` removes the
+completed op with `loadQueue().filter(o => o.id !== op.id)` (`:167`, and again
+at `:197`). `enqueue` sets `id` to `` `${type}:${key}` `` (`:86-94`), so a
+replacing op carries the **same id** — "remove exactly this op" removes its
+replacement. Revision A in flight, user edits to revision B, A succeeds, B is
+deleted; the server stays at A and the newer in-progress workout is lost.
+
+Add `SyncQueue.acknowledge(op, { revision, seq })`: removes only while the
+stored entry still matches that immutable pair, otherwise leaves it. `flush()`
+uses it for both success and dead-letter paths. This is a **queue-wide**
+change, so every existing op type must keep working — ops without a revision
+acknowledge unconditionally, exactly as today.
+
+**Step 3 — the executor and the gated push.** Active-workout ops carry
+`desiredRevision` (immutable, minted per distinct desired state) and the exact
+`client_seq` dispatched. `seq = max(localSeq, lastServerSeq) + 1`, both durable
+and profile-scoped. Push on `activeWorkout` change, debounced, only after
+hydration for the current profile and only when cloud-eligible; timers cancel
+on profile change. Empty preparing workouts are never pushed.
+
+**Step 4 — 409 rebase.** `saveActiveWorkout` / `clearActiveWorkout` must
+surface the structured body — they stringify it today (`ApiService.js:129-150`)
+— so the executor can read `client_seq` from the flat `ActiveWorkoutConflict`
+3a now serves. On 409: reissue the still-current desired state as a **new**
+revision above the returned bound, or drop it if superseded. Never resend the
+stale attempt. At most one rebase per response, then backoff.
+
+Do **not** widen `SyncQueue`'s retryable handling: `ApiService.js:317` already
+sets `err.retryable` for the deletion 404 and `SyncQueue.js:178` already
+honours it. Express the 409 within the executor and step 2's contract.
+
+**Step 5 — the pull.** `getActiveWorkout` has no caller, and the cloud pull
+fetches seven resources without it (`WorkoutContext.jsx:1007-1018`). Add it,
+give it the missing `r.ok` check, and merge against durable desired state:
+a pending or confirmed clear at a sequence at or above the server's means the
+server copy is stale. Without this the cross-device criterion cannot be met at
+all, no matter what the server does.
+
+**Zone:** HIGH — `WorkoutContext.jsx`, `SyncQueue.js`, `ApiService.js`,
+`StorageService.js`. `ApiService.js` alone is HIGH by APP INVARIANTS.
+
+**Risk ranked:** step 2 is the most dangerous, because it changes queue
+behaviour for **every** op type, not just this one. Step 1 is the most likely
+to be forgotten, and silently defeats the whole feature.
+
 ### Done means
 
 Start a workout with an exercise on one device → appears on another.
