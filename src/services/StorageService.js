@@ -1,4 +1,4 @@
-import { isAvailable, saveWorkout, saveActiveWorkout, clearActiveWorkout } from './ApiService';
+import { isAvailable, saveWorkout } from './ApiService';
 import { DEFAULT_VOICE_ID } from '../constants/voiceIds';
 import { DEFAULT_PERSONALITY } from '../constants/coachPersonalities';
 import { STORAGE_KEYS } from '../constants/storageKeys';
@@ -44,12 +44,20 @@ const KEY = {
     // deleted. An entry retires when a pull shows the row gone AND no upload
     // of it is still outstanding; if a pull finds it still there, the delete
     // is re-issued. See deleteWorkout / refreshProfileData.
-    deletedWorkouts: 'fitness_deleted_workouts'
+    deletedWorkouts: 'fitness_deleted_workouts',
+    // S32 Fix 3b. The DURABLE record of what this profile wants the server's
+    // active-workout slot to be: {desiredRevision, clientSeq, desiredWorkout,
+    // status, lastServerSeq}. `desiredWorkout: null` is a CLEAR, and that is
+    // the whole reason this key exists separately from `activeWorkout` --
+    // clearing removes that key, so without this there is nothing on disk
+    // saying the workout was finished, and boot resurrects it from the server.
+    activeSync: 'fitness_active_sync'
 };
 
 const PROFILE_SCOPED_BASE_KEYS = [
     KEY.history,
     KEY.activeWorkout,
+    KEY.activeSync,
     KEY.assessments,
     KEY.theme,
     KEY.units,
@@ -385,6 +393,22 @@ const StorageService = {
         this.saveDeletedWorkouts(uid, next);
         return next;
     },
+    loadActiveSync(uid) {
+        return readJSON(KEY.activeSync, null, { uid });
+    },
+
+    // Returns whether the record actually reached storage.
+    //
+    // Callers MUST check it. `safeSetItem` swallows a quota failure, so
+    // writing the record, ignoring the result, and then clearing the local
+    // active workout loses the clear entirely: nothing on disk records that
+    // the workout was finished, and the next pull brings it back from the
+    // server. Record first, and only touch the active-workout key if this
+    // returned true. Same defect class as saveHistory's ignored boolean.
+    saveActiveSync(uid, record) {
+        return writeJSON(KEY.activeSync, record, { uid });
+    },
+
     saveActiveWorkout(uid, workoutOrNull) {
         if (workoutOrNull) writeJSON(KEY.activeWorkout, workoutOrNull, { uid });
         else remove(KEY.activeWorkout, { uid });
@@ -499,12 +523,17 @@ const StorageService = {
                     await saveWorkout(lastWorkout).catch(e => console.warn('API sync: saveWorkout failed', e));
                 }
             }
-            // Sync active workout
-            if (state.activeWorkout) {
-                await saveActiveWorkout(state.activeWorkout).catch(e => console.warn('API sync: saveActiveWorkout failed', e));
-            } else {
-                await clearActiveWorkout().catch(e => console.warn('API sync: clearActiveWorkout failed', e));
-            }
+            // The active workout is NOT synced here any more (S32 Fix 3b).
+            //
+            // This leg sent it with no `client_seq`, which took the server's
+            // legacy branch and applied by ARRIVAL order — so it overtook a
+            // properly sequenced save still in flight, and could overwrite
+            // newer remote state. The client would have been walking around
+            // its own fence. It also fired on every history change, which is
+            // not when the active workout changes.
+            //
+            // WorkoutContext owns it now: a sequenced push through the sync
+            // queue, keyed per profile, with a durable desired-state record.
             return true;
         } catch (e) {
             console.warn('API sync failed, localStorage is source of truth', e);

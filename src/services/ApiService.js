@@ -123,28 +123,69 @@ export const saveWorkout = async (workout) => {
   return r.json();
 };
 
-export const getActiveWorkout = () =>
-  apiFetch('/api/workouts/active').then(r => r.json());
-
-export const saveActiveWorkout = async (workout) => {
-  const r = await apiFetch('/api/workouts/active', {
-    method: 'PUT',
-    body: JSON.stringify({ workout_data: workout })
-  });
+// Returns `{workout_data, client_seq, ...}` — or null when this profile has
+// never saved. A SOFT-CLEARED slot comes back as a row with
+// `workout_data: null` and its sequence, which is what lets a caller tell
+// "cleared at 7" from "never had one"; treating both as null resurrects a
+// finished workout.
+//
+// The `r.ok` check is new: this went straight to `.json()`, so a 401 or 500
+// body parsed into something that looked like an answer.
+export const getActiveWorkout = async () => {
+  const path = '/api/workouts/active';
+  const r = await apiFetch(path);
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw httpError(r, '/api/workouts/active', text);
+    throw httpError(r, path, text);
   }
   return r.json();
 };
 
-export const clearActiveWorkout = async () => {
-  const r = await apiFetch('/api/workouts/active', {
-    method: 'DELETE'
-  });
+// A 409 from the active-workout routes is NOT a rejected payload — it means a
+// newer sequence won, and the body carries the server's current `client_seq`
+// so the caller can REBASE above it. Stringifying it into the message (what
+// this used to do) left the caller with nothing to rebase onto, so the user's
+// edit could only be discarded.
+const activeConflict = (r, path, body) => {
+  const err = httpError(r, path, JSON.stringify(body));
+  err.status = 409;
+  // Flat, matching the ActiveWorkoutConflict model the server advertises.
+  err.serverSeq = Number(body?.client_seq ?? 0);
+  return err;
+};
+
+const readConflictBody = async (r) => {
+  try { return await r.json(); } catch { return null; }
+};
+
+export const saveActiveWorkout = async (workout, clientSeq = null) => {
+  const path = '/api/workouts/active';
+  const body = { workout_data: workout };
+  // Omitted entirely when absent — the server's LEGACY branch keys on the
+  // field being missing, and sending an explicit null would not select it.
+  if (clientSeq != null) body.client_seq = clientSeq;
+
+  const r = await apiFetch(path, { method: 'PUT', body: JSON.stringify(body) });
+  if (r.status === 409) throw activeConflict(r, path, await readConflictBody(r));
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    throw httpError(r, '/api/workouts/active', text);
+    throw httpError(r, path, text);
+  }
+  return r.json();
+};
+
+export const clearActiveWorkout = async (clientSeq = null) => {
+  // Query parameter, not a body: DELETE carries no payload here, and this is
+  // the shape the server accepts.
+  const path = clientSeq != null
+    ? `/api/workouts/active?client_seq=${encodeURIComponent(clientSeq)}`
+    : '/api/workouts/active';
+
+  const r = await apiFetch(path, { method: 'DELETE' });
+  if (r.status === 409) throw activeConflict(r, path, await readConflictBody(r));
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw httpError(r, path, text);
   }
   // 204 No Content on success — nothing to parse.
 };

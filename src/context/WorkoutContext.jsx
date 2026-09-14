@@ -519,6 +519,45 @@ export const planStampedIdentityAdoption = (op, saved, storedHistory) => {
     );
 };
 
+// --------------------------------------------------------------------------- //
+// S32 Fix 3b — the active-workout slot's desired state.
+//
+// The server fences by sequence (3a): a write applies only when its client_seq
+// is strictly higher than the stored one. These decide what this device WANTS
+// the slot to be, and at what sequence it asks.
+// --------------------------------------------------------------------------- //
+
+// The queue key MUST be injective per profile. `SyncQueue.enqueue` dedupes on
+// (type, key) and its id is `${type}:${key}` — `uid` is in NEITHER — so a
+// constant key would let one profile's active workout replace another's on the
+// same browser. Profiles still exist as a feature; this cannot rest on the
+// owner's one-device-per-person preference.
+export const activeSyncKey = (uid) => `active_workout:${uid}`;
+
+// Lamport: strictly above anything this device has sent AND anything the
+// server has told us about. `lastServerSeq` is advanced by `max` on a pull and
+// is never lowered, so learning about a higher sequence elsewhere cannot make
+// this device start losing races it should win.
+export const nextClientSeq = (record) =>
+    Math.max(Number(record?.clientSeq) || 0, Number(record?.lastServerSeq) || 0) + 1;
+
+// A new desired state. `desiredWorkout: null` is a CLEAR and is a first-class
+// value here — that is the whole reason this record exists apart from the
+// active-workout key, which clearing removes.
+export const planActiveSync = (record, workoutOrNull, revision) => ({
+    lastServerSeq: Number(record?.lastServerSeq) || 0,
+    clientSeq: Number(record?.clientSeq) || 0,
+    desiredRevision: revision,
+    desiredWorkout: workoutOrNull || null,
+    status: 'pending',
+});
+
+// An empty preparing workout is never pushed. `startWorkout` creates one the
+// moment the user opens the screen, and hydration rejects exactly that shape,
+// so pushing it would occupy another device's slot with nothing.
+export const isPushableActiveWorkout = (workout) =>
+    Boolean(workout) && Array.isArray(workout.exercises) && workout.exercises.length > 0;
+
 export const chooseDeletionTarget = (workout) => {
     if (workout?.client_id) return { clientId: workout.client_id, backendId: null };
     if (workout?.backendId) return { clientId: null, backendId: workout.backendId };
@@ -610,6 +649,21 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // request and the user may have switched profiles, and an unscoped
     // setHistory would write one profile's identity onto another's list. Same
     // ownership rule as dropLocallyAsDeleted and dropOwned.
+    // Dispatch the current desired state. Held in a ref because the persist
+    // effect above runs before executors are registered on the first render.
+    const pushActiveWorkoutRef = useRef(null);
+    pushActiveWorkoutRef.current = (uid, record) => {
+        SyncQueue.enqueue({
+            type: 'active_workout',
+            key: activeSyncKey(uid),
+            payload: { workout: record.desiredWorkout },
+            uid,
+            revision: record.desiredRevision,
+            seq: nextClientSeq(record),
+        });
+        SyncQueue.flush().catch(() => {});
+    };
+
     const adoptStampedIdentity = useCallback((op, saved) => {
         const stored = StorageService.loadProfileState(op?.uid).history || [];
         const updated = planStampedIdentityAdoption(op, saved, stored);
@@ -636,6 +690,67 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // one place with access to both ApiService and StorageService) and the
     // queue's flush triggers (online / foreground / boot) are installed once.
     useEffect(() => {
+        // Active workout. The op carries its IMMUTABLE identity — the revision
+        // it is sending and the exact sequence it asks for — so `acknowledge`
+        // can tell this op from a newer one that replaced it under the same id.
+        SyncQueue.registerExecutor('active_workout', async op => {
+            const { uid, payload } = op;
+            const seq = op.seq;
+            try {
+                if (payload?.workout) {
+                    await ApiService.saveActiveWorkout(payload.workout, seq);
+                } else {
+                    await ApiService.clearActiveWorkout(seq);
+                }
+                // Confirmed at this sequence. Record it so the next dispatch
+                // starts above it and a pull cannot argue with it.
+                const stored = StorageService.loadActiveSync(uid) || {};
+                if (stored.desiredRevision === op.revision) {
+                    StorageService.saveActiveSync(uid, {
+                        ...stored,
+                        clientSeq: seq,
+                        lastServerSeq: Math.max(Number(stored.lastServerSeq) || 0, seq),
+                        status: 'confirmed',
+                    });
+                }
+                return;
+            } catch (err) {
+                if (err?.status !== 409) throw err;
+
+                // REBASE, never discard. The server tells us the sequence that
+                // beat us; the user's edit is still what they want, so it is
+                // re-asked above that bound. Letting the 409 propagate would
+                // reach the queue's non-auth-4xx branch and dead-letter it.
+                const stored = StorageService.loadActiveSync(uid) || {};
+                const bound = Number(err.serverSeq) || 0;
+                const rebased = {
+                    ...stored,
+                    lastServerSeq: Math.max(Number(stored.lastServerSeq) || 0, bound),
+                };
+                // Superseded locally — a newer desired state is already queued
+                // and will carry the edit forward. Nothing to re-ask.
+                if (stored.desiredRevision !== op.revision) {
+                    StorageService.saveActiveSync(uid, rebased);
+                    return;
+                }
+                // Persist and enqueue the replacement BEFORE returning success,
+                // so the conditional acknowledge sees the revision mismatch and
+                // leaves the new op in place rather than removing it.
+                const next = { ...rebased, status: 'pending' };
+                if (!StorageService.saveActiveSync(uid, next)) {
+                    throw err;   // nothing durable — let it retry rather than lie
+                }
+                SyncQueue.enqueue({
+                    type: 'active_workout',
+                    key: activeSyncKey(uid),
+                    payload,
+                    uid,
+                    revision: op.revision,
+                    seq: nextClientSeq(next),
+                });
+            }
+        });
+
         SyncQueue.registerExecutor('workout', async op => {
             const saved = await ApiService.saveWorkout(op.payload);
             // The server retains deleted rows and returns them marked, so a
@@ -1589,9 +1704,33 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // commit, writing the pre-restore null over a live/paused session
     // (reproduced on reload in dev).
     useEffect(() => {
-        if (currentProfile && activeWorkoutHydratedFor === currentProfile.id) {
-            StorageService.saveActiveWorkout(currentProfile.id, activeWorkout || null);
+        if (!currentProfile || activeWorkoutHydratedFor !== currentProfile.id) return;
+        const uid = currentProfile.id;
+
+        // Record FIRST, and only touch the active-workout key if that write
+        // actually landed.
+        //
+        // The order alone is not enough: writes swallow a quota failure and
+        // return false. Removing the active-workout key after a failed record
+        // write loses the clear completely — nothing on disk says the workout
+        // was finished, so the next pull brings it back from the server. That
+        // is the exact resurrection the record exists to prevent. On failure,
+        // leave the previous local state alone; the next change retries.
+        const record = planActiveSync(
+            StorageService.loadActiveSync(uid),
+            activeWorkout || null,
+            crypto.randomUUID(),
+        );
+        if (!StorageService.saveActiveSync(uid, record)) {
+            console.warn('[active-sync] desired state not stored; local state left as-is');
+            return;
         }
+        StorageService.saveActiveWorkout(uid, activeWorkout || null);
+
+        if (!canSyncRef.current()) return;
+        // An empty preparing workout is not worth a sequence.
+        if (!isPushableActiveWorkout(activeWorkout) && activeWorkout) return;
+        pushActiveWorkoutRef.current?.(uid, record);
     }, [activeWorkout, currentProfile, activeWorkoutHydratedFor]);
 
     // Auto-sync to API after a workout is completed (i.e. history changes).

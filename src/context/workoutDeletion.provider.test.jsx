@@ -113,7 +113,12 @@ let container, root;
 const mount = async () => {
     container = document.createElement('div');
     document.body.appendChild(container);
-    const timerApiRef = { current: {} };
+    // The real TimerContext supplies these; cancelWorkout/finishWorkout call
+    // them unconditionally, so an empty ref throws on the way out of a workout.
+    const timerApiRef = { current: {
+        skipRest: () => {}, resetWorkTimer: () => {}, startRest: () => {},
+        pauseWorkTimer: () => {}, startWorkTimer: () => {},
+    } };
     await act(async () => {
         root = createRoot(container);
         root.render(
@@ -928,5 +933,89 @@ describe('boot replay', () => {
             'identical from the queue side'
         ).toHaveBeenCalledWith('cid-1');
         expect(pendingDeletes(), 'a confirmed delete must leave the queue').toEqual([]);
+    });
+});
+
+// --------------------------------------------------------------------------- //
+// S32 Fix 3b group B — the active-workout slot, through the real provider.
+//
+// Driven through startWorkout + addExerciseToWorkout, the API the UI actually
+// calls, rather than by assigning state. An empty preparing workout is
+// deliberately not pushable, so the exercise is what makes it real.
+// --------------------------------------------------------------------------- //
+describe('active-workout sync', () => {
+    const startReal = async () => {
+        await act(async () => { ctx.startWorkout('Leg Day'); });
+        const id = ctx.exercises[0]?.id;
+        await act(async () => { ctx.addExerciseToWorkout(id); });
+    };
+
+    it('pushes a started workout WITH a sequence, never unversioned', async () => {
+        // Unversioned writes take the server's LEGACY branch and apply by
+        // arrival order — the client would be walking around its own fence.
+        await mount();
+        await startReal();
+        await act(async () => { await SyncQueue.flush(); });
+
+        expect(ApiService.saveActiveWorkout, 'the active workout was never pushed')
+            .toHaveBeenCalled();
+        const [, seq] = ApiService.saveActiveWorkout.mock.calls.at(-1);
+        expect(seq, 'the push carried no client_seq').toBeGreaterThan(0);
+    });
+
+    it('does NOT push the empty preparing workout startWorkout creates', async () => {
+        await mount();
+        await act(async () => { ctx.startWorkout('Leg Day'); });
+        await act(async () => { await SyncQueue.flush(); });
+
+        expect(ApiService.saveActiveWorkout,
+            'an empty slot would occupy another device with nothing'
+        ).not.toHaveBeenCalled();
+    });
+
+    it('does NOT clear the local workout when the desired-state write fails', async () => {
+        // Correction A. Removing the active-workout key after a FAILED record
+        // write loses the clear entirely: nothing on disk says the workout was
+        // finished, so the next pull brings it back from the server.
+        await mount();
+        await startReal();
+        expect(ctx.activeWorkout, 'precondition: a workout must be active').toBeTruthy();
+
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSet = localStorage.setItem.bind(localStorage);
+        vi.spyOn(localStorage, 'setItem').mockImplementation((k, v) => {
+            if (k.includes('fitness_active_sync')) throw new Error('QuotaExceededError');
+            return realSet(k, v);
+        });
+
+        await act(async () => { ctx.cancelWorkout(); });
+
+        const stored = StorageService.loadProfileState(USER.id).activeWorkout;
+        expect(stored,
+            'the local active workout was cleared with no durable record of the clear'
+        ).toBeTruthy();
+    });
+
+    it('rebases above the server sequence on a 409 instead of dead-lettering', async () => {
+        // A 409 is not a rejected payload — a newer sequence won. Letting it
+        // propagate reaches the queue's non-auth-4xx branch and the user's
+        // edit is discarded for good.
+        await mount();
+        ApiService.saveActiveWorkout.mockRejectedValueOnce(
+            Object.assign(new Error('409'), { status: 409, serverSeq: 9 })
+        );
+
+        await startReal();
+        await act(async () => { await SyncQueue.flush(); });
+
+        // The push flushes as it enqueues, so the rebase has already been
+        // dispatched by now. What must be true is that the edit was RE-ASKED
+        // above the bound, not that it is still sitting in the queue.
+        const seqs = ApiService.saveActiveWorkout.mock.calls.map(([, s]) => s);
+        expect(seqs.length, 'the 409 was not retried at all').toBeGreaterThan(1);
+        expect(seqs.at(-1), 'the retry must ask ABOVE the server bound').toBeGreaterThan(9);
+
+        const dead = JSON.parse(localStorage.getItem('fitness_sync_deadletter') || '[]');
+        expect(dead, 'a 409 must never dead-letter').toHaveLength(0);
     });
 });
