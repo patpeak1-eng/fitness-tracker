@@ -88,6 +88,35 @@ describe("ActiveWorkoutService", () => {
     expect(workout.exercises[0].sets).toHaveLength(2);
   });
 
+  it("removeExercise removes only the targeted exercise instance", () => {
+    const workout = {
+      ...mkWorkout(),
+      exercises: [
+        { id: "exi_1", sets: [{ id: "set_1", reps: 5 }] },
+        { id: "exi_2", sets: [{ id: "set_2", reps: 8 }] },
+      ],
+    };
+
+    const next = ActiveWorkoutService.removeExercise(workout, { exerciseInstanceId: "exi_1" });
+
+    expect(next.exercises.map((e) => e.id)).toEqual(["exi_2"]);
+    expect(workout.exercises).toHaveLength(2);
+  });
+
+  it("removeExercise preserves the workout's final exercise", () => {
+    // An empty workout cannot start; the service refuses independently of the
+    // context guard (S32 template removal spec, decision 3).
+    const workout = {
+      ...mkWorkout(),
+      exercises: [{ id: "exi_1", sets: [{ id: "set_1", reps: 5 }] }],
+    };
+
+    const next = ActiveWorkoutService.removeExercise(workout, { exerciseInstanceId: "exi_1" });
+
+    expect(next).toBe(workout);
+    expect(next.exercises).toHaveLength(1);
+  });
+
   it("removeSet preserves an exercise's final set", () => {
     const workout = {
       ...mkWorkout(),

@@ -264,6 +264,45 @@
     opacity: 1;
 }
 
+/* Remove-exercise control in the prep header (S32). Row-control size 20 per
+   DESIGN_TOKENS §4; destructive intent uses the danger token only. */
+.remove-exercise-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.remove-exercise-btn:hover:not([aria-disabled="true"]),
+.remove-exercise-btn:focus-visible:not([aria-disabled="true"]) {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.remove-exercise-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.remove-exercise-btn[aria-disabled="true"] {
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.remove-exercise-reason {
+    margin: -0.75rem 0 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
 .input-target {
     color: var(--primary) !important;
     border-color: rgba(var(--primary-rgb), 0.3) !important;

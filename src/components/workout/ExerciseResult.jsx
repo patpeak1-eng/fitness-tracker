@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { Info, Plus, Trash2 } from 'lucide-react';
+import { Info, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import InstructionModal from './InstructionModal';
 import './ExerciseResult.css';
 
-const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [] }) => {
+// Prep mode may pass `onRequestRemoveExercise(instanceId, name)`: the page owns
+// the confirmation and the collection (S32). `canRemoveExercise` is false when
+// this is the last exercise — the control stays visible, disabled, with a
+// reason, rather than vanishing.
+const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null }) => {
     const { units, updateSet, addSet, removeSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
+    const showRemoveExercise = isPrep && !!workoutData && typeof onRequestRemoveExercise === 'function';
+    const removeReasonId = workoutData ? `remove-reason-${workoutData.id}` : undefined;
 
     // CRITICAL: Find the exercise safely
     const safeExercises = exercises || [];
@@ -30,7 +36,10 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
     if (!exercise || exercise.id === 'unknown') {
         return (
             <div className="p-4 border border-red-500 bg-red-500/10 rounded-lg my-2">
-                <p className="text-red-500 font-bold">⚠️ Data Mismatch: {exerciseId}</p>
+                <p className="text-red-500 font-bold">
+                    <AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
+                    Data Mismatch: {exerciseId}
+                </p>
             </div>
         );
     }
@@ -50,7 +59,32 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                         <Info size={16} />
                     </button>
                 </div>
+                {showRemoveExercise && (
+                    // aria-disabled, not disabled: a `disabled` button leaves the
+                    // tab order, so a screen reader never reaches it and the
+                    // reason below is never announced. Keep it focusable and
+                    // refuse the action in the handler (S32 code review P3).
+                    <button
+                        type="button"
+                        className="remove-exercise-btn"
+                        aria-label={`Remove ${exercise.name} from this workout`}
+                        title={canRemoveExercise ? `Remove ${exercise.name}` : 'A workout needs at least one exercise'}
+                        aria-describedby={canRemoveExercise ? undefined : removeReasonId}
+                        aria-disabled={!canRemoveExercise}
+                        onClick={() => {
+                            if (!canRemoveExercise) return;
+                            onRequestRemoveExercise(workoutData.id, exercise.name);
+                        }}
+                    >
+                        <Trash2 size={18} />
+                    </button>
+                )}
             </header>
+            {showRemoveExercise && !canRemoveExercise && (
+                <p id={removeReasonId} className="remove-exercise-reason">
+                    This is the only exercise left. A workout needs at least one.
+                </p>
+            )}
 
             {/* Sets Header */}
             <div className="sets-header" style={gridStyle}>

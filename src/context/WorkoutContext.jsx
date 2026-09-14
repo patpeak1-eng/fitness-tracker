@@ -632,6 +632,45 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         }
     }, []);
 
+    // A template created on this device gets its server id back asynchronously.
+    // Write it to the ORIGINATING profile's storage first, then into provider
+    // state only while that profile is still on screen — the same ownership
+    // gate as adoptStampedIdentity above. Before S32 the id reached storage
+    // only, so the next in-place save read a provider object with no
+    // backendId, overwrote the stored row without it, and POSTed a second
+    // cloud row (docs/template_exercise_removal_spec_s32.md, decision D).
+    const adoptTemplateBackendId = useCallback((uid, localId, backendId) => {
+        if (!uid || !localId || !backendId) return;
+        const stored = StorageService.loadCustomTemplates(uid);
+        const idx = stored.findIndex(t => t.id === localId);
+        if (idx !== -1) {
+            stored[idx].backendId = backendId;
+            StorageService.saveCustomTemplates(uid, stored);
+        }
+        if (latestProfileIdRef.current === uid) {
+            setTemplates(prev => prev.map(t =>
+                (t.id === localId && t.isCustom && !t.backendId) ? { ...t, backendId } : t
+            ));
+        }
+    }, []);
+    // Create requests still in flight, by profile + local template id.
+    // writeTemplate consults this so any saves that land before the create
+    // settles coalesce into one PUT of the latest payload instead of issuing
+    // a second POST (decision D-ii).
+    const pendingTemplateCreatesRef = useRef(new Map());
+    const templateCreateKey = (uid, localId) => `${uid}:${localId}`;
+    const trackTemplateCreate = (uid, localId, promise) => {
+        const key = templateCreateKey(uid, localId);
+        const record = { promise, latestTemplate: null, updateScheduled: false };
+        pendingTemplateCreatesRef.current.set(key, record);
+        promise.finally(() => {
+            if (pendingTemplateCreatesRef.current.get(key) === record) {
+                pendingTemplateCreatesRef.current.delete(key);
+            }
+        }).catch(() => {});
+        return promise;
+    };
+
     // Retry queue for failed cloud pushes. Executors are registered here (the
     // one place with access to both ApiService and StorageService) and the
     // queue's flush triggers (online / foreground / boot) are installed once.
@@ -664,16 +703,10 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         SyncQueue.registerExecutor('profile_settings', op => ApiService.saveProfile(op.payload));
         SyncQueue.registerExecutor('template', async op => {
             const resp = await ApiService.saveCustomTemplate(op.payload);
-            // Same backendId write-back as the direct push path, so a replayed
-            // template can be deleted/deduped later.
-            if (resp?.id && op.uid) {
-                const stored = StorageService.loadCustomTemplates(op.uid);
-                const idx = stored.findIndex(t => t.id === op.payload.id);
-                if (idx !== -1) {
-                    stored[idx].backendId = resp.id;
-                    StorageService.saveCustomTemplates(op.uid, stored);
-                }
-            }
+            // Same backendId adoption as the direct push path — storage AND
+            // provider state — so a replayed template can be updated in place,
+            // deleted or deduped later.
+            if (resp?.id && op.uid) adoptTemplateBackendId(op.uid, op.payload.id, resp.id);
         });
         // In-place template overwrite replay. A 404 (template deleted
         // server-side) is a non-auth 4xx → dead-letter, which is correct.
@@ -737,7 +770,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         SyncQueue.init();
         // dropLocallyAsDeleted is a []-deps useCallback, so it is stable and
         // listing it does not re-register the executors.
-    }, [dropLocallyAsDeleted]);
+    }, [adoptStampedIdentity, adoptTemplateBackendId, dropLocallyAsDeleted]);
 
     // User-Specific State (Reset when profile changes)
     const [activeWorkout, setActiveWorkout] = useState(null);
@@ -2445,8 +2478,14 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
 
             // SYNC LOGIC: If updating weight or targetReps, sync to template
             if (prev.sourceTemplateId && (updates.weight !== undefined || updates.targetReps !== undefined)) {
-                // We need to sync THIS set index of THIS exercise index to the original template
-                syncToTemplate(prev.sourceTemplateId, exIndex, setIndex, updates);
+                // exIndex is the ACTIVE WORKOUT's index. Since S32 a prep
+                // removal can make it diverge from the template's, so pass the
+                // catalog id and the workout length too and let syncToTemplate
+                // resolve the real slot.
+                syncToTemplate(prev.sourceTemplateId, {
+                    catalogId: exercise.exercise?.id,
+                    setCount: exercise.sets.length
+                }, setIndex, updates);
             }
 
      return ActiveWorkoutService.updateSet(prev, {
@@ -2457,22 +2496,77 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     });
 };
 
+    // Resolve which TEMPLATE slot a prep set-edit belongs to.
+    //
+    // The caller only knows the active workout's index. Before S32 the two
+    // arrays were always aligned, because a workout was built from its
+    // template in order and no exercise could be removed. Prep removal breaks
+    // that: drop index 0 of [Squat, Bench] and an edit to Bench arrives as
+    // index 0, which positionally is Squat — and syncToTemplate persists to
+    // custom storage immediately, so the wrong exercise is corrupted on disk
+    // and in the cloud (S32 code review, H1).
+    //
+    // Catalog id is authoritative, and where it cannot decide on its own this
+    // fails closed: refusing to sync costs the user an immediate write-through,
+    // while guessing corrupts a template on disk and in the cloud. Save and
+    // START are unaffected either way — they persist the whole prep payload and
+    // resolve no indices at all.
+    const resolveSyncTargetIndex = (template, locator) => {
+        const { catalogId } = locator || {};
+        const entries = template.exercises || [];
+
+        // No identity to match on: never guess. No production route builds a
+        // prep row without a catalog id today (S32 re-review P3).
+        if (!catalogId) return -1;
+
+        const idAt = (i) => {
+            const entry = entries[i];
+            return typeof entry === 'string' ? entry : entry?.id;
+        };
+        const matches = [];
+        for (let i = 0; i < entries.length; i++) {
+            if (idAt(i) === catalogId) matches.push(i);
+        }
+
+        // Exactly one entry carries this catalog id, so the id IS its identity
+        // and the workout's own index never enters into it. Anything else —
+        // absent, or listed more than once with no way to tell the occurrences
+        // apart — fails closed. A positional tie-break would be right only
+        // while the two arrays are aligned, and the state where they are not
+        // is constructible (S32 re-review round 2, C3), so the branch is not
+        // worth its hazard: Save and START still persist the whole payload.
+        return matches.length === 1 ? matches[0] : -1;
+    };
+
     // Helper to sync changes back to source template
-    const syncToTemplate = (templateId, exIndex, setIndex, updates) => {
+    const syncToTemplate = (templateId, exLocator, setIndex, updates) => {
         setTemplates(prevTemplates => {
             const tplIndex = prevTemplates.findIndex(t => t.id === templateId);
             if (tplIndex === -1) return prevTemplates;
 
             const tpl = prevTemplates[tplIndex];
+            // Built-ins are never written — not even in memory. Provider state
+            // is seeded from DEFAULT_TEMPLATES by reference, so the rich-object
+            // mutation below would edit the module constant for the rest of the
+            // page lifetime (S32 template removal spec §6).
+            if (!tpl.isCustom) return prevTemplates;
             // Deep copy to be safe
             const newTpl = { ...tpl, exercises: [...tpl.exercises] };
 
-            if (!newTpl.exercises[exIndex]) return prevTemplates; // Mismatch?
+            const exIndex = resolveSyncTargetIndex(newTpl, exLocator);
+            if (exIndex === -1 || !newTpl.exercises[exIndex]) return prevTemplates; // Mismatch?
 
             const tplEx = newTpl.exercises[exIndex];
 
             // Check if legacy (number) or rich (array)
             if (Array.isArray(tplEx.sets)) {
+                // setIndex is positional, and removing a SET in prep shifts the
+                // survivors exactly as removing an exercise shifts the rows —
+                // the same defect one level down, pre-existing since the S25.3
+                // per-set remove (S32 re-review round 2, P2). Sets have no ids
+                // to match on, so an unequal count is the only signal that the
+                // positions no longer correspond. Fail closed on it.
+                if (tplEx.sets.length !== exLocator?.setCount) return prevTemplates;
                 // Ensure array is long enough (it should be)
                 const newSets = [...tplEx.sets];
                 if (newSets[setIndex]) {
@@ -2615,24 +2709,54 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // Cloud push — PUT when the backend row is known, create otherwise.
         if (currentProfile?.email && ApiService.isAvailable()) {
             const uid = currentProfile.id;
+            const pendingCreate = nextTemplate.backendId
+                ? null
+                : pendingTemplateCreatesRef.current.get(templateCreateKey(uid, templateId));
+            if (pendingCreate) {
+                // The row is being created right now. A second POST would make
+                // a second cloud row. Keep replacing the desired payload and
+                // schedule only ONE PUT behind the create, so rapid saves
+                // cannot race stale updates against the newest one.
+                pendingCreate.latestTemplate = nextTemplate;
+                if (!pendingCreate.updateScheduled) {
+                    pendingCreate.updateScheduled = true;
+                    pendingCreate.promise.then(resp => {
+                        if (!resp?.id) {
+                            console.warn('[CloudSync] Template create returned no id; in-place update not pushed.');
+                            return;
+                        }
+                        const withId = { ...pendingCreate.latestTemplate, backendId: resp.id };
+                        return ApiService.updateCustomTemplate(resp.id, withId).catch(err => {
+                            console.warn('[CloudSync] Chained template update failed (non-fatal):', err.message);
+                            // Re-read rather than queue `withId`: a newer direct
+                            // save may have landed while this PUT was in flight,
+                            // and replaying the captured payload would restore an
+                            // exercise the user removed (S32 code review, H2).
+                            const latest = StorageService.loadCustomTemplates(uid).find(t => t.id === templateId);
+                            SyncQueue.enqueue({
+                                type: 'template_update',
+                                key: templateId,
+                                payload: latest ? { ...latest, backendId: resp.id } : withId,
+                                uid
+                            });
+                        });
+                    }).catch(() => { /* the create's own handler queued the latest stored payload */ });
+                }
+                return { ok: true, template: nextTemplate };
+            }
             const push = nextTemplate.backendId
                 ? ApiService.updateCustomTemplate(nextTemplate.backendId, nextTemplate)
-                : ApiService.saveCustomTemplate(nextTemplate);
+                : trackTemplateCreate(uid, templateId, ApiService.saveCustomTemplate(nextTemplate));
             push.then(resp => {
-                if (resp?.id && !nextTemplate.backendId) {
-                    const fresh = StorageService.loadCustomTemplates(uid);
-                    const idx = fresh.findIndex(t => t.id === templateId);
-                    if (idx !== -1) {
-                        fresh[idx].backendId = resp.id;
-                        StorageService.saveCustomTemplates(uid, fresh);
-                    }
-                }
+                if (resp?.id && !nextTemplate.backendId) adoptTemplateBackendId(uid, templateId, resp.id);
             }).catch(err => {
                 console.warn('[CloudSync] Template update failed (non-fatal):', err.message);
                 SyncQueue.enqueue({
                     type: nextTemplate.backendId ? 'template_update' : 'template',
                     key: templateId,
-                    payload: nextTemplate,
+                    // The latest stored payload, not the one this call sent: a
+                    // newer save may have landed while the request was out.
+                    payload: StorageService.loadCustomTemplates(uid).find(t => t.id === templateId) || nextTemplate,
                     uid
                 });
             });
@@ -2796,12 +2920,17 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     };
 
 
+    // Prep-only, and never the last exercise — the same two-layer guard as
+    // removeSet (the service refuses the final one independently). An unknown
+    // instance id returns prev untouched rather than silently filtering.
     const removeExerciseFromWorkout = (exerciseInstanceId) => {
-        if (!activeWorkout) return;
-        setActiveWorkout(prev =>
-    ActiveWorkoutService.removeExercise(prev, { exerciseInstanceId })
-);
-
+        setActiveWorkout(prev => {
+            if (!prev || prev.status !== 'preparing') return prev;
+            const list = prev.exercises || [];
+            if (list.length <= 1) return prev;
+            if (!list.some(item => item?.id === exerciseInstanceId)) return prev;
+            return ActiveWorkoutService.removeExercise(prev, { exerciseInstanceId });
+        });
     };
 
     const addCustomExercise = (newExercise) => {
@@ -3102,23 +3231,18 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         // synchronous return value. Failures land in the retry queue.
         if (currentProfile?.email && ApiService.isAvailable()) {
             const uid = currentProfile.id;
-            ApiService.saveCustomTemplate(newTemplate)
+            trackTemplateCreate(uid, newTemplate.id, ApiService.saveCustomTemplate(newTemplate))
                 .then(resp => {
-                    if (resp?.id) {
-                        const stored = StorageService.loadCustomTemplates(uid);
-                        const idx = stored.findIndex(t => t.id === newTemplate.id);
-                        if (idx !== -1) {
-                            stored[idx].backendId = resp.id;
-                            StorageService.saveCustomTemplates(uid, stored);
-                        }
-                    }
+                    if (resp?.id) adoptTemplateBackendId(uid, newTemplate.id, resp.id);
                 })
                 .catch(err => {
                     console.warn('[CloudSync] Template push failed (non-fatal):', err.message);
                     SyncQueue.enqueue({
                         type: 'template',
                         key: newTemplate.id,
-                        payload: newTemplate,
+                        // Latest stored payload: an in-place save may have
+                        // landed while this create was out (decision D-ii).
+                        payload: StorageService.loadCustomTemplates(uid).find(t => t.id === newTemplate.id) || newTemplate,
                         uid
                     });
                 });

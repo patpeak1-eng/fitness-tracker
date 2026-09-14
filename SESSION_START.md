@@ -308,6 +308,30 @@ Supersedes the per-session lists below, which are kept for context.
    `tpl_custom_<uuid>` in `template_data.id`), per-user unique constraint,
    `INSERT … ON CONFLICT … RETURNING`. Found during the removal spec's plan
    review (rounds 2–4); the removal feature deliberately excludes it.
+7a. **P2 — Template update ordering on replay (separate from item 7).**
+   Template ops carry no revision or sequence, so a queued `template_update`
+   that replays after a newer save already succeeded pushes the older payload
+   back to the server. Reviewer probe: an outgoing PUT sequence of 3, 2, 3
+   against a monotonically edited template. Create idempotency (item 7) does
+   **not** close this — it is an update-ordering problem, not a create one.
+   Likely fix is a revision or client sequence on template ops plus a fenced
+   `acknowledge`, mirroring what `active_workout` got in S32 fix 3a. Raised in
+   the S32 removal code re-review, 2026-09-14.
+7b. **P3 — Occurrence identity for repeated exercises in a template.** A
+   template may list the same catalog id twice, and once a prep removal shifts
+   the indices nothing can say which occurrence a set edit belongs to.
+   `resolveSyncTargetIndex` therefore fails closed and skips the immediate
+   write-through in that narrow case; Save and START still persist everything,
+   so no edit is lost. A real fix stamps each workout exercise with its source
+   template position at creation, which changes the persisted `activeWorkout`
+   shape and needs a hydration fallback for existing snapshots. Raised in the
+   S32 removal code re-review, 2026-09-14. The same refusal applies at the set
+   level, where sets have no ids at all and an unequal set count is the only
+   available signal. An earlier revision kept a positional tie-break for the
+   equal-length case; review round 2 constructed a state that defeats it (two
+   sessions removing different occurrences, one saving, the other reloading a
+   persisted prep), so the branch was dropped rather than carried as a latent
+   hazard into the active-workout sync work.
 
 **Owner-only verification (needs a real phone; cannot be done from here)**
 7. P1 — Real-device barcode camera test.

@@ -30,10 +30,14 @@ const updateSet = (state, { exerciseInstanceId, setId, updates }) => {
 
 const removeExercise = (state, { exerciseInstanceId }) => {
     if (!state) return state;
+    const exercises = state.exercises || [];
+    // The final exercise is preserved: an empty workout cannot start, so
+    // removing it would be a trap, not a state (mirrors removeSet below).
+    if (exercises.length <= 1) return state;
 
     return {
         ...state,
-        exercises: (state.exercises || []).filter(ex => ex.id !== exerciseInstanceId)
+        exercises: exercises.filter(ex => ex.id !== exerciseInstanceId)
     };
 };
 

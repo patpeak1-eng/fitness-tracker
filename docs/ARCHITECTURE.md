@@ -1331,6 +1331,64 @@ own custom template always hit the in-place branch, never a duplicate.
 `saveWorkoutAsTemplate` is behavior-frozen and now has no in-repo caller
 (kept as context API).
 
+**Remove an exercise from a template (S32).** Spec:
+docs/template_exercise_removal_spec_s32.md. There is no template editor; the
+prep screen is the edit surface. `ExerciseResult` (prep mode) renders a
+remove-exercise control in its header and asks the page via
+`onRequestRemoveExercise(instanceId, name)`; `TrackWorkout` owns the
+confirmation `Modal` and the collection rule (`canRemoveExercise` = more than
+one exercise) and calls `removeExerciseFromWorkout`, which is guarded twice:
+the context accepts only `status === 'preparing'`, a known instance id and
+never the last exercise, and `ActiveWorkoutService.removeExercise` preserves
+the final exercise independently (same two-layer shape as `removeSet`).
+Persistence is the existing prep-save contract: an own custom template is
+updated in place by Save or by a dirty START; a built-in is never written —
+Save prefills the first free `"<name> (my version)"` (`utils/templateNames.js`)
+and forks. The Save dialog refuses a normalized name collision against any
+custom template, including a case-only rename of the source; the exact
+same-name save of an own custom is the in-place branch and is exempt. That
+rule covers the prep Save dialog and built-in forks only — the no-source START
+auto-save, the Coach save and assessment program import still create directly.
+
+**Built-in prep boundary.** `syncToTemplate` (the set-field write-through from
+`updateSet`) returns without mutation when the resolved template is not
+custom. Provider `templates` state is seeded from `DEFAULT_TEMPLATES` by
+reference, so before S32 a prep weight edit on the rich-object built-in
+mutated the module constant in memory for the page lifetime (never persisted).
+
+**Prep set write-through resolves by identity, and fails closed.** The workout
+row and its template entry are two separate arrays, aligned only because
+`startWorkoutFromTemplate` builds one from the other in order. Removing an
+exercise — or a set — in prep breaks that alignment, so `syncToTemplate` must
+not trust the workout's position. `resolveSyncTargetIndex` picks the template
+entry whose catalog id matches, and writes only when exactly one does; a
+missing id, or the same exercise listed twice, refuses the write. The set level
+has no ids to match on, so it refuses whenever the template entry's set count
+differs from the workout row's. A refusal costs only the immediate
+write-through: Save and START persist the whole prep payload through
+`writeTemplate` and resolve no indices at all. Occurrence identity for repeated
+exercises is deliberately not built — see `SESSION_START.md` item 7b.
+
+**Template backendId adoption.** `adoptTemplateBackendId(uid, localId,
+backendId)` is the shared acknowledgement path for direct and queued template
+creates: it writes the originating profile's custom storage, then updates
+provider state only while `latestProfileIdRef.current === uid`. All three
+create acknowledgements use it — `saveCustomTemplate`, `writeTemplate`'s
+create branch, and the SyncQueue `'template'` executor. Before S32 the id
+reached storage only, so an in-place save later in the same page session read
+a provider object with no `backendId`, overwrote the stored row without it and
+POSTed a second cloud row. Direct creates are also tracked by profile and local
+id in `pendingTemplateCreatesRef` while in flight: any `writeTemplate` calls
+that find no `backendId` but a pending create coalesce into one PUT of the
+latest payload behind it (falling back to a `template_update` op carrying the
+id) instead of racing multiple updates or issuing a second POST; if the create
+itself fails, its queue entry carries the latest STORED payload. Not covered,
+by decision: a create that already failed into the queue followed by an
+in-place save (today's direct POST), and a create whose response was lost after
+the server committed — template create is not idempotent server-side. That is
+the separate "template create idempotency" backlog item (stable client id +
+unique constraint + upsert, the S32 workouts pattern).
+
 ---
 
-*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery); S27 added Section 13 (session lifetime & sync recovery). Last updated: S27, 2026-08-24.*
+*Compiled from: WorkoutContext.jsx, StorageService.js, ActiveWorkoutService.js, ApiService.js, SyncQueue.js, App.jsx, full `src/` inventory, backend source + live openapi.json, docs/DESIGN_TOKENS.md, and session notes through S25.3. Full catch-up audit pass completed S17; S24/S25/S25.1/S25.2/S25.3 architecture changes were then added with their implementation commits; S26 added Section 12 (PWA update delivery); S27 added Section 13 (session lifetime & sync recovery); S32 added template exercise removal, catalog-id-resolved prep set sync, and direct pending-create serialization. Last updated: S32, 2026-09-14.*

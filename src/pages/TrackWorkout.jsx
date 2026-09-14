@@ -5,7 +5,8 @@ import CreateTemplateModal from '../components/workout/CreateTemplateModal';
 import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
 import PlateCalculator from '../components/workout/PlateCalculator';
 import Modal from '../components/common/Modal'; // Import reusable Modal
-import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings, Save } from 'lucide-react';
+import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings, Save, Trash2 } from 'lucide-react';
+import { firstFreeTemplateName, isTemplateNameTaken } from '../utils/templateNames';
 import '../styles/filter-chips.css';
 import './TrackWorkout.css';
 
@@ -90,7 +91,8 @@ const matchesMuscleFocus = (tags, selected) => {
 
 const TrackWorkout = () => {
     const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation,
-        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep, templateExercisesFromWorkout } = useContext(WorkoutContext);
+        equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep, templateExercisesFromWorkout,
+        removeExerciseFromWorkout } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -154,13 +156,24 @@ const TrackWorkout = () => {
     const isSaved = savedSnapshot !== null && savedSnapshot === prepSerialized;
     const [saveTplModal, setSaveTplModal] = useState({ isOpen: false, name: '', error: '' });
     const [saveNotice, setSaveNotice] = useState(null); // { kind: 'success'|'error', text }
+    // Remove-an-exercise from prep (S32). The row asks; this page confirms and
+    // owns the collection rule: never below one exercise.
+    const [removeTarget, setRemoveTarget] = useState(null); // { instanceId, name }
+    const canRemoveExercise = !!activeWorkout && (activeWorkout.exercises || []).length > 1;
 
     // New session → fresh save state (the page persists across workouts).
     useEffect(() => {
         setSavedSnapshot(null);
         setSaveNotice(null);
         setSaveTplModal({ isOpen: false, name: '', error: '' });
+        setRemoveTarget(null);
     }, [activeWorkout?.id]);
+
+    const confirmRemoveExercise = () => {
+        if (!removeTarget) return;
+        removeExerciseFromWorkout(removeTarget.instanceId);
+        setRemoveTarget(null);
+    };
 
     // The save notice is transient, not a permanent banner.
     useEffect(() => {
@@ -172,6 +185,15 @@ const TrackWorkout = () => {
     const confirmSaveTemplate = async () => {
         const trimmed = saveTplModal.name.trim();
         if (!trimmed) return;
+        // Decision B (S32): an exact same-name save of your own custom template
+        // is the in-place update and needs no collision check. Anything else
+        // creates, so a normalized match against ANY custom — including a
+        // case-only rename of the source — is refused here, before the create.
+        const isInPlaceUpdate = !!sourceTemplate?.isCustom && trimmed === sourceTemplate.name;
+        if (!isInPlaceUpdate && isTemplateNameTaken(trimmed, templates)) {
+            setSaveTplModal(prev => ({ ...prev, error: `A template named "${trimmed}" already exists. Choose another name.` }));
+            return;
+        }
         // Local persistence inside is synchronous; only the cloud push is
         // async and already falls back to SyncQueue.
         const result = await saveTemplateFromPrep(trimmed)
@@ -473,6 +495,8 @@ const TrackWorkout = () => {
                                 workoutData={typeof item === 'object' ? item : null}
                                 isPrep={true}
                                 invalidWeightSetKeys={prepValidation.invalidWeightSetKeys}
+                                canRemoveExercise={canRemoveExercise}
+                                onRequestRemoveExercise={(instanceId, name) => setRemoveTarget({ instanceId, name })}
                             />
                         );
                     })}
@@ -520,7 +544,16 @@ const TrackWorkout = () => {
                         </button>
                         {canSaveTemplate && (
                             <button
-                                onClick={() => setSaveTplModal({ isOpen: true, name: sourceTemplate?.name || activeWorkout.name || '', error: '' })}
+                                onClick={() => setSaveTplModal({
+                                    isOpen: true,
+                                    // A built-in must be renamed to save; prefill the
+                                    // first free "(my version)" so the refusal is a
+                                    // one-tap fix, not a dead end (decision 2).
+                                    name: isBuiltInSource
+                                        ? firstFreeTemplateName(sourceTemplate.name, templates)
+                                        : (sourceTemplate?.name || activeWorkout.name || ''),
+                                    error: ''
+                                })}
                                 disabled={isSaved}
                                 style={{
                                     width: '100%',
@@ -600,6 +633,49 @@ const TrackWorkout = () => {
                     {saveTplModal.error && (
                         <p className="save-tpl-error">{saveTplModal.error}</p>
                     )}
+                </Modal>
+
+                {/* Remove-exercise confirm (S32) */}
+                <Modal
+                    isOpen={!!removeTarget}
+                    onClose={() => setRemoveTarget(null)}
+                    title="Remove Exercise"
+                    actions={
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%' }}>
+                            <button
+                                className="secondary-btn"
+                                onClick={() => setRemoveTarget(null)}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmRemoveExercise}
+                                style={{
+                                    backgroundColor: 'color-mix(in srgb, var(--danger) 20%, transparent)',
+                                    color: 'var(--danger)',
+                                    border: '1px solid var(--danger)',
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <Trash2 size={16} /> Remove
+                            </button>
+                        </div>
+                    }
+                >
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.5' }}>
+                        Remove <strong>{removeTarget?.name}</strong> from this workout?{' '}
+                        {isBuiltInSource
+                            ? 'The built-in template stays as it is. Save under a new name to keep your version.'
+                            : sourceTemplate
+                                ? `Saving or starting will update "${sourceTemplate.name}".`
+                                : ''}
+                    </p>
                 </Modal>
             </div>
         );
