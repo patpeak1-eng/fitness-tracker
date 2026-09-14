@@ -297,6 +297,17 @@ Supersedes the per-session lists below, which are kept for context.
    becomes visible. Pre-existing, non-destructive, tracked separately from the
    deletion work.
 6. **P3 — Remove an exercise from an existing custom template.** No UI path.
+   Spec at revision 5 in `docs/template_exercise_removal_spec_s32.md`, in
+   plan review (five Codex rounds so far); owner decisions A–E recorded there.
+7. **P2 — Template create idempotency (HIGH, own spec; owner decision E2,
+   2026-09-13).** `POST /api/templates` always inserts; no client-id
+   uniqueness. A lost response, a queued replay, or an in-flight save can
+   each produce a duplicate cloud row, and no client-only change closes the
+   lost-response case. Fix at the root with the pattern workouts got in S32:
+   stable client id on `custom_templates` (templates already carry
+   `tpl_custom_<uuid>` in `template_data.id`), per-user unique constraint,
+   `INSERT … ON CONFLICT … RETURNING`. Found during the removal spec's plan
+   review (rounds 2–4); the removal feature deliberately excludes it.
 
 **Owner-only verification (needs a real phone; cannot be done from here)**
 7. P1 — Real-device barcode camera test.
