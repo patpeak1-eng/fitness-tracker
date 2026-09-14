@@ -307,9 +307,75 @@ all, no matter what the server does.
 **Zone:** HIGH — `WorkoutContext.jsx`, `SyncQueue.js`, `ApiService.js`,
 `StorageService.js`. `ApiService.js` alone is HIGH by APP INVARIANTS.
 
-**Risk ranked:** step 2 is the most dangerous, because it changes queue
-behaviour for **every** op type, not just this one. Step 1 is the most likely
-to be forgotten, and silently defeats the whole feature.
+#### Plan-review corrections — round 2
+
+Three defects, each verified against source. The first two are the plan being
+*underspecified* at exactly the points where a crash or a race decides whether
+the user loses a workout.
+
+**A. One durable sync record, written BEFORE the legacy key.** The plan leaned
+on "durable desired state" without saying what it is or when it is written.
+`StorageService.saveActiveWorkout(uid, null)` (`:388-391`) *removes* the only
+active-workout key, so a clear currently leaves nothing behind. Crash after
+that removal but before separate metadata lands, and boot sees a live server
+workout with no record that it was cleared — resurrection. Reversing the order
+just moves the window.
+
+So: one profile-scoped record `{desiredRevision, clientSeq, desiredWorkout |
+null, status, lastServerSeq}`, persisted **before** the legacy active key is
+changed or removed, with boot recovery defined over it. **The clear record must
+outlive `activeWorkout = null`** — that is the whole point of it.
+
+**B. The merge rule needs a full table, not a clear-only rule.** "A pending or
+confirmed clear at a sequence ≥ the server's means the server copy is stale"
+protects clears and silently loses new workouts. Device B starts workout B at
+seq 6 offline; the server still holds A at seq 5; B's pull arrives before B
+dispatches and applies A, because B is not a clear. **B is gone.**
+
+| Local state | Rule |
+|---|---|
+| **Pending** desired state — workout *or* clear | wins over a pull until its op resolves or rebases |
+| **Confirmed** desired state | suppresses the server value only when its seq ≥ server seq |
+| otherwise | apply the server value and advance `lastServerSeq` |
+
+`server null` counts as **sequence 0**, so a device that has never seen the row
+keeps its local desired state. A pull never *lowers* the local counter; it
+advances `lastServerSeq` by `max` only.
+
+**C. The queue key must be injective per profile.** Counters are
+profile-scoped, but `enqueue` dedupes on `(type, key)` with
+`id = ${type}:${key}` and **`uid` is part of neither** (`SyncQueue.js:82-102`).
+Two profiles on one browser would have profile 2's active op replace profile
+1's. Key active ops `active_workout:${uid}` and retain `uid`. The multi-profile
+feature still exists, so this cannot rest on the owner's one-device preference.
+
+**D. The 409 rebase needs a defined executor transaction.** Catch the 409,
+persist and enqueue the new revision **before** returning success, then let the
+conditional acknowledge see the captured revision mismatch and leave the
+replacement in place. Letting a 409 propagate reaches `SyncQueue`'s generic
+non-auth-4xx dead-letter branch (`:191-197`) and the desired state is lost.
+
+**E. Step 2 must be tested on a revision-less op, not only this one.** Verified
+op types: `workout`, `weight`, `assessment`, `profile_settings`, `template`,
+`template_update`, `exercise`, `food_log`, `food_log_update`,
+`food_log_delete`, `workout_delete` — none carries a revision today, so
+acknowledgement must be explicitly unconditional when both fields are absent.
+Prove that for **both** the success and dead-letter paths on at least
+`profile_settings`. Leave the 401 and retryable branches untouched.
+
+#### Deploy groups — the steps are NOT individually shippable
+
+| Group | Contents | Why |
+|---|---|---|
+| **A** | Step 2 alone | Safe only with regression tests proving revision-less behaviour is unchanged |
+| **B** | Steps 1, 3, 4 **together**, with A–D above | Step 1 alone removes the only current active-workout writer before its replacement exists, leaving a stale server slot after a workout finishes. Steps 1–3 without 4 can 409 straight into the dead-letter branch |
+| **C** | Step 5, after B | Depends on the durable record from A |
+
+Only all five meet the owner's full request.
+
+**Risk ranked:** step 2 has the broadest blast radius — it changes queue
+behaviour for **every** op type. Steps 1 and 5 are the likeliest omissions, and
+each silently defeats one half of sync: 1 the fence, 5 cross-device entirely.
 
 ### Done means
 
