@@ -3,7 +3,7 @@
 **Zone:** HIGH — writes `custom_templates`, which is user data and syncs to the
 backend. No new template-persistence path is introduced; see §2.
 
-**Status:** revision 3, spec only. No code until the literal clearance.
+**Status:** revision 4, spec only. No code until the literal clearance.
 
 **Revision 2 (2026-09-13).** Plan-stage cross-review (Codex, adversarial)
 returned CHANGES-REQUIRED with eight findings; every one was re-verified
@@ -19,8 +19,17 @@ one (N2): a template created in the same page session never gets its
 `backendId` into provider state — only into storage — so the next in-place
 save overwrites the stored row without it and POSTs a duplicate cloud row.
 This feature's primary flow (fork a built-in, then START) hits exactly that,
-so the fix is in scope (§4b decision D). The clearance phrase is required
-against this revision.
+so the fix is in scope (§4b decision D).
+
+**Revision 4 (2026-09-13).** Round-3 re-review: N1, N4, N5 resolved; N2/N3
+reworked; four new findings (R3-F1–F4), all verified and adopted. Decision D's
+acknowledgement-only mechanism could not keep one cloud row when a second
+save lands before the first create settles, and it missed the queue-replay
+acknowledgement and the profile gate; D is now a shared adoption contract
+plus create/update serialization. The collision rule's boundary is stated
+narrowly. A page-level `TrackWorkout` test is added — revision 3's claim that
+the repo has no page-level harness was false (`src/pages/loginIdentity.test.jsx`).
+The clearance phrase is required against this revision.
 
 ---
 
@@ -127,9 +136,9 @@ decision D").
 | # | Decision | Decided / recommended |
 |---|---|---|
 | A | START after a removal on an own custom template | **Decided: keep today's auto-save** (decision 4). START already invokes the structural save for dirty own-custom prep; set fields also have their separate immediate write-through through `syncToTemplate` |
-| B | Fork-name collisions (nothing prevents duplicate names locally or server-side: `saveCustomTemplate` always appends; `custom_templates.name` has no uniqueness constraint) | **Decided, rule made action-aware (N1):** a submission whose trimmed name **exactly** equals `sourceTemplate.name` of an own custom is the in-place-update branch and is allowed without collision validation. Every other submission is a create/fork: compare its normalized name with every custom template **including the source** and reject a match inline (modal stays open, `saveTemplateFromPrep` not called). So a case-only rename of your own custom is refused rather than silently forked into a normalized duplicate. Built-in fork prefill uses the first free normalized name. UI-only, `TrackWorkout.jsx` + the §3 helper |
+| B | Fork-name collisions (nothing prevents duplicate names locally or server-side: `saveCustomTemplate` always appends; `custom_templates.name` has no uniqueness constraint) | **Decided, rule made action-aware (N1):** a submission whose trimmed name **exactly** equals `sourceTemplate.name` of an own custom is the in-place-update branch and is allowed without collision validation. Every other submission is a create/fork: compare its normalized name with every custom template **including the source** and reject a match inline (modal stays open, `saveTemplateFromPrep` not called). So a case-only rename of your own custom is refused rather than silently forked into a normalized duplicate. Built-in fork prefill uses the first free normalized name. UI-only, `TrackWorkout.jsx` + the §3 helper. **Boundary (R3-F3):** this rule prevents collisions for the prep Save modal and built-in forks only. The existing no-source START auto-save (`TrackWorkout.jsx` ~198-204, the Build-My-Own draft), the Coach save path (`CoachView.jsx` ~777-781), and assessment program import (`WorkoutContext.jsx` ~3400-3420) create custom templates directly and still permit normalized-duplicate names; they are outside this feature and unchanged. Own-custom START is safe (exact source name, in-place); built-in START never creates |
 | C | Scope growth: guards in `WorkoutContext.jsx` and `ActiveWorkoutService.js` (§6) | **Decided: accept the two guards.** Each is a few lines, both close real holes in the invariant the owner asked for, and the zone was already HIGH |
-| D | **Same-session `backendId` loss (N2, verified).** The cloud acknowledgement in `saveCustomTemplate` (~3244-3252) and in `writeTemplate`'s create branch (~2760-2767) writes `backendId` into storage only, never into provider state. `writeTemplate` then reads the stale provider object (~2728), overwrites the stored row with it (~2748-2752) and POSTs instead of PUTs (~2757-2759): the stored `backendId` is erased and a second cloud row is created. This feature's main path — fork a built-in, then START (auto-save on the now-custom source) — triggers it | **Decided: fix in scope.** In both acknowledgement handlers, also adopt the id into provider state: `setTemplates(prev => prev.map(t => t.id === localId && !t.backendId ? { ...t, backendId: resp.id } : t))`. Functional update, no new write path, no schema change. Regression test in §7 (test 3b). Excluding it would ship a feature whose primary flow duplicates cloud rows |
+| D | **Same-session `backendId` loss (N2, verified).** The cloud acknowledgement in `saveCustomTemplate` (~3244-3252) and in `writeTemplate`'s create branch (~2760-2767) writes `backendId` into storage only, never into provider state. `writeTemplate` then reads the stale provider object (~2728), overwrites the stored row with it (~2748-2752) and POSTs instead of PUTs (~2757-2759): the stored `backendId` is erased and a second cloud row is created. This feature's main path — fork a built-in, then START (auto-save on the now-custom source) — triggers it | **Decided: fix in scope** (owner, on the revision-3 mechanism; revision 4 completes it per R3-F1/F2). Contract: **(i) one shared adoption helper** `adoptTemplateBackendId(uid, localId, backendId)` used by all three create acknowledgements — `saveCustomTemplate` direct create (~3244), `writeTemplate`'s create branch (~2760), and the SyncQueue `'template'` executor (~781). It writes the originating `uid`'s custom storage first, then functionally updates provider state **only when `latestProfileIdRef.current === uid`** (the provider's established gate, ~683-685); a later profile load picks the id up from storage otherwise. **(ii) At most one create request pending per local id.** `saveCustomTemplate` records its create promise by local id in a ref. If `writeTemplate` finds no `backendId` while a create is pending, it persists the latest local payload as today but **chains one PUT of that latest payload after the create resolves** (or a queue enqueue if it rejects) — never a second POST. **(iii) If the create already failed into the queue**, `writeTemplate` re-enqueues the latest payload under the same `('template', localId)` — `SyncQueue.enqueue` already replaces by (type, key) — instead of a direct POST; this needs a queue-membership read, so `SyncQueue.js` gets a one-line `has(type, key)` if nothing equivalent exists. No new write path, no schema change. Tests in §7 (3b, 3c, 3d, 3e) |
 
 ## 5. Files
 
@@ -141,9 +150,11 @@ decision D").
 | `src/pages/TrackWorkout.css` | Any modal/notice styling not already present |
 | `src/utils/templateNames.js` | New. `normalizeTemplateName`, `firstFreeTemplateName` (§3) |
 | `src/utils/templateNames.test.js` | New. Unit tests for the helper (§7) |
-| `src/context/WorkoutContext.jsx` | (1) `syncToTemplate` returns without mutation when the resolved template is not custom; (2) `removeExerciseFromWorkout` uses the functional `prev`, accepts only `status === 'preparing'`, requires a matching instance id, and preserves at least one exercise; (3) decision D: both template-create acknowledgements adopt `backendId` into provider state |
+| `src/context/WorkoutContext.jsx` | (1) `syncToTemplate` returns without mutation when the resolved template is not custom; (2) `removeExerciseFromWorkout` uses the functional `prev`, accepts only `status === 'preparing'`, requires a matching instance id, and preserves at least one exercise; (3) decision D: shared `adoptTemplateBackendId` used by all three create acknowledgements, profile-gated; pending-create ref and the chained-PUT / re-enqueue branch in `writeTemplate` |
+| `src/services/SyncQueue.js` | Only if needed: a one-line `has(type, key)` membership read for decision D (iii) |
 | `src/services/ActiveWorkoutService.js` | `removeExercise` independently preserves the final exercise |
 | `src/context/templateSave.provider.test.jsx` | New. Real-provider tests for the save/fork contract and decision D (§7) |
+| `src/pages/TrackWorkout.test.jsx` | New. Page-level jsdom tests for the collision gate wiring (§7), on the existing `loginIdentity.test.jsx` pattern (ReactDOM + `act`, no testing-library) |
 | `src/services/ActiveWorkoutService.test.js` | New or extended. Floor invariant for `removeExercise` |
 | `docs/ARCHITECTURE.md` | Same commit: the built-in prep boundary (`syncToTemplate` never writes a built-in), the remove-exercise prep control, the guards, and provider-state `backendId` adoption on create acknowledgement |
 
@@ -168,11 +179,18 @@ the coordinator (ZONE_OVERRIDE_RULE).
   untouched", and it would make the §7 built-in-unchanged test fail whenever a
   set was edited before the fork. Fix: an early return when the resolved
   template is not custom.
-- **Same-session `backendId` divergence (round 2, verified).** See §4b
-  decision D. Pre-existing; reachable today by creating a custom and then
-  saving it in place within the same page session; made routine by this
-  feature's fork-then-START path. A later cloud pull adopts an orphaned row by
-  `template_data.id` (~1488-1500), which does not undo a duplicate POST.
+- **Same-session `backendId` divergence (round 2, verified; extended round 3).**
+  See §4b decision D. Pre-existing; reachable today by creating a custom and
+  then saving it in place within the same page session; made routine by this
+  feature's fork-then-START path. Three orderings, all covered by D:
+  acknowledgement already settled (adoption into provider state); second save
+  **before** the create settles (one pending create per local id, chained
+  PUT); create failed into the queue (re-enqueue replaces the queued payload).
+  Adoption is profile-gated like every other async state adoption in the
+  provider (~683-685, ~1013-1025). A later cloud pull adopts an orphaned row by
+  `template_data.id` (~1488-1500) whether storage adoption ran before or after
+  it, so pull ordering is safe — but a pull does not undo a duplicate POST,
+  which is why (ii) and (iii) exist.
 - **`sourceTemplateId` after a fork.** Every successful create/fork re-points
   the active session at the created custom template (~3302-3306). Subsequent
   set edits, recommendations, and a later dirty START target that copy. Before
@@ -239,13 +257,33 @@ context, never the module. Every precondition asserted.
    entries keep both ids; storage has exactly one row; exercise count reduced;
    `ApiService.updateCustomTemplate` called with `backend-sentinel`;
    `ApiService.saveCustomTemplate` **not** called.
-   3b. **Same-session create then in-place save (decision D).** Mock
-   `saveCustomTemplate` to resolve `{ id: 'backend-new' }`. Start a built-in,
-   fork it, await the acknowledgement; assert the provider's new entry carries
-   `backend-new` (precondition, red today). Then `saveTemplateFromPrep(<fork
-   name>)` → `updateCustomTemplate` called with `backend-new`,
-   `saveCustomTemplate` called exactly once overall, stored row still has
-   `backend-new`. Mutation: drop the provider-state adoption → red.
+   3b. **Same-session create then in-place save, acknowledgement settled
+   (decision D-i).** Mock `saveCustomTemplate` with a **manually controlled
+   deferred promise** (no acknowledgement promise is exposed, so "await the
+   ack" is not deterministic otherwise). Start a built-in, fork it, release the
+   deferred with `{ id: 'backend-new' }` inside `act`, flush; assert the
+   provider's new entry carries `backend-new` (precondition, red today). Then
+   `saveTemplateFromPrep(<fork name>)` → `updateCustomTemplate` called with
+   `backend-new`, `saveCustomTemplate` called exactly once overall, stored row
+   still has `backend-new`. Mutation: drop the provider-state adoption → red.
+   3c. **Save before the create settles (D-ii).** Fork; call the same-name
+   save while the deferred is still pending; assert `saveCustomTemplate` has
+   one call and `updateCustomTemplate` none; release `{ id: 'backend-new' }`;
+   flush → `updateCustomTemplate` called once with `backend-new` and the
+   **latest** payload; storage and provider retain `backend-new`; total
+   create calls one. Mutation: drop the pending-create chaining → two creates
+   → red.
+   3d. **Queued create then in-place save (D-iii).** Make the create reject;
+   assert a `'template'` op is queued for the local id (precondition). Save in
+   place → no direct create call, the queued op's payload is the latest one,
+   still exactly one queued op. Then let the executor replay successfully →
+   provider entry and storage carry the returned id (executor adoption).
+   Mutation: drop executor adoption → provider entry lacks the id → red.
+   3e. **Profile switch before a deferred acknowledgement (D-i gate).** Fork
+   under profile A with the deferred pending; switch to profile B; release;
+   assert B's visible templates are unchanged and A's storage has the id;
+   switch back to A → the id is visible. Mutation: remove the profile gate →
+   red on B.
 4. **Back out leaves membership unchanged.** Start the seeded custom, remove
    an exercise, `cancelWorkout()` → stored custom still has two entries.
 5. **Last-exercise guard (context).** With one exercise,
@@ -257,9 +295,15 @@ context, never the module. Every precondition asserted.
 (b) normalization: `" push DAY "` and `"Push Day"` are equal;
 (c) no customs → `"Name (my version)"`.
 
-`TrackWorkout` collision behaviour (decision B) is exercised in the `npm run
-dev` pass (§8 step 2) — the repo has no page-level test harness and adding
-one is out of scope; the rule itself is covered by the helper tests.
+`src/pages/TrackWorkout.test.jsx` — mount `TrackWorkout` under a mocked
+`WorkoutContext.Provider` value (existing ReactDOM + `act` jsdom pattern from
+`loginIdentity.test.jsx`; `saveTemplateFromPrep` is a `vi.fn`). Deterministic
+cases: (a) opening Save on a built-in when `"Name (my version)"` already
+exists prefills `"Name (my version 2)"`; (b) typing a normalized-equal
+existing custom name and submitting keeps the modal open, shows the inline
+error, and **never** calls `saveTemplateFromPrep`; (c) an exact unchanged
+own-custom name calls `saveTemplateFromPrep` with that name. Mutation: remove
+the submit guard → (b) red.
 
 `src/services/ActiveWorkoutService.test.js` — `removeExercise` preserves the
 final exercise; removes a non-final one.
