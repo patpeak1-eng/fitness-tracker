@@ -83,7 +83,11 @@ const SyncQueue = {
     // (type, key) replaces the older payload, so the queue holds only the
     // latest value per item (settings) and never holds the same workout /
     // template / weight entry twice even if two push paths both failed.
-    enqueue({ type, key, payload, uid = null }) {
+    // `revision` / `seq` are OPTIONAL and immutable once stamped: they identify
+    // WHICH desired state this entry carries, so `acknowledge` can tell a
+    // completed op from a newer one that replaced it under the same id. Ops
+    // without them acknowledge unconditionally, exactly as before.
+    enqueue({ type, key, payload, uid = null, revision = null, seq = null }) {
         const ops = loadQueue().filter(op => !(op.type === type && op.key === key));
         ops.push({
             id: `${type}:${key}`,
@@ -91,6 +95,8 @@ const SyncQueue = {
             key,
             payload,
             uid,
+            revision,
+            seq,
             attempts: 0
         });
         const stored = persistQueue(ops);
@@ -144,6 +150,36 @@ const SyncQueue = {
         notify();
     },
 
+    // Remove a COMPLETED op — but only if the queue still holds the same one.
+    //
+    // `enqueue` sets `id` to `${type}:${key}`, so a replacing op carries the
+    // SAME id by construction. "Remove exactly this op" therefore removed the
+    // REPLACEMENT: revision A in flight, the user edits to revision B, A
+    // succeeds, and B is deleted without ever being sent. The server stays at
+    // A and the newer state is lost.
+    //
+    // Ops that carry an immutable identity (`revision` + `seq`, stamped at
+    // enqueue and never rewritten) are removed only while the stored entry
+    // still has that exact pair. Everything else — every op type in the app
+    // today — has neither field and is removed unconditionally, exactly as
+    // before. That default is deliberate: this function runs for all of them,
+    // and a bug that only ever affected the active workout must not change how
+    // settings, weights or the food log acknowledge.
+    acknowledge(op) {
+        const ops = loadQueue();
+        const stored = ops.find(o => o.id === op.id);
+        if (!stored) return true;                      // already gone
+
+        const identified = op.revision != null || op.seq != null;
+        if (identified && !(stored.revision === op.revision && stored.seq === op.seq)) {
+            // A newer desired state took this slot while the request was out.
+            // Leave it queued so it gets its own turn.
+            return false;
+        }
+        persistQueue(ops.filter(o => o.id !== op.id));
+        return true;
+    },
+
     async flush() {
         if (flushing) return;
         const ops = loadQueue();
@@ -162,9 +198,11 @@ const SyncQueue = {
 
                 try {
                     await exec(op);
-                    // Success: remove exactly this op (queue may have gained
-                    // new ops while we were awaiting).
-                    persistQueue(loadQueue().filter(o => o.id !== op.id));
+                    // Success: acknowledge conditionally. The queue may have
+                    // gained new ops while we were awaiting — and for an op
+                    // carrying an immutable identity, one of them may have
+                    // REPLACED this very entry under the same id.
+                    SyncQueue.acknowledge(op);
                     if (authExpired) {
                         authExpired = false; // a push succeeded — auth is back
                     }
@@ -194,7 +232,9 @@ const SyncQueue = {
                         // dead-letter store instead of discarding, loudly.
                         console.warn(`[SyncQueue] dead-lettering rejected op ${op.id}:`, err);
                         deadLetter(op, err);
-                        persistQueue(loadQueue().filter(o => o.id !== op.id));
+                        // Same conditional removal: a rejected revision must
+                        // not take its replacement down with it.
+                        SyncQueue.acknowledge(op);
                     } else {
                         // Network / 5xx / 429: keep for the next flush.
                         const kept = loadQueue().map(o =>
