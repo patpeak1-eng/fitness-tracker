@@ -146,11 +146,28 @@ Confirm against the remote and the live build. *Prevents:* the one false
 
 ## TEST_ACCOUNT_RULE
 
-Never test auth or data-destructive behavior against the owner's real
-account. Register a disposable account, exercise the feature, and delete it
-**within the same session** — retain the credentials until you do, because
-account deletion requires the account's own password. Two S16 throwaway
-accounts are still stranded on the live backend for exactly this reason.
+Never test auth or data-destructive behavior against the owner's real account,
+or any real user's.
+
+**Two standing agent test accounts exist — use them, do not create more.**
+Credentials: `C:\Users\PC\.fitness-tracker-secrets\agent-test-accounts.json`.
+Deliberately outside the repo: the GitHub repo is **public**, and a gitignored
+file does not exist in a sibling worktree, so it would not be findable anyway.
+
+- `agent-test-clean@example.com` — keep EMPTY. Empty-state, first-run, login.
+- `agent-test-data@example.com` — may accumulate. History, pagination, sync.
+
+One agent per account at a time. Two agents sharing one manufactures the very
+cross-session races we are trying to find.
+
+Create a disposable account **only** for a test that destroys the account
+itself. Delete it within the same session and retain its password until you
+do: deletion requires the account's own password and there is **no reset or
+change-password endpoint**. Six stranded accounts on the live backend are what
+skipping this looks like — none can now be deleted through the API.
+
+Both standing accounts are password sign-in; the owner's real account is
+Google OAuth, so they do not exercise that path.
 
 There are no delete endpoints for weights, exercises, or users' individual
 rows. Assume a test write is permanent.

@@ -403,8 +403,17 @@ Supersedes the per-session lists below, which are kept for context.
     never sync. It stays on the device; the alternative resurrects deletions.
 
 **Housekeeping**
-15. P3 — Four `example.com` fixture accounts on production. Deleting them is a
-    production write and needs an explicit go-ahead.
+15. **CLOSED, accepted 2026-09-14.** Six stranded fixture accounts on
+    production (four `example.com` + two from S16). They hold no data, and
+    because no password was recorded, nobody can sign into them either — so
+    there is no security exposure. They also cannot be deleted through the
+    API for the same reason; only a direct production DB write would remove
+    them, which the owner declined as disproportionate. Left in place.
+    **The replacement is two standing agent test accounts** — see
+    TEST_ACCOUNT_RULE in `AGENTS.md`. Credentials live at
+    `C:\Users\PC\.fitness-tracker-secrets\agent-test-accounts.json`, outside
+    the repo because the repo is public. Do not create further throwaways
+    except to test account deletion itself.
 16. P3 — GitNexus index stale; `npx gitnexus analyze --skip-agents-md`.
 
 ---
