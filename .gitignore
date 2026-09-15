@@ -15,3 +15,6 @@ fitness_data.json
 *.bat
 __pycache__/
 *.pyc
+
+# Playwright MCP scratch output (tool artefacts, not work product)
+.playwright-mcp/
