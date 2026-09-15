@@ -233,6 +233,23 @@ docs/preparation_controls_visual_contract_s25_3.md):
   Arnold Press's previous “No Visual Available” state was a field-name mismatch,
   not missing image files.
 
+## NEXT SESSION STARTS HERE
+
+**Owner's stated next task (2026-09-14): add more exercises to the app.**
+Not yet scoped — ask what kind before assuming. Likely touches the exercise
+catalog, and possibly illustrations; S30 added six video-sourced exercises,
+so `codex/review-s30-tiktok-exercises` and the S30 notes below are the
+nearest precedent for how that was done.
+
+Before writing anything, read the two things that make this cheap: the
+exercise catalog shape in `docs/ARCHITECTURE.md`, and the equipment `"/"`
+overloading gotcha — `exercise.equipment` uses `/` both as an OR-separator
+and inside literal multi-word names, so match the full string before
+splitting on it.
+
+Repo state at close: `5598f4b`, both Railway services SUCCESS, both checkouts
+clean, two worktrees, six branches. Nothing in flight, no agents running.
+
 ## Session 33 — 2026-09-14 (template exercise removal, shipped)
 
 **Shipped to `main` and verified live. Owner confirmed it working on his
