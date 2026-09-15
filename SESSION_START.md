@@ -233,6 +233,58 @@ docs/preparation_controls_visual_contract_s25_3.md):
   Arnold Press's previous “No Visual Available” state was a field-name mismatch,
   not missing image files.
 
+## Session 33 — 2026-09-14 (template exercise removal, shipped)
+
+**Shipped to `main` and verified live. Owner confirmed it working on his
+phone.**
+1. `eb6039b` — **remove an exercise from a template, from the prep screen.**
+   The trash control lives in each prep exercise header. Own custom templates
+   update in place; a built-in is never written — saving prompts for a name
+   and forks. A workout keeps at least one exercise, guarded in the context,
+   the service, and the UI. Most of the work was already in the repo:
+   `removeExerciseFromWorkout` had existed since an earlier session with no UI
+   caller, and `saveTemplateFromPrep`'s fork rule shipped in S27.
+2. `c0ba54d` — Coach APP KNOWLEDGE gained an "Editing a template" entry. It
+   was missed in the feature commit, which SINGLE_ARCHITECTURE_DOC_RULE
+   requires. Written as behaviour, not a list of template names or counts —
+   a count in that prompt is what went stale last time.
+
+**Two real defects were found in code review, not by the tests.** Both are the
+same shape, and both are the reason this took five plan rounds and three code
+rounds:
+- **P1, introduced-by-reachability.** `syncToTemplate` applied the *active
+  workout's* exercise index positionally to the *template's* array. Safe only
+  while the two were aligned — and this feature is the first thing in the app
+  able to break that alignment. Removing an exercise made every later set edit
+  land on the wrong template exercise, persisted immediately to custom storage
+  and the cloud, surviving Cancel. Now resolved by catalog id.
+- **P2, pre-existing since the S25.3 per-set remove.** The identical defect one
+  level down: removing a *set* shifted the survivors, so a later edit wrote
+  into the removed set's slot. Sets carry no ids, so the guard is an
+  equal-count check. This one was live in the app for sessions.
+
+**The resolver fails closed, deliberately.** Where catalog id cannot decide —
+absent, or the same exercise listed twice — it refuses the immediate
+write-through rather than guess. Nothing is lost: Save and START persist the
+whole prep payload through `writeTemplate` and resolve no indices at all. An
+earlier revision kept a positional tie-break for the equal-length case;
+review round 2 constructed a state that defeats it, so it was dropped rather
+than carried into the active-workout sync work as a latent hazard.
+
+**Process notes worth keeping:**
+- 151 tests, 24 recorded mutations killed. The reviewers' own provider probes
+  found both P1s; the 32 tests submitted with the feature found neither. The
+  standing assumption that a passing suite proves nothing held again.
+- Reviewer quota is now a real scheduling constraint. One Codex re-review
+  consumed an entire 5-hour window and 17% of the weekly budget. Reviews were
+  sequenced across two harnesses, second reviewer seeing the first's findings.
+- **Unexplained, unresolved:** `src/components/workout/ExerciseResult.css`
+  changed from `:disabled` to `[aria-disabled="true"]` at 12:27 on 2026-09-14
+  and no agent's transcript accounts for it. The content is correct, was
+  reviewed twice and is live. Three agents shared this one worktree at the
+  time, which WORKTREE_ISOLATION_RULE exists to prevent. Treat as a reason to
+  give reviewers their own worktree, not as a resolved question.
+
 ## Session 32 — 2026-09-12/13 (deletion, identity, auth)
 
 **Shipped to `main` and verified live:**
@@ -296,9 +348,9 @@ Supersedes the per-session lists below, which are kept for context.
    is suppressed from `newItems`** by the fingerprint filter, so it never
    becomes visible. Pre-existing, non-destructive, tracked separately from the
    deletion work.
-6. **P3 — Remove an exercise from an existing custom template.** No UI path.
-   Spec at revision 5 in `docs/template_exercise_removal_spec_s32.md`, in
-   plan review (five Codex rounds so far); owner decisions A–E recorded there.
+6. ~~P3 — Remove an exercise from an existing custom template.~~ **DONE,
+   shipped `eb6039b`, live and owner-confirmed 2026-09-14 (S33).** Spec frozen
+   at `docs/template_exercise_removal_spec_s32.md` revision 5 + nits.
 7. **P2 — Template create idempotency (HIGH, own spec; owner decision E2,
    2026-09-13).** `POST /api/templates` always inserts; no client-id
    uniqueness. A lost response, a queued replay, or an in-flight save can
