@@ -1,5 +1,24 @@
 # S34 — Reorder exercises by dragging, and no rest timer at the end
 
+> **SUPERSEDED 2026-09-20 — do not build from this file.** The plan review
+> returned CHANGES-REQUIRED and recommended splitting the two features; the
+> owner agreed. Feature B is now `docs/end_of_workout_rest_spec_s34.md`.
+> Feature A gets its own spec, written after B ships, and must carry the three
+> P1 findings this file predates:
+>
+> 1. `resolveTemplateExerciseIndex` (`WorkoutContext.jsx:2771-2779`) still
+>    resolves positionally first, so §2's claim that reordering cannot
+>    mis-target is **false** for the recommendation path when a template lists
+>    the same exercise twice. Owner approved fixing it with feature A.
+> 2. Prep rows are keyed by catalog id **plus index**
+>    (`TrackWorkout.jsx:492`), so reordering remounts the row and destroys the
+>    element holding pointer capture and focus. Keys must be instance ids.
+> 3. The three-control header does fit at 390 px — 310 px available, three
+>    44 px controls plus 154 px for a truncated title — so risk 1 below is
+>    resolved, not open.
+>
+> Retained for the review trail only.
+
 > Spec committed alone under SPEC_FIRST_RULE. No implementation code.
 > Anchored to `c766002`. Every file:line below was read at that revision.
 
