@@ -13,9 +13,14 @@
 > 2. Prep rows are keyed by catalog id **plus index**
 >    (`TrackWorkout.jsx:492`), so reordering remounts the row and destroys the
 >    element holding pointer capture and focus. Keys must be instance ids.
-> 3. The three-control header does fit at 390 px — 310 px available, three
->    44 px controls plus 154 px for a truncated title — so risk 1 below is
->    resolved, not open.
+> 3. `toggleSetComplete` has three call sites, not the one this file wired
+>    (`GuidedWorkoutView.jsx:296`, `:314`, `:525`). That was feature B's
+>    finding and has moved with it to the job-1 spec.
+>
+> Not a P1, but carried forward: the three-control header is **feasible** at
+> 390 px — 310 px available, three 44 px controls, 154 px left for a truncated
+> title — so risk 1 below is a sizing exercise rather than an open question.
+> The CSS work is still required.
 >
 > Retained for the review trail only.
 

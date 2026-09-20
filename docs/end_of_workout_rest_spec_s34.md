@@ -29,6 +29,20 @@ driven by `confirmModal` (`:67`) and `handleConfirmFinish` (`:224-230`),
 reusing the shared `Modal`. **This spec builds no new dialog** — it triggers
 that one.
 
+**What actually happens today.** `goToNext` (`:207-222`) advances the set,
+else the exercise, else — on the final set of the final exercise —
+`setConfirmModal({ isOpen: true })` (`:220`). The auto-advance effect (`:123`)
+calls it once a rest has run down. So the dialog the owner is asking for
+*already appears*; it just appears **after sitting through a rest timer**.
+
+This feature is therefore not new behaviour. It brings an existing dialog
+forward to the moment of completion and drops the pointless rest. Two
+consequences for the tests in §7: the dialog opening is **not** proof that the
+advance was suppressed, because `goToNext`'s third branch opens it too; and the
+advance must be asserted against both `currentSetIndex` and
+`currentExerciseIndex`, since the first branch (`:212-214`) moves the set index
+while leaving the exercise index alone.
+
 ## 3. Deciding "the workout is finished"
 
 **Definition:** no set anywhere in the workout remains incomplete, counting the
@@ -86,18 +100,47 @@ All three consume the return value. A single shared handler takes the boolean
 so the behaviour cannot drift between them.
 
 On `true`, in this order:
-1. Suppress the pending auto-advance by clearing `wasRestingRef.current`.
-2. `skipRest()`, to clear a rest that was already running or paused from the
-   previous set.
+1. If a rest is currently live — `isActive`, or paused with `timeLeft > 0` —
+   **arm a suppression latch** (§4.3).
+2. `skipRest()`, to clear that rest.
 3. Open the existing `confirmModal`.
 
-**Why step 1 exists.** `:123` advances to the next exercise when a rest
-transitions to `isActive === false` with `timeLeft === 0`, and `skipRest`
-(`TimerContext.jsx:129-131`) sets exactly that. Without the suppression,
-finishing while a rest is running would advance the view underneath the dialog.
+Timer orchestration stays in the view, where the advance lifecycle lives; the
+context stays the decision-maker. No new context state, no new component.
 
-Timer orchestration stays in the view, where `wasRestingRef` lives; the context
-stays the decision-maker. No new context state, no new component.
+### 4.3 Suppressing the auto-advance — a latch, not a one-shot ref
+
+`:123` advances when a rest transitions to `isActive === false` with
+`timeLeft === 0`, which is exactly the state `skipRest`
+(`TimerContext.jsx:129-131`) produces. Without suppression, finishing while a
+rest is running advances the view underneath the dialog.
+
+**Clearing `wasRestingRef` is not sufficient, and revision 1 was wrong to say
+it was.** `:126` re-writes `wasRestingRef.current = restTimer.isActive` on
+*every* run of that effect, unconditionally. A passive effect queued from an
+earlier rest tick can therefore run *after* the completion handler cleared the
+ref and set it back to `true`; the subsequent stopped/zero effect then sees
+`true` and advances. The plan reviewer reproduced this against the installed
+React with a forced scheduler yield — a deterministic scheduling model, not a
+device-specific flake.
+
+**Required lifecycle** for a separate `suppressAdvanceRef`:
+
+- **Arm** it in the completion handler *only when a rest is actually live*
+  (`isActive`, or paused with `timeLeft > 0`). Arming when the rest is already
+  idle would leave it armed with no transition coming, wrongly swallowing a
+  later legitimate advance.
+- **In the advance effect, check the latch before anything else.** While armed:
+  do not call `goToNext`; still keep `wasRestingRef` honest by assigning
+  `restTimer.isActive` as today; and **disarm only once the cleared transition
+  is actually observed** (`!isActive && timeLeft === 0`). This is what makes it
+  survive stale effects — a re-arming write from an older effect no longer
+  matters, because the latch, not the ref, gates the advance.
+- **Disarm on cleanup**: when the active workout changes or the view unmounts,
+  so a latch can never leak across workouts.
+
+The latch is a view-lifecycle ref, which is the appropriate tool here — see the
+StrictMode note in §9.
 
 ## 5. Deliberate positions
 
@@ -107,8 +150,11 @@ stays the decision-maker. No new context state, no new component.
   dismissible as today. Re-ticking opens it again, which is correct.
 - Skipping sets means the prompt never fires and the Finish button behaves
   exactly as it does now. Intended fallback, not a gap.
-- No touch interaction changes, so this job carries **no iOS/Android
-  divergence risk**. That belongs to job 2.
+- This job adds **no new drag or touch gesture**, so it carries none of job 2's
+  pointer-behaviour divergence. It is still verified on **both** iPhone and
+  Android, because it touches the final-set input path, the on-screen keyboard
+  dismissal after `blur()` (`:297`), and dialog presentation — all of which do
+  differ between the two.
 
 ## 6. Files
 
@@ -143,25 +189,44 @@ back to the owner (ZONE_OVERRIDE_RULE).
 5. An unknown instance id, and a known instance with an unknown set id, each
    return `false` and call no timer method. *Mutation: drop the validation →
    the hypothetical counts a phantom set → red.*
-6. A workout whose only outstanding set is a **warm-up** is finished by
-   completing it. *Mutation: exclude warm-ups from the predicate → returns
-   `false` → red.*
-7. The predicate is computed without re-reading state after `updateSet`:
-   assert `startRestTimer` was not called even when `updateSet` is made to
-   resolve on a later tick. *Mutation: compute from a post-`updateSet` read →
-   red or hangs.*
+6. **Warm-ups count, in two steps** — one step cannot kill the mutation.
+   With an incomplete warm-up plus an incomplete normal set: completing the
+   normal set returns `false`; *then* completing the warm-up returns `true`.
+   *Mutation: filter warm-ups out of the predicate → the first half returns
+   `true` → red.* (A single-step version passes under that mutation, because
+   dropping the only outstanding warm-up leaves every retained set complete.)
+7. **Same-event ordering.** In one `act`, drive the real provider the way
+   `commitActualReps` does: `updateSet` writing the final set's reps, then
+   `toggleSetComplete` immediately. Assert the call returns `true`
+   **synchronously**, and that after commit the reps and the completed flag
+   both survived. *Mutation: compute the predicate from a re-read of
+   `activeWorkout` after `updateSet` → the toggle sees stale state → red.*
+   (Revision 1 proposed deferring an `updateSet` promise. That is not
+   constructible: `updateSet` returns `void` and is lexically captured.)
 
 **Component** (`GuidedWorkoutView.test.jsx`, the existing ReactDOM/jsdom
 pattern from `loginIdentity.test.jsx`)
 8. Each of the three call sites — reps entry, Log Set, checkbox — opens the
    dialog when its completion finishes the workout. Three cases, one per site.
    *Mutation: unwire any single site → that case red.*
-9. Finishing **while a rest is running** leaves `currentExerciseIndex`
-   unchanged and the dialog open. *Mutation: drop the `wasRestingRef`
-   suppression → the view advances → red.*
-10. Finishing when no rest is running still opens the dialog and does not
-    advance. *Mutation: call `skipRest` unconditionally without the
-    suppression → red.*
+9. Finishing **while a rest is running** does not advance. The fixture must
+    have a **navigable following exercise** and must drive the timer through
+    real stateful updates, not a frozen mock — otherwise the effect never
+    fires and the test passes for the wrong reason. Assert **both**
+    `currentSetIndex` and `currentExerciseIndex` are unchanged; the dialog
+    being open proves nothing, since `goToNext`'s third branch (`:220`) opens
+    it too. *Mutation: gate the advance on `wasRestingRef` alone instead of
+    the latch, with a stale re-arming effect in play → the view advances →
+    red.*
+10. Finishing while a rest is **paused with time remaining** clears it: the
+    rest timer ends at zero and inactive, and the view still does not advance.
+    *Mutation: skip the `skipRest()` call on a paused rest → a paused timer
+    survives behind the dialog → red.* (Revision 1's mutant — dropping
+    suppression while idle — cannot fail, because neither version advances
+    when there was no rest transition to begin with.)
+11. Arming is **conditional**: finishing with no rest live leaves the latch
+    disarmed, so a later legitimate rest-driven advance still works.
+    *Mutation: arm unconditionally → the next advance is swallowed → red.*
 
 ## 8. Verification (HIGH tier)
 
@@ -182,11 +247,15 @@ pattern from `loginIdentity.test.jsx`)
 1. **A caller added later that ignores the return value** silently loses the
    behaviour. Mitigation: one shared handler in the view rather than three
    copies, and test 8 covers each site.
-2. **StrictMode replay.** The predicate is pure and computed outside any
-   updater, so a replay recomputes the same answer. Explicitly not stored in a
-   ref or a mount guard — those do not survive replay (APP INVARIANTS).
-3. **A rest already running at the moment of completion** is the interesting
-   state, and it is what tests 9 and 10 exist for.
+2. **StrictMode.** The predicate is pure and computed outside any state
+   updater, so it is safe. The APP INVARIANTS warning about mount-guard refs
+   is about refs used to gate *effects on mount*, which StrictMode replays —
+   it does not apply here: ordinary event handlers are not replayed, and the
+   §4.3 suppression latch is a view-lifecycle ref, which is the right tool.
+   Revision 1 over-applied that invariant.
+3. **A rest live at the moment of completion** — running or paused — is the
+   interesting state, and what tests 9, 10 and 11 exist for. The stale-effect
+   re-arming in §4.3 is the specific failure they guard.
 
 ## 10. Done means
 
