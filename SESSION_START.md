@@ -250,6 +250,69 @@ splitting on it.
 Repo state at close: `5598f4b`, both Railway services SUCCESS, both checkouts
 clean, two worktrees, six branches. Nothing in flight, no agents running.
 
+## Session 34 — 2026-09-20/21 (prep-screen reordering + end-of-workout rest, shipped)
+
+**All four commits are on `main`, deployed SUCCESS, and owner-confirmed working
+on his phone.** 178 tests at close (was 151), build clean, 0 lint errors.
+
+1. `1b0f380` — **no rest timer once the workout is finished.**
+   `toggleSetComplete` returns whether that tick finished the workout and skips
+   the rest timer when it did. "Finished" is *no incomplete set anywhere*,
+   computed as a synchronous hypothetical against current state — never "the
+   last set of the last exercise", and never re-read after `updateSet`, which
+   is async. `GuidedWorkoutView` gained a latch so the suppressed rest cannot
+   auto-advance the exercise.
+2. `63bf5ce` — **drag to reorder exercises on the prep screen.** Plus two
+   prerequisites the plan review found: prep rows were keyed by position (an
+   index key rebuilds the row mid-drag), and `resolveTemplateExerciseIndex`
+   tried the stored position first, so a template listing one exercise twice
+   had the wrong copy updated by a progression. Both now resolve by id and fail
+   closed.
+3. `892b72c` — **fix: the drag did nothing on a phone.** See below.
+4. `7c84a09` — **reorganize mode.** A prep-screen toggle collapses every card to
+   its name row, grip and set count, so a long list fits one screen and a move
+   of several places is one short drag. View state only; nothing persisted.
+
+**The defect that reached the owner's phone, and why.** The first drag build
+reordered the live array on every pointer move. React then *moves* the row's DOM
+node, and moving the node holding pointer capture releases the capture and fires
+`pointercancel` — which the handler treated as "finger lifted". On touch the
+pointer is gone after a cancel, so the drag died within a few pixels: the grip
+rendered and nothing moved. It now previews with transforms and commits once on
+`pointerup`, so no node moves during the gesture.
+
+It shipped because **every reorder test drove the keyboard path**. Not one
+dispatched a pointer event, so the entire drag was untested behind a green
+suite. The general form: a feature's primary input method must be exercised by
+at least one test, or the suite is green over nothing.
+
+**Process — the owner called it, and he was right.** Two small features cost
+five plan-review rounds before any code existed, and he said plainly he was
+close to going back to Claude Desktop. A meaningful share of that was ceremony,
+including a third plan round this session chose to run after adopting every
+finding of round 2 without dispute. The single-pass builds he then directed took
+~40 minutes each with full mutation checks. **Open question for the owner, not
+yet decided:** whether to amend `AGENTS.md` so the multi-round plan review and
+the two clearance phrases apply only to schema, auth, and destructive work.
+
+**What to keep regardless:** the mutation discipline, and the rule that each
+test must name the asserted value that flips under its named mutation. It killed
+five dead tests in the rest-timer work, two mis-aimed ones in the reorder work,
+and one decorative test this session was about to add for reorganize mode. Every
+one of those looked green and verified nothing.
+
+**A doc-accuracy miss worth recording.** `892b72c` declared "no architectural
+change" while it had in fact replaced the drag mechanism `ARCHITECTURE.md`
+described. Caught one commit later and corrected in `7c84a09`. The completion
+report's required `ARCHITECTURE.md:` line only works if the answer is checked
+against the doc, not recalled.
+
+Repo state at close: `main` at `7c84a09`, frontend Railway SUCCESS, tree clean
+on `feat/s34-end-rest` (which equals `main`). No agents running, nothing in
+flight. Backend untouched this session.
+
+**Next, at the owner's direction:** add more exercises to the app. Not started.
+
 ## Session 33 — 2026-09-14 (template exercise removal, shipped)
 
 **Shipped to `main` and verified live. Owner confirmed it working on his
@@ -345,9 +408,22 @@ that once put an exercise count in the Coach prompt.
 
 ---
 
-## OPEN ITEMS — consolidated 2026-09-13
+## OPEN ITEMS — consolidated 2026-09-13, amended 2026-09-21 (S34)
 
 Supersedes the per-session lists below, which are kept for context.
+
+**Added in S34**
+0a. **Next task, owner-directed:** add more exercises to the catalog. Not
+   started, no spec. Scope and source of the exercise data both undecided.
+0b. **Owner decision pending — process weight.** Whether `AGENTS.md`'s
+   multi-round plan review and two clearance phrases should narrow to schema,
+   auth, and destructive work only. Raised by the owner in S34 after five plan
+   rounds on two small UI features; he has not yet said yes. Do not amend
+   `AGENTS.md` without that answer.
+0c. **P2 — a feature's primary input method must have a test that drives it.**
+   S34 shipped a drag that could not work on touch behind a fully green suite,
+   because every reorder test used the keyboard path. Candidate for
+   `docs/skills/` rather than a rule, since it is a test-design technique.
 
 **Blocking work in flight**
 1. **P1 — S32 Fix 1b deletion.** Two P1s + one mislabelled test, above. Branch
