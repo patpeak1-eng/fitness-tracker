@@ -8,7 +8,7 @@ import './ExerciseResult.css';
 // the confirmation and the collection (S32). `canRemoveExercise` is false when
 // this is the last exercise — the control stays visible, disabled, with a
 // reason, rather than vanishing.
-const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null, onReorderPointerDown = null, onReorderByKey = null, isDragging = false }) => {
+const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null, onReorderPointerDown = null, onReorderByKey = null, isDragging = false, dragStyle = null }) => {
     const { units, updateSet, addSet, removeSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
     const showRemoveExercise = isPrep && !!workoutData && typeof onRequestRemoveExercise === 'function';
@@ -52,7 +52,10 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
         : { gridTemplateColumns: '0.5fr 1fr 1fr 1fr' };
 
     return (
-        <div className={`exercise-result-card${isDragging ? ' is-dragging' : ''}`}>
+        <div
+            className={`exercise-result-card${isDragging ? ' is-dragging' : ''}${dragStyle && !isDragging ? ' is-displaced' : ''}`}
+            style={dragStyle || undefined}
+        >
             <header className="exercise-header">
                 <div className="header-left">
                     {showReorder && (

@@ -333,17 +333,25 @@
     cursor: grabbing;
 }
 
-/* The card being dragged. No transform: the list itself reorders live, so the
-   row is already where the finger is. */
+/* The card under the finger. Its transform is the live pointer offset, set
+   inline — the list itself does not reorder until the finger lifts. */
 .exercise-result-card.is-dragging {
-    opacity: 0.85;
+    opacity: 0.9;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     position: relative;
     z-index: 2;
+    touch-action: none;
+}
+
+/* A row the dragged card would displace. It glides; the dragged one must not,
+   or it would lag behind the finger. */
+.exercise-result-card.is-displaced {
+    transition: transform 0.18s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .reorder-grip {
+    .reorder-grip,
+    .exercise-result-card.is-displaced {
         transition: none;
     }
 }

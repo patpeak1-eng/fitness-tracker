@@ -240,6 +240,92 @@ describe('reorder wiring (S34)', () => {
         expect(value.reorderExerciseInWorkout, 'neither end can move outward').not.toHaveBeenCalled();
     });
 
+    // --- Pointer drag (S34 follow-up) ---------------------------------------
+    // The first build reordered the live array on every pointer move. React then
+    // MOVED the row's DOM node, which released pointer capture and fired
+    // pointercancel; on a phone the pointer is gone after that, so the drag died
+    // immediately. It shipped because nothing here ever dispatched a pointer
+    // event. These tests dispatch real ones.
+    const ptr = (type, { pointerId = 1, clientY = 0 } = {}) => {
+        const Ctor = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+        const e = new Ctor(type, { bubbles: true, cancelable: true, clientY, button: 0 });
+        if (e.pointerId === undefined) Object.defineProperty(e, 'pointerId', { value: pointerId });
+        return e;
+    };
+
+    // Two 100px-tall rows at y=0 and y=100, so midpoints are 50 and 150.
+    const stubRowGeometry = () => {
+        const cards = Array.from(container.querySelectorAll('.exercise-result-card'));
+        cards.forEach((c, i) => {
+            c.getBoundingClientRect = () => ({ top: i * 100, height: 100, bottom: i * 100 + 100, left: 0, right: 0, width: 300, x: 0, y: i * 100 });
+        });
+        return cards;
+    };
+
+    const dragFirstRowDown = async () => {
+        const grip = grips()[0];
+        stubRowGeometry();
+        await act(async () => { grip.dispatchEvent(ptr('pointerdown', { clientY: 10 })); });
+        await act(async () => { window.dispatchEvent(ptr('pointermove', { clientY: 40 })); });
+        await act(async () => { window.dispatchEvent(ptr('pointermove', { clientY: 170 })); });
+    };
+
+    it('a pointer drag commits exactly one reorder, and only on release', async () => {
+        // Mutation: reorder inside the pointermove handler (the shipped bug).
+        // Flips: the during-the-drag assertion — zero calls becomes two.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await dragFirstRowDown();
+
+        expect(value.reorderExerciseInWorkout, 'the list must not move while the finger is down').not.toHaveBeenCalled();
+
+        await act(async () => { window.dispatchEvent(ptr('pointerup', { clientY: 170 })); });
+
+        expect(value.reorderExerciseInWorkout).toHaveBeenCalledTimes(1);
+        expect(value.reorderExerciseInWorkout).toHaveBeenCalledWith('inst-1', 1);
+    });
+
+    it('the dragged row follows the finger while the drag is live', async () => {
+        // Mutation: stop passing dragStyle to ExerciseResult.
+        // Flips: the transform assertion — the style is empty.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await dragFirstRowDown();
+
+        const dragged = container.querySelector('.exercise-result-card.is-dragging');
+        expect(dragged, 'the row under the finger is not marked as dragging').toBeTruthy();
+        expect(dragged.style.transform).toBe('translateY(160px)');
+
+        const displaced = container.querySelector('.exercise-result-card.is-displaced');
+        expect(displaced, 'the row being passed does not move out of the way').toBeTruthy();
+        expect(displaced.style.transform).toBe('translateY(-100px)');
+    });
+
+    it('pointercancel aborts the drag and leaves the order alone', async () => {
+        // Mutation: treat pointercancel as a drop (commit on it too).
+        // Flips: the not.toHaveBeenCalled assertion.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await dragFirstRowDown();
+
+        await act(async () => { window.dispatchEvent(ptr('pointercancel', { clientY: 170 })); });
+
+        expect(value.reorderExerciseInWorkout).not.toHaveBeenCalled();
+        expect(container.querySelector('.exercise-result-card.is-dragging'), 'the drag preview must clear').toBeNull();
+    });
+
+    it('a tap on the grip never arms a drag', async () => {
+        // Mutation: drop the 6px arming threshold (`< 6` -> `< 0`).
+        // Flips: the is-dragging assertion — a 2px tap starts a drag preview.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        const grip = grips()[0];
+        stubRowGeometry();
+        await act(async () => { grip.dispatchEvent(ptr('pointerdown', { clientY: 10 })); });
+        await act(async () => { window.dispatchEvent(ptr('pointermove', { clientY: 12 })); });
+
+        expect(container.querySelector('.exercise-result-card.is-dragging'), 'a 2px tap must not start a drag').toBeNull();
+
+        await act(async () => { window.dispatchEvent(ptr('pointerup', { clientY: 12 })); });
+        expect(value.reorderExerciseInWorkout).not.toHaveBeenCalled();
+    });
+
     it('the grip is a real button, so it is reachable by keyboard', async () => {
         await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
         const grip = grips()[0];

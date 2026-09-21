@@ -168,10 +168,16 @@ const TrackWorkout = () => {
     // reason a dedicated handle is worth having.
     //
     // Live pointer maths sit in a ref, not state: a re-render mid-drag must not
-    // discard them, and `setPointerCapture` lives on the grip element, which
-    // stays mounted because prep rows are keyed by instance id.
-    const [draggingId, setDraggingId] = useState(null);
-    const dragRef = useRef(null); // { instanceId, pointerId, startY, started }
+    // discard them.
+    //
+    // The list is NOT reordered while the finger is down — only previewed with
+    // transforms, and committed once on release. Reordering live moves the row's
+    // DOM node, and moving the node that holds pointer capture releases the
+    // capture and fires `pointercancel`; on touch the pointer is then gone, so
+    // the drag died on the first few pixels of movement. Preview-then-commit
+    // keeps every node exactly where it was for the whole gesture.
+    const [dragView, setDragView] = useState(null); // { id, dy, from, to, shift }
+    const dragRef = useRef(null); // { instanceId, pointerId, startY, started, rects, shift }
 
     const exerciseIds = () => (activeWorkout?.exercises || []).map(ex => ex.id);
 
@@ -188,7 +194,7 @@ const TrackWorkout = () => {
         if (e.button !== undefined && e.button !== 0) return; // left / primary only
         e.preventDefault();
         e.currentTarget.setPointerCapture?.(e.pointerId);
-        dragRef.current = { instanceId, pointerId: e.pointerId, startY: e.clientY, started: false };
+        dragRef.current = { instanceId, pointerId: e.pointerId, startY: e.clientY, started: false, rects: null, shift: 0 };
     };
 
     useEffect(() => {
@@ -200,32 +206,54 @@ const TrackWorkout = () => {
             // there can only mean reorder. A hold would add latency for nothing.
             if (!d.started) {
                 if (Math.abs(e.clientY - d.startY) < 6) return;
+
+                // Measure ONCE, at the moment the drag arms. Prep rows vary in
+                // height with set count, and nothing moves for the rest of the
+                // gesture, so these rects stay true — and re-measuring mid-drag
+                // would read the previewed transforms back in.
+                const cards = Array.from(document.querySelectorAll('.exercise-result-card'));
+                if (cards.length !== exerciseIds().length) return;
+                d.rects = cards.map(c => {
+                    const r = c.getBoundingClientRect();
+                    return { top: r.top, height: r.height };
+                });
+                // Row pitch, gap included: what every displaced row moves by.
+                d.shift = d.rects.length > 1
+                    ? Math.abs(d.rects[1].top - d.rects[0].top)
+                    : d.rects[0].height;
                 d.started = true;
-                setDraggingId(d.instanceId);
             }
 
-            // Target index from MEASURED row midpoints — prep rows vary in
-            // height with set count, so assumed heights would drift.
-            const cards = Array.from(document.querySelectorAll('.exercise-result-card'));
             const ids = exerciseIds();
-            if (cards.length !== ids.length) return;
             const from = ids.indexOf(d.instanceId);
-            if (from === -1) return;
+            if (from === -1 || !d.rects || d.rects.length !== ids.length) return;
 
             let to = from;
-            for (let i = 0; i < cards.length; i++) {
-                const r = cards[i].getBoundingClientRect();
-                const mid = r.top + r.height / 2;
+            for (let i = 0; i < d.rects.length; i++) {
+                const mid = d.rects[i].top + d.rects[i].height / 2;
                 if (i < from && e.clientY < mid) { to = i; break; }
                 if (i > from && e.clientY > mid) { to = i; }
             }
-            if (to !== from) reorderExerciseInWorkout(d.instanceId, to);
+
+            // Preview only. The commit happens once, on release, and reads the
+            // target from the ref — never from a state updater, which StrictMode
+            // invokes twice.
+            d.from = from;
+            d.to = to;
+            setDragView({ id: d.instanceId, dy: e.clientY - d.startY, from, to, shift: d.shift });
         };
 
-        const onEnd = () => {
-            if (!dragRef.current) return;
+        const onEnd = (e) => {
+            const d = dragRef.current;
+            if (!d || (e && e.pointerId !== undefined && e.pointerId !== d.pointerId)) return;
             dragRef.current = null;
-            setDraggingId(null);
+
+            setDragView(null);
+
+            // pointercancel is an abort, not a drop: leave the order alone.
+            if (e?.type === 'pointerup' && d.started && d.to !== d.from) {
+                reorderExerciseInWorkout(d.instanceId, d.to);
+            }
         };
 
         window.addEventListener('pointermove', onMove);
@@ -237,6 +265,18 @@ const TrackWorkout = () => {
             window.removeEventListener('pointercancel', onEnd);
         };
     });
+
+    // Preview transform for one prep row, given the live drag.
+    const dragStyleFor = (instanceId, index) => {
+        if (!dragView) return null;
+        if (dragView.id === instanceId) {
+            return { transform: `translateY(${dragView.dy}px)` };
+        }
+        const { from, to, shift } = dragView;
+        if (from < index && index <= to) return { transform: `translateY(${-shift}px)` };
+        if (to <= index && index < from) return { transform: `translateY(${shift}px)` };
+        return null;
+    };
 
     // New session → fresh save state (the page persists across workouts).
     useEffect(() => {
@@ -582,7 +622,8 @@ const TrackWorkout = () => {
                                 onRequestRemoveExercise={(instanceId, name) => setRemoveTarget({ instanceId, name })}
                                 onReorderPointerDown={handleReorderPointerDown}
                                 onReorderByKey={handleReorderByKey}
-                                isDragging={draggingId === (typeof item === 'object' ? item.id : null)}
+                                isDragging={!!dragView && dragView.id === (typeof item === 'object' ? item.id : null)}
+                                dragStyle={typeof item === 'object' ? dragStyleFor(item.id, index) : null}
                             />
                         );
                     })}
