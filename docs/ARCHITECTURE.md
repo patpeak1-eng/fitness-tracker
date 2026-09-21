@@ -1369,6 +1369,32 @@ write-through: Save and START persist the whole prep payload through
 `writeTemplate` and resolve no indices at all. Occurrence identity for repeated
 exercises is deliberately not built — see `SESSION_START.md` item 7b.
 
+**Reordering exercises in prep.** `reorderExerciseInWorkout` moves one exercise
+within the session, guarded in both the context and `ActiveWorkoutService` like
+every other active-workout mutation, refusing outside `preparing`, on an
+unknown instance id, on an out-of-range index, and on a no-op — each returning
+`prev` by identity. Exercise objects are carried by reference, so set identity
+and completion survive a move. Nothing is persisted: `templateExercisesFromWorkout`
+already derives template order from the workout array, so Save and START pick
+the new order up with **no change to any write path**, and a built-in still
+forks rather than being modified.
+
+Two things make this safe that were not true before S34. Prep rows are keyed by
+**instance id**, not by position — an index-based key made React rebuild the row
+on every move, destroying the element holding pointer capture. And both template
+resolvers now match by catalog id and fail closed on ambiguity;
+`resolveTemplateExerciseIndex` previously tried the stored position first, so a
+reordered template listing one exercise twice had the wrong copy updated by a
+progression recommendation.
+
+The drag is hand-rolled Pointer Events — one path for mouse, touch and pen, no
+dependency. The grip carries `touch-action: none`, so a drag started there never
+scrolls the page; that is what a dedicated handle buys, and why no hold delay is
+needed. Drag arms after 6 px of movement, target index comes from **measured**
+row midpoints (prep rows vary in height with set count), and pointer maths live
+in a ref so a re-render mid-drag cannot discard them. Arrow Up/Down on the
+focused grip moves the exercise without a pointer at all.
+
 **The workout ends when nothing is outstanding, and then it does not rest.**
 `toggleSetComplete` returns whether that action finished the workout, and
 suppresses the rest timer when it did — resting after the last set is a wait

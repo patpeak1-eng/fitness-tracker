@@ -2805,15 +2805,22 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
     // Recommendation objects carry a positional exerciseIndex captured at
     // detection time; re-verify it against the catalog id in case the
     // template changed shape (or the workout skipped a missing exercise).
+    //
+    // Trying the stored position FIRST is only safe while the id is unique in
+    // the template. Reordering (S34) makes a stale position point at a
+    // different occurrence of the same exercise, so a template listing that
+    // exercise twice would have its wrong copy updated. Ambiguity fails closed
+    // here, exactly as resolveSyncTargetIndex does for prep set edits.
     const resolveTemplateExerciseIndex = (template, rec) => {
         const itemIdAt = (i) => {
             const item = template.exercises?.[i];
             return typeof item === 'string' ? item : item?.id;
         };
-        if (itemIdAt(rec.exerciseIndex) === rec.exerciseId) return rec.exerciseIndex;
-        return (template.exercises || []).findIndex((item) =>
-            (typeof item === 'string' ? item : item?.id) === rec.exerciseId
-        );
+        const matches = (template.exercises || [])
+            .map((_, i) => i)
+            .filter(i => itemIdAt(i) === rec.exerciseId);
+        if (matches.length !== 1) return -1;
+        return matches[0];
     };
 
     // Apply a progression recommendation to its source template. Runs
@@ -2967,6 +2974,20 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             if (list.length <= 1) return prev;
             if (!list.some(item => item?.id === exerciseInstanceId)) return prev;
             return ActiveWorkoutService.removeExercise(prev, { exerciseInstanceId });
+        });
+    };
+
+    // Reorder is prep-only and session-local: the template is not touched until
+    // an explicit Save or START, exactly like removal. Guarded in both layers,
+    // mirroring removeExerciseFromWorkout — every refusal returns `prev` by
+    // identity so React sees no change.
+    const reorderExerciseInWorkout = (exerciseInstanceId, toIndex) => {
+        setActiveWorkout(prev => {
+            if (!prev || prev.status !== 'preparing') return prev;
+            const list = prev.exercises || [];
+            if (!list.some(item => item?.id === exerciseInstanceId)) return prev;
+            if (!Number.isInteger(toIndex) || toIndex < 0 || toIndex >= list.length) return prev;
+            return ActiveWorkoutService.reorderExercise(prev, { exerciseInstanceId, toIndex });
         });
     };
 
@@ -3665,6 +3686,7 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         resumeWorkout,
         addExerciseToWorkout,
         removeExerciseFromWorkout,
+        reorderExerciseInWorkout,
         addSet,
         updateSet,
         removeSet,

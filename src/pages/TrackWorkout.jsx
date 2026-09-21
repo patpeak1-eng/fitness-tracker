@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { WorkoutContext } from '../context/WorkoutContext';
 import ExerciseResult from '../components/workout/ExerciseResult';
 import CreateTemplateModal from '../components/workout/CreateTemplateModal';
@@ -92,7 +92,7 @@ const matchesMuscleFocus = (tags, selected) => {
 const TrackWorkout = () => {
     const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation,
         equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep, templateExercisesFromWorkout,
-        removeExerciseFromWorkout } = useContext(WorkoutContext);
+        removeExerciseFromWorkout, reorderExerciseInWorkout } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -160,6 +160,83 @@ const TrackWorkout = () => {
     // owns the collection rule: never below one exercise.
     const [removeTarget, setRemoveTarget] = useState(null); // { instanceId, name }
     const canRemoveExercise = !!activeWorkout && (activeWorkout.exercises || []).length > 1;
+
+    // --- Drag to reorder (S34) -------------------------------------------
+    // Pointer Events, no dependency: one code path for mouse, touch and pen.
+    // The grip carries `touch-action: none`, so a drag started there never
+    // scrolls the page — which is the hard part of touch reordering, and the
+    // reason a dedicated handle is worth having.
+    //
+    // Live pointer maths sit in a ref, not state: a re-render mid-drag must not
+    // discard them, and `setPointerCapture` lives on the grip element, which
+    // stays mounted because prep rows are keyed by instance id.
+    const [draggingId, setDraggingId] = useState(null);
+    const dragRef = useRef(null); // { instanceId, pointerId, startY, started }
+
+    const exerciseIds = () => (activeWorkout?.exercises || []).map(ex => ex.id);
+
+    const handleReorderByKey = (instanceId, delta) => {
+        const ids = exerciseIds();
+        const from = ids.indexOf(instanceId);
+        if (from === -1) return;
+        const to = from + delta;
+        if (to < 0 || to >= ids.length) return;
+        reorderExerciseInWorkout(instanceId, to);
+    };
+
+    const handleReorderPointerDown = (e, instanceId) => {
+        if (e.button !== undefined && e.button !== 0) return; // left / primary only
+        e.preventDefault();
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        dragRef.current = { instanceId, pointerId: e.pointerId, startY: e.clientY, started: false };
+    };
+
+    useEffect(() => {
+        const onMove = (e) => {
+            const d = dragRef.current;
+            if (!d || e.pointerId !== d.pointerId) return;
+
+            // A 6px threshold, not a hold: the grip is dedicated, so a press
+            // there can only mean reorder. A hold would add latency for nothing.
+            if (!d.started) {
+                if (Math.abs(e.clientY - d.startY) < 6) return;
+                d.started = true;
+                setDraggingId(d.instanceId);
+            }
+
+            // Target index from MEASURED row midpoints — prep rows vary in
+            // height with set count, so assumed heights would drift.
+            const cards = Array.from(document.querySelectorAll('.exercise-result-card'));
+            const ids = exerciseIds();
+            if (cards.length !== ids.length) return;
+            const from = ids.indexOf(d.instanceId);
+            if (from === -1) return;
+
+            let to = from;
+            for (let i = 0; i < cards.length; i++) {
+                const r = cards[i].getBoundingClientRect();
+                const mid = r.top + r.height / 2;
+                if (i < from && e.clientY < mid) { to = i; break; }
+                if (i > from && e.clientY > mid) { to = i; }
+            }
+            if (to !== from) reorderExerciseInWorkout(d.instanceId, to);
+        };
+
+        const onEnd = () => {
+            if (!dragRef.current) return;
+            dragRef.current = null;
+            setDraggingId(null);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
+        return () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
+        };
+    });
 
     // New session → fresh save state (the page persists across workouts).
     useEffect(() => {
@@ -489,7 +566,13 @@ const TrackWorkout = () => {
                         // This ensures the user sees the setup list for EVERYTHING, including Cardio/Planks
                         return (
                             <ExerciseResult
-                                key={`${exId}-${index}-prep`}
+                                // Keyed by INSTANCE id, never by position:
+                                // reordering changes the index, and an
+                                // index-based key makes React discard and
+                                // rebuild the row — which destroys the element
+                                // holding pointer capture, killing the drag
+                                // mid-gesture (S34 plan review P1).
+                                key={(typeof item === 'object' && item.id) ? item.id : `${exId}-${index}-prep`}
                                 exerciseId={exId}
                                 exercises={exercises}
                                 workoutData={typeof item === 'object' ? item : null}
@@ -497,6 +580,9 @@ const TrackWorkout = () => {
                                 invalidWeightSetKeys={prepValidation.invalidWeightSetKeys}
                                 canRemoveExercise={canRemoveExercise}
                                 onRequestRemoveExercise={(instanceId, name) => setRemoveTarget({ instanceId, name })}
+                                onReorderPointerDown={handleReorderPointerDown}
+                                onReorderByKey={handleReorderByKey}
+                                isDragging={draggingId === (typeof item === 'object' ? item.id : null)}
                             />
                         );
                     })}

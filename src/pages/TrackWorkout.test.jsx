@@ -63,6 +63,7 @@ const baseValue = (activeWorkout, templates) => ({
     saveTemplateFromPrep: vi.fn(async (name) => ({ ok: true, mode: 'created', template: { id: 'tpl_custom_new', name } })),
     templateExercisesFromWorkout: (w) => w.exercises.map(ex => ({ id: ex.exercise.id, sets: ex.sets })),
     removeExerciseFromWorkout: vi.fn(),
+    reorderExerciseInWorkout: vi.fn(),
     units: 'metric',
     updateSet: vi.fn(),
     addSet: vi.fn(),
@@ -198,5 +199,52 @@ describe('(d) remove-exercise wiring through the row and the confirmation', () =
         expect(removeSquat.hasAttribute('disabled'), 'a disabled control is skipped by the tab order').toBe(false);
         removeSquat.focus();
         expect(document.activeElement, 'the control must be focusable to be announced').toBe(removeSquat);
+    });
+});
+
+describe('reorder wiring (S34)', () => {
+    const grips = () => Array.from(container.querySelectorAll('.reorder-grip'));
+
+    it('a grip renders per prep row, keyed so a reorder cannot remount it', async () => {
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        expect(grips()).toHaveLength(2);
+        expect(grips()[0].getAttribute('aria-label')).toMatch(/Squat/);
+    });
+
+    it('Arrow Down on a focused grip moves that exercise one place, once', async () => {
+        // Mutation: unbind the keydown handler on the grip.
+        // Flips: the toHaveBeenCalledWith assertion — zero calls.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+
+        const grip = grips()[0];
+        grip.focus();
+        await act(async () => {
+            grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        });
+
+        expect(value.reorderExerciseInWorkout).toHaveBeenCalledTimes(1);
+        expect(value.reorderExerciseInWorkout).toHaveBeenCalledWith('inst-1', 1);
+    });
+
+    it('Arrow Up at the top, and Arrow Down at the bottom, are refused', async () => {
+        // Mutation: drop the bounds check in handleReorderByKey.
+        // Flips: the not.toHaveBeenCalled assertion.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+
+        const [first, last] = grips();
+        await act(async () => {
+            first.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+            last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        });
+
+        expect(value.reorderExerciseInWorkout, 'neither end can move outward').not.toHaveBeenCalled();
+    });
+
+    it('the grip is a real button, so it is reachable by keyboard', async () => {
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        const grip = grips()[0];
+        expect(grip.tagName).toBe('BUTTON');
+        grip.focus();
+        expect(document.activeElement).toBe(grip);
     });
 });

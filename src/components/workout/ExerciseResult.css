@@ -297,6 +297,57 @@
     cursor: not-allowed;
 }
 
+/* Reorder grip in the prep header (S34). Six dots, the platform convention. */
+.reorder-grip {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    margin-left: -10px; /* optical: pull the grip toward the card edge */
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    flex-shrink: 0;
+    /* The whole point of a dedicated handle: a drag started here never scrolls
+       the page, so touch reordering needs no hold delay and no scroll lock. */
+    touch-action: none;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.reorder-grip:hover,
+.reorder-grip:focus-visible {
+    color: var(--text-secondary);
+    background: var(--input-bg);
+}
+
+.reorder-grip:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.reorder-grip:active {
+    cursor: grabbing;
+}
+
+/* The card being dragged. No transform: the list itself reorders live, so the
+   row is already where the finger is. */
+.exercise-result-card.is-dragging {
+    opacity: 0.85;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    position: relative;
+    z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reorder-grip {
+        transition: none;
+    }
+}
+
 .remove-exercise-reason {
     margin: -0.75rem 0 1rem;
     font-size: 0.75rem;

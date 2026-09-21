@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Info, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Info, Plus, Trash2, AlertTriangle, GripVertical } from 'lucide-react';
 import { useWorkout } from '../../context/WorkoutContext';
 import InstructionModal from './InstructionModal';
 import './ExerciseResult.css';
@@ -8,10 +8,11 @@ import './ExerciseResult.css';
 // the confirmation and the collection (S32). `canRemoveExercise` is false when
 // this is the last exercise — the control stays visible, disabled, with a
 // reason, rather than vanishing.
-const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null }) => {
+const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null, onReorderPointerDown = null, onReorderByKey = null, isDragging = false }) => {
     const { units, updateSet, addSet, removeSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
     const showRemoveExercise = isPrep && !!workoutData && typeof onRequestRemoveExercise === 'function';
+    const showReorder = isPrep && !!workoutData && typeof onReorderPointerDown === 'function' && typeof onReorderByKey === 'function';
     const removeReasonId = workoutData ? `remove-reason-${workoutData.id}` : undefined;
 
     // CRITICAL: Find the exercise safely
@@ -51,9 +52,25 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
         : { gridTemplateColumns: '0.5fr 1fr 1fr 1fr' };
 
     return (
-        <div className="exercise-result-card">
+        <div className={`exercise-result-card${isDragging ? ' is-dragging' : ''}`}>
             <header className="exercise-header">
                 <div className="header-left">
+                    {showReorder && (
+                        <button
+                            type="button"
+                            className="reorder-grip"
+                            aria-label={`Reorder ${exercise.name}. Use the arrow keys to move it, or drag.`}
+                            title={`Reorder ${exercise.name}`}
+                            onPointerDown={(e) => onReorderPointerDown(e, workoutData.id)}
+                            onKeyDown={(e) => {
+                                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                                e.preventDefault();
+                                onReorderByKey(workoutData.id, e.key === 'ArrowUp' ? -1 : 1);
+                            }}
+                        >
+                            <GripVertical size={18} />
+                        </button>
+                    )}
                     <h3>{exercise.name}</h3>
                     <button className="info-btn" onClick={() => setShowModal(true)}>
                         <Info size={16} />

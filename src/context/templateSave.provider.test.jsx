@@ -782,6 +782,92 @@ const complete = async (exIdx, setIdx) => {
     return reported;
 };
 
+describe('9. drag to reorder (S34)', () => {
+    const order = () => ctx.activeWorkout.exercises.map(e => e.exercise.id);
+    const storedOrder = () => customsInStorage()[0].exercises.map(e => e.id);
+
+    it('9a. the new order survives an in-place Save', async () => {
+        // Mutation: make reorderExerciseInWorkout return prev.
+        // Flips: BOTH the session-order and the stored-order assertions.
+        seedProfiles();
+        StorageService.saveCustomTemplates(USER.id, [seededCustom()]);
+        await mount();
+        await startTemplate('tpl_custom_seed');
+        expect(order(), 'precondition').toEqual(['wt_squat', 'wt_flat_bench']);
+
+        const bench = ctx.activeWorkout.exercises[1];
+        await act(async () => { ctx.reorderExerciseInWorkout(bench.id, 0); });
+        expect(order(), 'session reordered').toEqual(['wt_flat_bench', 'wt_squat']);
+
+        // Untouched until an explicit save — same rule as removal.
+        expect(storedOrder(), 'template not written yet').toEqual(['wt_squat', 'wt_flat_bench']);
+
+        await save('Own Custom');
+        await flush();
+        expect(storedOrder(), 'Save persists the new order').toEqual(['wt_flat_bench', 'wt_squat']);
+    });
+
+    it('9b. reordering a BUILT-IN leaves it untouched and forks on save', async () => {
+        // Mutation: let writeTemplate accept a built-in.
+        // Flips: the deep-equal snapshot of the built-in in provider state.
+        seedProfiles();
+        await mount();
+        await startTemplate(RICH_BUILT_IN);
+
+        const builtInBefore = JSON.stringify(ctx.templates.find(t => t.id === RICH_BUILT_IN));
+        const first = ctx.activeWorkout.exercises[0];
+        await act(async () => { ctx.reorderExerciseInWorkout(first.id, 2); });
+
+        const result = await save('My Reordered Copy');
+        await flush();
+
+        expect(result.ok).toBe(true);
+        expect(JSON.stringify(ctx.templates.find(t => t.id === RICH_BUILT_IN)), 'the built-in must be byte-identical')
+            .toBe(builtInBefore);
+        const copy = customsInStorage().find(t => t.name === 'My Reordered Copy');
+        expect(copy, 'a copy was created').toBeTruthy();
+        expect(copy.id).not.toBe(RICH_BUILT_IN);
+    });
+
+    it('9c. a set edit after a reorder still lands on the right exercise', async () => {
+        // The S32 regression guard: set edits resolve by catalog id, so moving
+        // an exercise must not redirect its weights.
+        // Mutation: resolve positionally in resolveSyncTargetIndex.
+        // Flips: both weight assertions — 999 lands on the squat.
+        seedProfiles();
+        StorageService.saveCustomTemplates(USER.id, [seededCustom()]);
+        await mount();
+        await startTemplate('tpl_custom_seed');
+
+        const bench = ctx.activeWorkout.exercises[1];
+        await act(async () => { ctx.reorderExerciseInWorkout(bench.id, 0); });
+        const movedBench = ctx.activeWorkout.exercises[0];
+        expect(movedBench.exercise.id, 'precondition: bench did not move').toBe('wt_flat_bench');
+
+        await act(async () => { ctx.updateSet(movedBench.id, movedBench.sets[0].id, { weight: 999 }); });
+        await flush();
+
+        const stored = customsInStorage()[0].exercises;
+        expect(stored.find(e => e.id === 'wt_flat_bench').sets[0].weight, 'the edit follows the exercise').toBe(999);
+        expect(stored.find(e => e.id === 'wt_squat').sets[0].weight, 'the other one is untouched').toBe(100);
+    });
+
+    it('9d. reorder is refused outside prep, by identity', async () => {
+        // Mutation: drop the status guard in reorderExerciseInWorkout.
+        // Flips: the toBe(live) identity assertion.
+        seedProfiles();
+        StorageService.saveCustomTemplates(USER.id, [seededCustom()]);
+        await mount();
+        await startTemplate('tpl_custom_seed');
+        await act(async () => { ctx.startGuidedSession(); });
+        expect(ctx.activeWorkout.status, 'precondition').toBe('active');
+
+        const live = ctx.activeWorkout;
+        await act(async () => { ctx.reorderExerciseInWorkout(live.exercises[1].id, 0); });
+        expect(ctx.activeWorkout, 'a live session is not reorderable').toBe(live);
+    });
+});
+
 describe('8. no rest timer once the workout is finished (S34)', () => {
     it('8a. the final outstanding set reports finished and starts no rest', async () => {
         // Mutation: make startRestTimer unconditional again.

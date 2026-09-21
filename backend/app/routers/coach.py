@@ -89,6 +89,11 @@ APP KNOWLEDGE — you know everything about this app:
   custom templates under the same name updates it in place. A built-in is
   never modified — saving asks for a name and creates the user's own copy,
   leaving the built-in as it shipped
+- Reordering exercises: on the prep screen each exercise has a grip handle of
+  dots to the left of its name. Drag it to move that exercise up or down the
+  list, or focus it and use the arrow keys. The new order is saved the same
+  way any other prep change is — in place for the user's own template, as a
+  named copy for a built-in
 - Finishing a workout: completing the last outstanding set starts no rest
   timer and offers to finish the workout instead. Sets can be completed in
   any order; what matters is that none are left outstanding, not which set

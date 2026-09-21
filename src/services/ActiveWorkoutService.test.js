@@ -131,3 +131,49 @@ describe("ActiveWorkoutService", () => {
     expect(next.exercises[0].sets).toEqual([{ id: "set_1", reps: 5 }]);
   });
 });
+
+describe("reorderExercise (S34)", () => {
+  const state = () => ({
+    status: "preparing",
+    exercises: [
+      { id: "a", sets: [{ id: "s1" }] },
+      { id: "b", sets: [{ id: "s2" }] },
+      { id: "c", sets: [{ id: "s3" }] },
+    ],
+  });
+
+  it("moves one exercise and leaves the others in relative order", () => {
+    // Mutation: insert without removing first (drop the splice(from, 1)).
+    // Flips: the id-order assertion — the list grows to four entries.
+    const before = state();
+    const next = ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "a", toIndex: 2 });
+
+    expect(next.exercises.map(e => e.id)).toEqual(["b", "c", "a"]);
+    expect(next.exercises, "no duplication or loss").toHaveLength(3);
+    expect(before.exercises.map(e => e.id), "input not mutated").toEqual(["a", "b", "c"]);
+  });
+
+  it("carries the exercise objects by reference, so set identity survives", () => {
+    // Mutation: deep-clone the moved exercise instead of carrying it.
+    // Flips: the toBe identity assertion on the sets array.
+    const before = state();
+    const movedSets = before.exercises[0].sets;
+    const next = ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "a", toIndex: 1 });
+
+    expect(next.exercises[1].sets).toBe(movedSets);
+  });
+
+  it("refuses an unknown id, an out-of-range index, and a no-op move, by identity", () => {
+    // Mutation: drop any one of the three guards.
+    // Flips: that guard's toBe(before) — a refusal that returns a NEW object
+    // fails identity even though the contents look unchanged.
+    const before = state();
+
+    expect(ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "zzz", toIndex: 1 })).toBe(before);
+    expect(ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "a", toIndex: 3 })).toBe(before);
+    expect(ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "a", toIndex: -1 })).toBe(before);
+    expect(ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "a", toIndex: 1.5 })).toBe(before);
+    expect(ActiveWorkoutService.reorderExercise(before, { exerciseInstanceId: "a", toIndex: 0 })).toBe(before);
+    expect(ActiveWorkoutService.reorderExercise(null, { exerciseInstanceId: "a", toIndex: 0 })).toBe(null);
+  });
+});
