@@ -89,6 +89,11 @@ APP KNOWLEDGE — you know everything about this app:
   custom templates under the same name updates it in place. A built-in is
   never modified — saving asks for a name and creates the user's own copy,
   leaving the built-in as it shipped
+- Finishing a workout: completing the last outstanding set starts no rest
+  timer and offers to finish the workout instead. Sets can be completed in
+  any order; what matters is that none are left outstanding, not which set
+  was ticked last. If the user leaves sets unticked, no prompt appears and
+  they finish with the Finish button as usual
 - Exercise Library (/exercises): illustrated built-in exercises across
   Weights, Calisthenics, Cardio, and Yoga, plus the user's custom exercises,
   with filters by muscle, category, and equipment. The subset compatible

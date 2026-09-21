@@ -84,6 +84,13 @@ const GuidedWorkoutView = () => {
     // Auto-advance trackers — hoisted above the early returns (Rules of Hooks).
     const wasRestingRef = React.useRef(false);
     const wasWorkingRef = React.useRef(false);
+    // Set when finishing the workout clears a live rest. Clearing
+    // `wasRestingRef` alone is NOT enough: the rest effect below re-writes it
+    // unconditionally on every run, so a passive effect queued from an earlier
+    // tick can re-arm it after the handler cleared it, and the stopped/zero
+    // effect then advances. The latch gates the advance instead of the ref, so
+    // a stale re-arming write cannot defeat it.
+    const suppressAdvanceRef = React.useRef(false);
 
     // Derived values, computed null-safe so every hook below runs on every
     // render — even before activeWorkout / the current exercise exist. The
@@ -120,11 +127,27 @@ const GuidedWorkoutView = () => {
     // --- AUTO-ADVANCE LOGIC ---
     useEffect(() => {
         if (!currentExerciseInstance) return;
-        if (wasRestingRef.current && !restTimer.isActive && restTimer.timeLeft === 0) {
+        const restCleared = !restTimer.isActive && restTimer.timeLeft === 0;
+        if (suppressAdvanceRef.current) {
+            // Swallow this transition. Keep the ref honest so behaviour is
+            // normal once disarmed, and disarm only when the cleared state is
+            // actually observed — that is what survives a stale re-arming
+            // write from an effect queued before the latch was set.
+            wasRestingRef.current = restTimer.isActive;
+            if (restCleared) suppressAdvanceRef.current = false;
+            return;
+        }
+        if (wasRestingRef.current && restCleared) {
             goToNext();
         }
         wasRestingRef.current = restTimer.isActive;
     }, [restTimer.isActive, restTimer.timeLeft]);
+
+    // A latch must never outlive the workout that armed it.
+    useEffect(() => {
+        suppressAdvanceRef.current = false;
+        return () => { suppressAdvanceRef.current = false; };
+    }, [activeWorkout?.id]);
 
     useEffect(() => {
         if (!currentExerciseInstance) return;
@@ -203,6 +226,23 @@ const GuidedWorkoutView = () => {
     }
 
 
+
+    // Every completion goes through here so the three call sites cannot drift.
+    // Returns nothing: callers toggle, then continue with their own business.
+    const completeSet = (exerciseInstanceId, setId) => {
+        const finished = toggleSetComplete(exerciseInstanceId, setId, false);
+        if (!finished) return;
+
+        // Arm ONLY when a rest is actually live. Arming with nothing to
+        // suppress would leave the latch waiting for a transition that never
+        // comes, swallowing the next legitimate advance instead.
+        const restIsLive = restTimer.isActive || restTimer.timeLeft > 0;
+        if (restIsLive) {
+            suppressAdvanceRef.current = true;
+            skipRest();
+        }
+        setConfirmModal({ isOpen: true });
+    };
 
     const goToNext = () => {
         stopWorkTimer();
@@ -293,7 +333,7 @@ const GuidedWorkoutView = () => {
         }
         // Reps must land before the completion toggle (PR check reads the set).
         updateSet(currentExerciseInstance.id, set.id, { reps });
-        toggleSetComplete(currentExerciseInstance.id, set.id, false);
+        completeSet(currentExerciseInstance.id, set.id);
         inputEl.blur();
     };
 
@@ -311,7 +351,7 @@ const GuidedWorkoutView = () => {
         if (inputValues.time !== currentSet.time) updates.time = Number(inputValues.time);
 
         updateSet(currentExerciseInstance.id, currentSet.id, updates);
-        toggleSetComplete(currentExerciseInstance.id, currentSet.id, false);
+        completeSet(currentExerciseInstance.id, currentSet.id);
         setShowInputModal(false);
     };
 
@@ -522,7 +562,7 @@ const GuidedWorkoutView = () => {
                                         type="button"
                                         className="active-set-check"
                                         aria-label={`${set.completed ? 'Mark set incomplete' : 'Mark set complete'} ${index + 1}`}
-                                        onClick={() => toggleSetComplete(currentExerciseInstance.id, set.id, set.completed)}
+                                        onClick={() => set.completed ? toggleSetComplete(currentExerciseInstance.id, set.id, true) : completeSet(currentExerciseInstance.id, set.id)}
                                     >
                                         {set.completed && <Check size={18} strokeWidth={3} />}
                                     </button>

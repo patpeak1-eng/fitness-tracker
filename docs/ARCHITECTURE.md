@@ -1369,6 +1369,27 @@ write-through: Save and START persist the whole prep payload through
 `writeTemplate` and resolve no indices at all. Occurrence identity for repeated
 exercises is deliberately not built — see `SESSION_START.md` item 7b.
 
+**The workout ends when nothing is outstanding, and then it does not rest.**
+`toggleSetComplete` returns whether that action finished the workout, and
+suppresses the rest timer when it did — resting after the last set is a wait
+for nothing. "Finished" is *no incomplete set anywhere*, never "the last set of
+the last exercise": sets are ticked in any order, and positional reasoning has
+produced three separate defects in this file. The answer is a **synchronous
+hypothetical** computed before `updateSet` — that update is asynchronous, so a
+read after it still shows the pre-toggle value — treating only the one
+validated set as complete. Warm-ups count; they are exempt from the PR check,
+not from completion.
+
+`GuidedWorkoutView` consumes that boolean at all three completion call sites
+through one shared handler, and opens the Finish dialog that `goToNext` already
+opens at the end of a workout — the change brings that dialog forward, it does
+not add one. When a rest was live it is cleared, and a **suppression latch**
+blocks the auto-advance: clearing `wasRestingRef` alone is insufficient because
+the rest effect re-writes it on every run, so an effect queued from an earlier
+tick can re-arm it and the cleared-rest transition then advances the view under
+the dialog. The latch arms only when a rest is actually live, disarms only once
+the cleared transition is observed, and never outlives its workout.
+
 **Template backendId adoption.** `adoptTemplateBackendId(uid, localId,
 backendId)` is the shared acknowledgement path for direct and queued template
 creates: it writes the originating profile's custom storage, then updates

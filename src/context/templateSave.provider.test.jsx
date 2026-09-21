@@ -95,6 +95,7 @@ const Probe = () => {
 };
 
 let container, root;
+let timerApi = null;
 
 const flush = async () => {
     await act(async () => { await Promise.resolve(); });
@@ -104,12 +105,13 @@ const flush = async () => {
 const mount = async () => {
     container = document.createElement('div');
     document.body.appendChild(container);
-    const timerApiRef = {
-        current: {
-            skipRest: vi.fn(),
-            resetWorkTimer: vi.fn(),
-        },
+    timerApi = {
+        skipRest: vi.fn(),
+        resetWorkTimer: vi.fn(),
+        startRestTimer: vi.fn(),
+        stopWorkTimer: vi.fn(),
     };
+    const timerApiRef = { current: timerApi };
     await act(async () => {
         root = createRoot(container);
         root.render(
@@ -745,5 +747,155 @@ describe('7. a rejected chained PUT queues the latest payload, not the captured 
         // an unrelated POST.
         const createsForFork = ApiService.saveCustomTemplate.mock.calls.filter(([t]) => t?.id === forkedId);
         expect(createsForFork, 'no second create for the forked template').toHaveLength(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// S34 — no rest timer once the workout is finished.
+// Spec: docs/end_of_workout_rest_spec_s34.md section 7.
+// Every test names both its mutation AND the asserted value that flips under
+// it. A mutation that changes no asserted value is a decorative test.
+// ---------------------------------------------------------------------------
+
+const twoExerciseSeed = (squatSets, benchSets) => seededCustom({
+    exercises: [
+        { id: 'wt_squat', sets: squatSets },
+        { id: 'wt_flat_bench', sets: benchSets },
+    ],
+});
+const aSet = (over = {}) => ({ targetReps: 5, weight: 100, ...over });
+
+const startGuided = async (seed) => {
+    seedProfiles();
+    StorageService.saveCustomTemplates(USER.id, [seed]);
+    await mount();
+    await startTemplate('tpl_custom_seed');
+    await act(async () => { ctx.startGuidedSession(); });
+    expect(ctx.activeWorkout.status, 'precondition: guided session did not start').toBe('active');
+};
+
+const complete = async (exIdx, setIdx) => {
+    const ex = ctx.activeWorkout.exercises[exIdx];
+    const set = ex.sets[setIdx];
+    let reported;
+    await act(async () => { reported = ctx.toggleSetComplete(ex.id, set.id, !!set.completed); });
+    return reported;
+};
+
+describe('8. no rest timer once the workout is finished (S34)', () => {
+    it('8a. the final outstanding set reports finished and starts no rest', async () => {
+        // Mutation: make startRestTimer unconditional again.
+        // Flips: the not.toHaveBeenCalled assertion on startRestTimer.
+        await startGuided(twoExerciseSeed([aSet()], [aSet()]));
+
+        expect(await complete(0, 0), 'first of two is not the end').toBe(false);
+        expect(timerApi.startRestTimer, 'a normal set still rests').toHaveBeenCalledTimes(1);
+
+        timerApi.startRestTimer.mockClear();
+        expect(await complete(1, 0), 'that was the last outstanding set').toBe(true);
+        expect(timerApi.startRestTimer, 'no rest once the workout is over').not.toHaveBeenCalled();
+        expect(timerApi.stopWorkTimer, 'the work timer still stops').toHaveBeenCalled();
+    });
+
+    it('8b. ticking out of order is judged by what remains, not by position', async () => {
+        // Mutation: decide on "last set of the last exercise" instead of
+        // "nothing outstanding".
+        // Flips: BOTH halves — the positionally-last set would report true
+        // when it is not the end, and the earlier set would report false
+        // when it is.
+        await startGuided(twoExerciseSeed([aSet(), aSet()], [aSet()]));
+
+        expect(await complete(0, 0), 'squat set 1').toBe(false);
+        expect(await complete(1, 0), 'bench is last by position, squat set 2 remains').toBe(false);
+        expect(timerApi.startRestTimer, 'still resting, work remains').toHaveBeenCalledTimes(2);
+
+        timerApi.startRestTimer.mockClear();
+        expect(await complete(0, 1), 'nothing outstanding now').toBe(true);
+        expect(timerApi.startRestTimer).not.toHaveBeenCalled();
+    });
+
+    it('8c. warm-ups count toward completion, in two steps because one cannot fail', async () => {
+        // Mutation: exclude warm-up sets from the predicate.
+        // Flips: the FIRST assertion — completing the normal set would report
+        // true, because the only thing left is a warm-up the mutant ignores.
+        // A single-step version cannot fail: dropping the only outstanding
+        // warm-up leaves every retained set complete, so it reports true
+        // either way.
+        await startGuided(twoExerciseSeed([aSet()], [aSet()]));
+
+        // setType must be set on the WORKOUT, not the template:
+        // startWorkoutFromTemplate hardcodes setType 'normal' when it builds
+        // sets, so a warm-up seeded in the template never reaches the session.
+        // Seeding it there made an earlier version of this test vacuous.
+        const squat = ctx.activeWorkout.exercises[0];
+        await act(async () => { ctx.updateSet(squat.id, squat.sets[0].id, { setType: 'warmup' }); });
+        expect(ctx.activeWorkout.exercises[0].sets[0].setType, 'precondition: not a warm-up').toBe('warmup');
+
+        expect(await complete(1, 0), 'a warm-up is still outstanding').toBe(false);
+        expect(await complete(0, 0), 'the warm-up was the last one').toBe(true);
+        expect(timerApi.startRestTimer, 'only the non-final set rested').toHaveBeenCalledTimes(1);
+    });
+
+    it('8d. un-ticking never reports finished, and still skips rest', async () => {
+        // Mutation: return the predicate on the un-complete branch too.
+        // Flips: the toBe(false) on the un-tick.
+        await startGuided(twoExerciseSeed([aSet()], [aSet()]));
+        await complete(0, 0);
+        expect(await complete(1, 0), 'precondition: finished').toBe(true);
+
+        timerApi.startRestTimer.mockClear();
+        timerApi.skipRest.mockClear();
+        expect(await complete(1, 0), 'un-ticking is never a finish').toBe(false);
+        expect(timerApi.skipRest, 'un-ticking clears rest as before').toHaveBeenCalled();
+        expect(timerApi.startRestTimer).not.toHaveBeenCalled();
+    });
+
+    it('8e. an unresolvable instance or set reports false', async () => {
+        // Mutation: drop the target?.sets?.some(...) validation.
+        // Flips: both toBe(false) assertions.
+        // The fixture must be OTHERWISE COMPLETE for that to bite: with work
+        // still outstanding the predicate returns false regardless of the
+        // validation, so an earlier version of this test could not fail.
+        await startGuided(twoExerciseSeed([aSet()], [aSet()]));
+        await complete(0, 0);
+        expect(await complete(1, 0), 'precondition: every real set is complete').toBe(true);
+
+        let r1, r2;
+        await act(async () => { r1 = ctx.toggleSetComplete('no-such-instance', 'no-such-set', false); });
+        const realEx = ctx.activeWorkout.exercises[1];
+        await act(async () => { r2 = ctx.toggleSetComplete(realEx.id, 'no-such-set', false); });
+
+        expect(r1, 'unknown instance').toBe(false);
+        expect(r2, 'known instance, unknown set').toBe(false);
+    });
+
+    it('8f. same event: reps land, then the toggle reports finished synchronously', async () => {
+        // This is how commitActualReps drives it: updateSet then
+        // toggleSetComplete, same handler, same tick.
+        //
+        // Mutation: make the predicate OBSERVE instead of hypothesise — drop
+        // the `ex.id === exerciseInstanceId && s.id === setId ? true` arm so
+        // every set is read as stored.
+        // Flips: `reported` becomes false, because the target set is not
+        // complete in state yet and never will be within this tick.
+        // (8a dies under the same mutation. Merely MOVING the computation
+        // after updateSet is not a mutation at all: `activeWorkout` is the
+        // same object either way inside one tick, which is why an earlier
+        // version of this test could not fail.)
+        await startGuided(twoExerciseSeed([aSet()], [aSet()]));
+        await complete(0, 0);
+
+        const ex = ctx.activeWorkout.exercises[1];
+        const set = ex.sets[0];
+        let reported;
+        await act(async () => {
+            ctx.updateSet(ex.id, set.id, { reps: 7 });
+            reported = ctx.toggleSetComplete(ex.id, set.id, false);
+        });
+
+        expect(reported, 'reported synchronously, from the hypothetical').toBe(true);
+        const after = ctx.activeWorkout.exercises[1].sets[0];
+        expect(after.reps, 'the reps survived the same-event toggle').toBe(7);
+        expect(after.completed, 'and so did the completion').toBe(true);
     });
 });

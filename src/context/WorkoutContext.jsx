@@ -2632,8 +2632,35 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
         return false;
     };
 
+    // Would the workout be finished if this one set were complete?
+    //
+    // Computed as a synchronous hypothetical against the CURRENT state, never
+    // from a read after `updateSet` — that update is asynchronous, so a re-read
+    // here would see the pre-toggle value. Only the one validated set is
+    // treated as complete; every other set is read as stored.
+    //
+    // Deliberately not "the last set of the last exercise": sets are ticked in
+    // any order, and positional reasoning has produced three separate defects
+    // in this file's history (S32 H1, its set-level twin, and the reorder
+    // resolver). Warm-ups are ordinary sets here — they are exempt from the PR
+    // check below, not from being completed.
+    const wouldFinishWorkout = (workout, exerciseInstanceId, setId) => {
+        const exercises = workout?.exercises || [];
+        const target = exercises.find(e => e?.id === exerciseInstanceId);
+        if (!target?.sets?.some(s => s?.id === setId)) return false;
+
+        return exercises.every(ex =>
+            (ex?.sets || []).every(s =>
+                (ex.id === exerciseInstanceId && s?.id === setId) ? true : !!s?.completed
+            )
+        );
+    };
+
+    // Returns true when this action finished the workout, so the caller can
+    // offer to finish instead of resting. Completion only — un-completing and
+    // every refusal return false.
     const toggleSetComplete = (exerciseInstanceId, setId, currentStatus) => {
-        if (!activeWorkout) return;
+        if (!activeWorkout) return false;
 
         let updates = { completed: !currentStatus };
 
@@ -2657,18 +2684,28 @@ export const WorkoutProvider = ({ children, timerApiRef }) => {
             updates.isPR = false;
         }
 
+        // Read BEFORE updateSet: that update is async, so this must be the
+        // hypothetical, not an observation.
+        const finished = !currentStatus
+            && wouldFinishWorkout(activeWorkout, exerciseInstanceId, setId);
+
         updateSet(exerciseInstanceId, setId, updates);
 
         // IF finishing a set (marking complete), start appropriate timer logic
         if (!currentStatus) {
             // Stop work timer if running
             timerApiRef.current?.stopWorkTimer();
-            // Start rest timer
-            timerApiRef.current?.startRestTimer(); // Explicitly use default
+            // No rest after the final set — the workout is over, so resting is
+            // a wait for nothing. The caller offers to finish instead.
+            if (!finished) {
+                timerApiRef.current?.startRestTimer(); // Explicitly use default
+            }
         } else {
             // Un-completing logic? Maybe stop rest timer
             timerApiRef.current?.skipRest();
         }
+
+        return finished;
     };
 
     // --- Single canonical template-write path (S27 spec §B). ---
