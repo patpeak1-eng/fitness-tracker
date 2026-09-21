@@ -1390,10 +1390,28 @@ progression recommendation.
 The drag is hand-rolled Pointer Events — one path for mouse, touch and pen, no
 dependency. The grip carries `touch-action: none`, so a drag started there never
 scrolls the page; that is what a dedicated handle buys, and why no hold delay is
-needed. Drag arms after 6 px of movement, target index comes from **measured**
-row midpoints (prep rows vary in height with set count), and pointer maths live
-in a ref so a re-render mid-drag cannot discard them. Arrow Up/Down on the
-focused grip moves the exercise without a pointer at all.
+needed. Drag arms after 6 px of movement, and pointer maths live in a ref so a
+re-render mid-drag cannot discard them. Arrow Up/Down on the focused grip moves
+the exercise without a pointer at all.
+
+The gesture is **preview, then commit**: nothing in the list moves while the
+pointer is down. The dragged row carries the live pointer offset as an inline
+transform, rows it would displace glide by one row pitch, and
+`reorderExerciseInWorkout` is called once, on `pointerup`. This is not a
+stylistic choice. Reordering live moves the row's DOM node, and moving the node
+holding pointer capture releases the capture and fires `pointercancel` — which
+on touch ends the gesture outright, so the first build did nothing at all on a
+phone. `pointercancel` is now an abort that commits nothing. Row geometry is
+**measured once** when the drag arms (prep rows vary in height with set count);
+re-measuring per move would read the preview transforms back in.
+
+**Reorganize mode.** A prep-screen toggle collapses every exercise card to its
+name row plus grip and set count, so a long workout fits on one phone screen and
+an exercise can travel several places in one short drag. It is view state in
+`TrackWorkout` alone — `isCompact` down to `ExerciseResult`, which hides the sets
+rather than discarding them; nothing is edited, persisted, or synced, and the
+mode resets with the session. Collapsing rather than scaling the page is
+deliberate: a scaled page shrinks the type and the touch targets with it.
 
 **The workout ends when nothing is outstanding, and then it does not rest.**
 `toggleSetComplete` returns whether that action finished the workout, and

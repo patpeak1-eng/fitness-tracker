@@ -8,10 +8,14 @@ import './ExerciseResult.css';
 // the confirmation and the collection (S32). `canRemoveExercise` is false when
 // this is the last exercise — the control stays visible, disabled, with a
 // reason, rather than vanishing.
-const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null, onReorderPointerDown = null, onReorderByKey = null, isDragging = false, dragStyle = null }) => {
+const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, invalidWeightSetKeys = [], canRemoveExercise = true, onRequestRemoveExercise = null, onReorderPointerDown = null, onReorderByKey = null, isDragging = false, dragStyle = null, isCompact = false }) => {
     const { units, updateSet, addSet, removeSet } = useWorkout();
     const [showModal, setShowModal] = useState(false);
     const showRemoveExercise = isPrep && !!workoutData && typeof onRequestRemoveExercise === 'function';
+    // Reorganize mode: the card collapses to its name row, so the whole list
+    // fits on one screen and a drag covers several places at once. Sets are
+    // hidden, never discarded — this is a view state, nothing is edited.
+    const compact = isPrep && isCompact;
     const showReorder = isPrep && !!workoutData && typeof onReorderPointerDown === 'function' && typeof onReorderByKey === 'function';
     const removeReasonId = workoutData ? `remove-reason-${workoutData.id}` : undefined;
 
@@ -53,7 +57,7 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
 
     return (
         <div
-            className={`exercise-result-card${isDragging ? ' is-dragging' : ''}${dragStyle && !isDragging ? ' is-displaced' : ''}`}
+            className={`exercise-result-card${compact ? ' is-compact' : ''}${isDragging ? ' is-dragging' : ''}${dragStyle && !isDragging ? ' is-displaced' : ''}`}
             style={dragStyle || undefined}
         >
             <header className="exercise-header">
@@ -75,9 +79,15 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                         </button>
                     )}
                     <h3>{exercise.name}</h3>
-                    <button className="info-btn" onClick={() => setShowModal(true)}>
-                        <Info size={16} />
-                    </button>
+                    {compact ? (
+                        // The set count keeps the collapsed row informative —
+                        // the sets are hidden, not gone.
+                        <span className="compact-set-count">{sets.length} {sets.length === 1 ? 'set' : 'sets'}</span>
+                    ) : (
+                        <button className="info-btn" onClick={() => setShowModal(true)}>
+                            <Info size={16} />
+                        </button>
+                    )}
                 </div>
                 {showRemoveExercise && (
                     // aria-disabled, not disabled: a `disabled` button leaves the
@@ -106,6 +116,8 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                 </p>
             )}
 
+            {!compact && (
+            <>
             {/* Sets Header */}
             <div className="sets-header" style={gridStyle}>
                 <div className="col-set">SET</div>
@@ -182,6 +194,8 @@ const ExerciseResult = ({ exerciseId, exercises, workoutData, isPrep = false, in
                 <Plus size={16} style={{ display: 'inline', marginRight: '5px' }} />
                 Add Set
             </button>
+            </>
+            )}
 
             {showModal && (
                 <InstructionModal

@@ -326,6 +326,47 @@ describe('reorder wiring (S34)', () => {
         expect(value.reorderExerciseInWorkout).not.toHaveBeenCalled();
     });
 
+    // --- Reorganize mode -----------------------------------------------------
+    const toggle = () => container.querySelector('.reorganize-toggle');
+
+    it('reorganize mode collapses every row to its name, and restores them', async () => {
+        // Mutation: ignore isCompact in ExerciseResult (`const compact = false`).
+        // Flips: the sets-are-hidden assertion — the inputs are still there.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        expect(container.querySelectorAll('.sets-container')).toHaveLength(2);
+
+        await click(toggle());
+
+        expect(container.querySelectorAll('.exercise-result-card.is-compact')).toHaveLength(2);
+        expect(container.querySelectorAll('.sets-container'), 'sets must be hidden while reorganizing').toHaveLength(0);
+        // Collapsed, not emptied: every name and its grip must survive.
+        expect(grips()).toHaveLength(2);
+        expect(container.textContent).toMatch(/Squat/);
+
+        await click(toggle());
+        expect(container.querySelectorAll('.sets-container'), 'leaving the mode restores the sets').toHaveLength(2);
+    });
+
+    it('a drag still commits while collapsed', async () => {
+        // Mutation: stop rendering the grip in compact mode
+        // (`showReorder = ... && !compact`).
+        // Flips: grips() is empty, so the drag never starts and the
+        // toHaveBeenCalledWith assertion goes red.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await click(toggle());
+        await dragFirstRowDown();
+        await act(async () => { window.dispatchEvent(ptr('pointerup', { clientY: 170 })); });
+
+        expect(value.reorderExerciseInWorkout).toHaveBeenCalledWith('inst-1', 1);
+    });
+
+    it('the toggle is not offered when there is nothing to reorder', async () => {
+        // Mutation: drop the `length > 1` condition.
+        // Flips: the toBeNull assertion.
+        await mount(baseValue(prepWorkout('tpl_custom_push', 1), [BUILT_IN, OWN]));
+        expect(toggle(), 'one exercise cannot be reordered').toBeNull();
+    });
+
     it('the grip is a real button, so it is reachable by keyboard', async () => {
         await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
         const grip = grips()[0];

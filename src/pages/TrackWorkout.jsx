@@ -5,7 +5,7 @@ import CreateTemplateModal from '../components/workout/CreateTemplateModal';
 import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
 import PlateCalculator from '../components/workout/PlateCalculator';
 import Modal from '../components/common/Modal'; // Import reusable Modal
-import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings, Save, Trash2 } from 'lucide-react';
+import { Play, Plus, Clock, XCircle, Check, Calculator, ChevronDown, ChevronUp, Dumbbell, Home, Flame, User, Settings, Save, Trash2, ArrowUpDown } from 'lucide-react';
 import { firstFreeTemplateName, isTemplateNameTaken } from '../utils/templateNames';
 import '../styles/filter-chips.css';
 import './TrackWorkout.css';
@@ -176,6 +176,11 @@ const TrackWorkout = () => {
     // capture and fires `pointercancel`; on touch the pointer is then gone, so
     // the drag died on the first few pixels of movement. Preview-then-commit
     // keeps every node exactly where it was for the whole gesture.
+    // Reorganize mode collapses every prep row to its name, so the whole list
+    // fits on one phone screen and an exercise can travel several places in one
+    // short drag. Collapsing beats scaling the page down: the type stays the
+    // same size and the grip stays a full-size touch target.
+    const [reorganizeMode, setReorganizeMode] = useState(false);
     const [dragView, setDragView] = useState(null); // { id, dy, from, to, shift }
     const dragRef = useRef(null); // { instanceId, pointerId, startY, started, rects, shift }
 
@@ -284,6 +289,7 @@ const TrackWorkout = () => {
         setSaveNotice(null);
         setSaveTplModal({ isOpen: false, name: '', error: '' });
         setRemoveTarget(null);
+        setReorganizeMode(false);
     }, [activeWorkout?.id]);
 
     const confirmRemoveExercise = () => {
@@ -595,6 +601,18 @@ const TrackWorkout = () => {
                                 Enter a weight greater than 0 for every weighted set before starting.
                             </p>
                         )}
+                        {/* Only worth offering when there is something to reorder. */}
+                        {(activeWorkout.exercises || []).length > 1 && (
+                            <button
+                                type="button"
+                                className={`reorganize-toggle${reorganizeMode ? ' is-on' : ''}`}
+                                aria-pressed={reorganizeMode}
+                                onClick={() => setReorganizeMode(v => !v)}
+                            >
+                                {reorganizeMode ? <Check size={18} /> : <ArrowUpDown size={18} />}
+                                {reorganizeMode ? 'Done reorganizing' : 'Reorganize exercises'}
+                            </button>
+                        )}
                     </div>
 
                     {activeWorkout.exercises && activeWorkout.exercises.map((item, index) => {
@@ -624,6 +642,7 @@ const TrackWorkout = () => {
                                 onReorderByKey={handleReorderByKey}
                                 isDragging={!!dragView && dragView.id === (typeof item === 'object' ? item.id : null)}
                                 dragStyle={typeof item === 'object' ? dragStyleFor(item.id, index) : null}
+                                isCompact={reorganizeMode}
                             />
                         );
                     })}

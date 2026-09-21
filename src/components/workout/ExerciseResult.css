@@ -333,6 +333,41 @@
     cursor: grabbing;
 }
 
+/* Reorganize mode: the card collapses to its name row. Type size is untouched
+   on purpose — scaling the page down would shrink the words and the touch
+   targets with it, which is the opposite of usable one-handed. */
+.exercise-result-card.is-compact {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.exercise-result-card.is-compact .exercise-header {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.exercise-result-card.is-compact .exercise-header h3 {
+    /* Long exercise names must truncate rather than wrap to a second line:
+       equal row heights are what make the drag predictable. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.exercise-result-card.is-compact .header-left {
+    min-width: 0;
+    flex: 1;
+}
+
+.compact-set-count {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 /* The card under the finger. Its transform is the live pointer offset, set
    inline — the list itself does not reorder until the finger lifts. */
 .exercise-result-card.is-dragging {

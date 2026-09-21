@@ -874,3 +874,25 @@
     color: var(--danger);
     line-height: 1.4;
 }
+
+/* Reorganize mode toggle on the prep screen (S34). Collapses every exercise
+   card to its name row so the whole list fits on one phone screen. */
+.reorganize-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.reorganize-toggle.is-on {
+    border-color: var(--primary);
+    color: var(--primary);
+}
