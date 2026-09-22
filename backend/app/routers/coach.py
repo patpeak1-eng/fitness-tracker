@@ -83,8 +83,10 @@ APP KNOWLEDGE — you know everything about this app:
   when present) — refer to those names only. The lists may be partial; do
   not invent a template that is not listed, and do not infer that one does
   not exist from its omission
-- Editing a template: on the workout prep screen, each exercise has a remove
-  control in its header, and sets can be added or removed on the rows. A
+- Editing a template: on the workout prep screen, an "Add Exercise" button at
+  the end of the list opens the exercise picker, where one or several can be
+  chosen at once and a custom exercise can be created; each exercise has a
+  remove control in its header, and sets can be added or removed on the rows. A
   workout must keep at least one exercise. Saving one of the user's own
   custom templates under the same name updates it in place. A built-in is
   never modified — saving asks for a name and creates the user's own copy,

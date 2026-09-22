@@ -64,6 +64,7 @@ const baseValue = (activeWorkout, templates) => ({
     templateExercisesFromWorkout: (w) => w.exercises.map(ex => ({ id: ex.exercise.id, sets: ex.sets })),
     removeExerciseFromWorkout: vi.fn(),
     reorderExerciseInWorkout: vi.fn(),
+    addExerciseToWorkout: vi.fn(),
     units: 'metric',
     updateSet: vi.fn(),
     addSet: vi.fn(),
@@ -199,6 +200,64 @@ describe('(d) remove-exercise wiring through the row and the confirmation', () =
         expect(removeSquat.hasAttribute('disabled'), 'a disabled control is skipped by the tab order').toBe(false);
         removeSquat.focus();
         expect(document.activeElement, 'the control must be focusable to be announced').toBe(removeSquat);
+    });
+});
+
+describe('adding an exercise from the prep screen (S35)', () => {
+    const addButton = () => container.querySelector('.add-exercise-btn');
+    const selector = () => container.querySelector('.exercise-selector-overlay');
+    const rowAddButtons = () => Array.from(container.querySelectorAll('.exercise-item .add-btn'));
+
+    it('the Add Exercise button opens the picker', async () => {
+        // Mutation: render the picker on `false` instead of showAddExercise.
+        // Flips: the selector-is-open assertion.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        expect(selector(), 'the picker must not be open unprompted').toBeNull();
+
+        await click(addButton());
+        expect(selector(), 'Add Exercise did not open the picker').toBeTruthy();
+    });
+
+    it('confirming a selection adds that exercise and closes the picker', async () => {
+        // Mutation: pass a no-op onSelect to ExerciseSelector.
+        // Flips: the toHaveBeenCalledWith assertion.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await click(addButton());
+
+        await click(rowAddButtons()[0]);
+        await click(buttonByText('Add 1 exercise'));
+
+        expect(value.addExerciseToWorkout).toHaveBeenCalledTimes(1);
+        expect(value.addExerciseToWorkout).toHaveBeenCalledWith('wt_squat');
+        expect(selector(), 'the picker must close after adding').toBeNull();
+    });
+
+    it('several exercises staged at once are each added', async () => {
+        // Mutation: call onSelect only for the first staged exercise in
+        // ExerciseSelector.handleConfirmSelection.
+        // Flips: the call-count and second-argument assertions.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await click(addButton());
+
+        await click(rowAddButtons()[0]);
+        await click(rowAddButtons()[1]);
+        await click(buttonByText('Add 2 exercises'));
+
+        expect(value.addExerciseToWorkout).toHaveBeenCalledTimes(2);
+        expect(value.addExerciseToWorkout).toHaveBeenNthCalledWith(1, 'wt_squat');
+        expect(value.addExerciseToWorkout).toHaveBeenNthCalledWith(2, 'wt_flat_bench');
+    });
+
+    it('closing the picker without confirming adds nothing', async () => {
+        // Mutation: have onClose also call addExerciseToWorkout.
+        // Flips: the not.toHaveBeenCalled assertion.
+        await mount(baseValue(prepWorkout('tpl_custom_push'), [BUILT_IN, OWN]));
+        await click(addButton());
+        await click(rowAddButtons()[0]);
+        await click(container.querySelector('.exercise-selector-overlay .close-btn'));
+
+        expect(value.addExerciseToWorkout).not.toHaveBeenCalled();
+        expect(selector()).toBeNull();
     });
 });
 

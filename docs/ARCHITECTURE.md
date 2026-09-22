@@ -1369,6 +1369,19 @@ write-through: Save and START persist the whole prep payload through
 `writeTemplate` and resolve no indices at all. Occurrence identity for repeated
 exercises is deliberately not built — see `SESSION_START.md` item 7b.
 
+**Adding an exercise in prep.** An "Add Exercise" button at the end of the prep
+list opens `ExerciseSelector` — the same picker Build My Own uses, so search,
+filters, multi-select and custom-exercise creation come with it; its `onSelect`
+fires once per staged exercise, so a multi-add needs nothing extra. It calls
+`addExerciseToWorkout`, which had been in the context with no caller. Filter
+state is lifted into `TrackWorkout` so it survives the selector's unmount
+between add cycles. The new exercise lands at the end with one empty set, and
+can be dragged elsewhere; prep validation then blocks START until a weighted
+set has a real weight, exactly as it does for a Build My Own draft. Persistence
+is the same as removal and reordering: nothing new is written, because
+`templateExercisesFromWorkout` derives template contents from the workout array,
+so Save and START carry the addition and a built-in still forks.
+
 **Reordering exercises in prep.** `reorderExerciseInWorkout` moves one exercise
 within the session, guarded in both the context and `ActiveWorkoutService` like
 every other active-workout mutation, refusing outside `preparing`, on an

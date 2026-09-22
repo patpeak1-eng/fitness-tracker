@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { WorkoutContext } from '../context/WorkoutContext';
 import ExerciseResult from '../components/workout/ExerciseResult';
 import CreateTemplateModal from '../components/workout/CreateTemplateModal';
+import ExerciseSelector from '../components/workout/ExerciseSelector';
 import GuidedWorkoutView from '../components/workout/GuidedWorkoutView';
 import PlateCalculator from '../components/workout/PlateCalculator';
 import Modal from '../components/common/Modal'; // Import reusable Modal
@@ -92,7 +93,7 @@ const matchesMuscleFocus = (tags, selected) => {
 const TrackWorkout = () => {
     const { activeWorkout, exercises, cancelWorkout, templates, startWorkoutFromTemplate, startWorkout, deleteTemplate, startGuidedSession, prepValidation,
         equipmentProfiles, activeEquipmentProfileId, setSessionEquipmentOverride, getCompatibleExercises, customEquipmentItems, saveTemplateFromPrep, templateExercisesFromWorkout,
-        removeExerciseFromWorkout, reorderExerciseInWorkout } = useContext(WorkoutContext);
+        removeExerciseFromWorkout, reorderExerciseInWorkout, addExerciseToWorkout } = useContext(WorkoutContext);
     const [showSelector, setShowSelector] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showPlateCalc, setShowPlateCalc] = useState(false);
@@ -181,6 +182,19 @@ const TrackWorkout = () => {
     // short drag. Collapsing beats scaling the page down: the type stays the
     // same size and the grip stays a full-size touch target.
     const [reorganizeMode, setReorganizeMode] = useState(false);
+
+    // Adding an exercise to the prep list (S35). The picker, the mutation and
+    // the save path all already existed: ExerciseSelector is the same component
+    // Build My Own uses, `addExerciseToWorkout` had been in the context with no
+    // caller, and `templateExercisesFromWorkout` derives template contents from
+    // the workout array — so Save and START pick a new exercise up with no
+    // change to any write path, and a built-in still forks rather than being
+    // modified. Filter state is lifted here so it survives the selector's
+    // unmount between add cycles, exactly as CreateTemplateModal does it.
+    const [showAddExercise, setShowAddExercise] = useState(false);
+    const [addCategory, setAddCategory] = useState('All');
+    const [addEquipment, setAddEquipment] = useState('All');
+    const [addMuscle, setAddMuscle] = useState('All');
     const [dragView, setDragView] = useState(null); // { id, dy, from, to, shift }
     const dragRef = useRef(null); // { instanceId, pointerId, startY, started, rects, shift }
 
@@ -290,6 +304,7 @@ const TrackWorkout = () => {
         setSaveTplModal({ isOpen: false, name: '', error: '' });
         setRemoveTarget(null);
         setReorganizeMode(false);
+        setShowAddExercise(false);
     }, [activeWorkout?.id]);
 
     const confirmRemoveExercise = () => {
@@ -647,6 +662,20 @@ const TrackWorkout = () => {
                         );
                     })}
 
+                    {/* Add an exercise to this workout (S35). Sits at the end of
+                        the list because that is where the new exercise lands;
+                        it can be dragged elsewhere from there. */}
+                    <div style={{ padding: '0 20px', marginTop: '4px' }}>
+                        <button
+                            type="button"
+                            className="add-exercise-btn"
+                            onClick={() => setShowAddExercise(true)}
+                        >
+                            <Plus size={18} />
+                            Add Exercise
+                        </button>
+                    </div>
+
                     {/* Collapsible Plate Calculator (utility for the prep screen) */}
                     <div style={{ padding: '0 20px', marginTop: '10px' }}>
                         <button
@@ -823,6 +852,24 @@ const TrackWorkout = () => {
                                 : ''}
                     </p>
                 </Modal>
+
+                {/* The same picker Build My Own uses — search, filters,
+                    multi-select and custom-exercise creation all come with it.
+                    onSelect fires once per staged exercise, so adding several
+                    at once needs nothing extra here. */}
+                {showAddExercise && (
+                    <ExerciseSelector
+                        exercises={exercises}
+                        onSelect={(exercise) => addExerciseToWorkout(exercise.id)}
+                        onClose={() => setShowAddExercise(false)}
+                        activeCategory={addCategory}
+                        setActiveCategory={setAddCategory}
+                        activeEquipment={addEquipment}
+                        setActiveEquipment={setAddEquipment}
+                        activeMuscle={addMuscle}
+                        setActiveMuscle={setAddMuscle}
+                    />
+                )}
             </div>
         );
     }

@@ -896,3 +896,33 @@
     border-color: var(--primary);
     color: var(--primary);
 }
+
+/* Add an exercise to the prep list (S35). Sits at the end of the list, where
+   the new exercise lands. */
+.add-exercise-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.add-exercise-btn:hover,
+.add-exercise-btn:focus-visible {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .add-exercise-btn {
+        transition: none;
+    }
+}
